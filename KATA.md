@@ -311,6 +311,8 @@ The important concept is:
 
 An agent can have a valid identity and valid delegation but still behave suspiciously.
 
+A useful way to think about this: classic behavioral biometrics (keystroke dynamics, mouse movement) watched *how a human's body works*. Agents don't type or click, so those scores give way to **agent-behavior profiling** — tool sequences, retry cadence, cart mutation velocity, API call patterns. The question stays the same (*does this behave like the legitimate actor?*); the observables change.
+
 ---
 
 # 11. Action Intelligence
@@ -379,6 +381,12 @@ A single signal may not indicate fraud.
 
 Multiple connected signals may.
 
+Two supporting principles from fraud practice strengthen this:
+
+**Correlate, don't just collect.** Fraud teams win by correlating signals, not by collecting more of them. Ten variables are only useful as the graph they form — a new device, a fresh VoIP number, an inconsistent identity, and a first transaction to a drop address are each merely suspicious; together, they are a conclusion.
+
+**The linkage principle.** Every event should join to history on each identifier: how many accounts has this phone touched? This device? This agent? This delegation? The counts, plus their recency, are the cheapest and most decisive features in most fraud models — and the simplest story to explain. KATA's graph should therefore track linkage counts and recency across principals, agents, delegations, and counterparties as first-class context.
+
 ---
 
 # 13. Traditional Fraud vs Agentic Fraud
@@ -405,6 +413,18 @@ Traditional fraud signals can be translated into agentic equivalents.
 This is an important design principle:
 
 > **KATA should extend fraud intelligence into the agentic world rather than create a completely isolated fraud model.**
+
+### Signal strength shifts in the agentic era
+
+Not every traditional signal survives the move to agentic systems unchanged. Current fraud research (see [research/fraud-signals.md](research/fraud-signals.md)) groups them three ways:
+
+**Signals that weaken.** *IP address* — an agent runs in its provider's cloud, so geolocation and ASN describe a datacenter, not a customer; a shopping agent on a cloud ASN is the expected pattern. *Device intelligence* — there is no human hand on a phone; the "device" is an ephemeral container. *Cookies* — agents don't browse like returning customers; sessions may be shared across users or discarded per task.
+
+**Signals that strengthen.** *Phone* — step-up authentication must reach the human, not the agent session; SIM-swap recency stays the highest-value phone signal. *Address* — when the shopper is software, where the goods ship is one of the few anchors left. *Identity proofing* — agents can assemble synthetic identities at machine scale, so enrollment-time verification carries more of the load. *Behavioral biometrics* — succeeded by agent-behavior profiling (tool sequences, retry cadence, action velocity).
+
+**Signals that hold steady.** *Email*, *payment instrument* (BIN profile, prepaid flags, and issuing-country mismatches survive; the wallet network token becomes a trust anchor), and *bank account* (ownership validation changes little by channel).
+
+The net effect: **assessment shifts from device trust to delegation trust.**
 
 ---
 
@@ -455,6 +475,8 @@ Previously granted delegation is no longer valid.
 ### QUARANTINE
 
 The agent is temporarily restricted while additional investigation occurs.
+
+This graduated ladder follows the lineage of risk-orchestration policy ladders in fraud practice (approve → step up → review → decline), extended for agentic systems with delegation-aware outcomes (`REVOKE`, `QUARANTINE`) and an explicit human-approval step.
 
 ---
 
@@ -729,7 +751,7 @@ Potentially relevant technologies and standards include:
 * Delegation standards
 * Payment authentication standards
 * AI agent protocols
-* Emerging agentic payment frameworks
+* Emerging agentic payment and agent-identity frameworks (e.g., Visa's Trusted Agent Protocol, Mastercard Agent Pay with Verifiable Intent, Google AP2, Stripe's Agentic Commerce Suite)
 
 KATA should consume identity and authorization evidence and convert it into a broader **trust and risk decision**.
 
@@ -827,7 +849,7 @@ How quickly should delegation be revoked?
 
 ### Liability
 
-Who is responsible when an authorized agent performs an unauthorized or harmful action?
+Who is responsible when an authorized agent performs an unauthorized or harmful action? Dispute rules for agent-delegated transactions are still being written (an open question for 2026–27) — KATA's explainable decisions (what was the grant, what did the agent do, why was it allowed) are designed to give liability frameworks the evidence they will need.
 
 ### Human Responsibility
 
@@ -946,13 +968,22 @@ It should not claim production readiness.
 
 One useful reference for the KATA concept is:
 
-**Fraud Risk Signals**
+**"From Cookie IDs to Agentic AI: Have Fun with Fraud Variables"** (Priyanka Aggarwal, October 2026)
 
 https://priyacali.github.io/fraud-risk-signals-article/
 
 The important insight taken from this type of fraud research is that risk signals should be correlated rather than evaluated independently.
 
-KATA extends this principle into agentic systems.
+KATA takes several ideas from it:
+
+* **Correlation over collection** — fraud teams win by correlating signals, not by collecting more of them.
+* **The linkage principle** — join every event to history on each identifier; counts plus recency are the cheapest, most decisive features.
+* **Signal strength shifts** — in the agentic era, IP/device/cookie signals weaken, phone/address/identity-proofing signals strengthen, and email/payment-instrument/bank-account signals hold steady.
+* **From device trust to delegation trust** — assessment splits into two verdicts: *is this agent legitimate, and does this action match the grant?*
+* **Cost discipline** — cheap signals run on every event, passive signals layer on continuously, expensive high-friction checks fire only at step-up moments.
+* **Verify, don't just block** — agentic AI should be treated as a new channel to verify, with good agents welcomed and bad ones made expensive.
+
+KATA extends these principles into agentic systems.
 
 Instead of:
 
@@ -1038,6 +1069,13 @@ SHOULD IT BE ALLOWED?
 ```
 
 This is the conceptual foundation of KATA.
+
+In operational terms, every KATA evaluation resolves into two verdicts:
+
+1. **Is this agent legitimate?** (identity + delegation + provenance)
+2. **Does this action match the grant?** (intent + behavior + action vs. authorization)
+
+This mirrors how fraud assessment itself is shifting: from device trust to delegation trust.
 
 ---
 

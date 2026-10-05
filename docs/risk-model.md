@@ -21,6 +21,8 @@ Decision                    ✅  (KATA)
 
 A single signal may be benign. The *combination* of weak signals across the graph — an unusual infrastructure change *plus* a slight intent deviation *plus* elevated action velocity — is what indicates risk.
 
+**The linkage principle.** Every evaluation should join to history on each identifier: how many principals has this agent served? How many delegations has this principal granted? How many counterparties has this agent paid? Linkage counts plus recency are the cheapest, most decisive features in fraud models — KATA treats them as first-class context in the graph.
+
 ## Component risks
 
 | Component | What is assessed |
@@ -50,6 +52,16 @@ Important caveats, per the framework:
 1. **The score is not the decision.** Policy maps the score *and its composition* to one of the seven decisions. Two actions with the same score but different risk composition (e.g., identity risk vs. intent risk) may — and should — get different decisions.
 2. **Composition matters more than the total.** A high intent-risk component (action far from declared intent) should weigh differently than diffuse low-level behavioral noise.
 3. **Missing evidence is a signal.** If identity cannot be verified or intent is absent, that increases risk rather than being treated as neutral.
+
+## Cost discipline: tiered evaluation
+
+Not every signal needs to run on every evaluation. Following fraud-orchestration practice:
+
+- **Cheap signals on every event** — delegation validity, hard intent limits, geolocation, line type. Milliseconds, near-zero cost.
+- **Passive signals continuously** — behavioral profiles, reputation, velocity counters. Collected in the background, consulted on every decision.
+- **Expensive signals at step-up only** — identity re-verification, SIM-swap queries, deep reputation lookups, human approval. High friction, high cost, reserved for elevated risk.
+
+The architecture follows the cost curve: the fast path stays fast, and depth is spent where risk justifies it. See [docs/architecture.md](docs/architecture.md).
 
 ## Explainability requirements
 

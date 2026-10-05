@@ -147,6 +147,16 @@ KATA extends existing fraud intelligence into the agentic world instead of reinv
 | Session risk | Agent session risk |
 | Merchant risk | Agent / merchant interaction risk |
 
+**But not every signal survives the move unchanged.** Fraud research groups them three ways:
+
+| Shift | Signals |
+|---|---|
+| Weaken | IP address, device intelligence, cookies — the agent runs in a cloud, not a hand |
+| Strengthen | Phone (step-up must reach the human), address (shipping is an anchor), identity proofing, agent-behavior profiling |
+| Hold steady | Email, payment instrument, bank account |
+
+Net effect: **assessment shifts from device trust to delegation trust** — *is this agent legitimate, and does this action match the grant?*
+
 See [research/fraud-signals.md](research/fraud-signals.md) for the expanded mapping.
 
 ## API concept

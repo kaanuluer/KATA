@@ -51,7 +51,7 @@ flowchart TD
 1. **Intercept.** The agent submits an intended action to the KATA Gateway *before* execution (pre-execution evaluation). Read-only/low-risk actions may be evaluated asynchronously.
 2. **Enrich.** The gateway loads the agent's identity record, the active delegation, the structured intent, and recent behavioral history.
 3. **Evaluate.** The risk engine correlates the action against identity + delegation + intent + behavior + context, producing component risks and a combined assessment.
-4. **Decide.** Policy maps the assessment to a decision. `ALLOW` proceeds; `STEP_UP` / `HUMAN_APPROVAL` pause for verification; `BLOCK` / `REVOKE` / `QUARANTINE` stop the action and may change the delegation's state.
+4. **Decide.** Policy maps the assessment to a decision. `ALLOW` proceeds; `STEP_UP` / `HUMAN_APPROVAL` pause for verification; `BLOCK` / `REVOKE` / `QUARANTINE` stop the action and may change the delegation's state. Conceptually, every decision resolves two verdicts: *is this agent legitimate* (identity + delegation + provenance) and *does this action match the grant* (intent + behavior + action vs. authorization).
 5. **Record.** Every evaluation — inputs, signals, decision, and rationale — is logged as an auditable trail. This feeds the behavior module for continuous verification.
 6. **Re-evaluate.** Outcomes and new risk intelligence trigger re-evaluation of active sessions. Trust is never cached indefinitely.
 
@@ -79,7 +79,7 @@ All three are deployment *patterns*, not products. The framework is standards-ne
 ## Latency considerations
 
 - **Pre-execution evaluation** is on the critical path: keep the default path fast (cached identity/delegation/intent lookups, local policy), and push deep behavioral analysis to async re-evaluation where possible.
-- **Tier the checks.** Cheap checks first (delegation validity, hard intent limits); expensive checks (behavioral anomaly scoring, reputation lookups) only when risk is elevated.
+- **Tier the checks (cost discipline).** Cheap signals run on every event (delegation validity, hard intent limits); passive signals (behavioral profiles, reputation) layer on continuously; expensive, high-friction checks (identity re-verification, SIM-swap queries, human approval) fire only at step-up moments. The architecture follows the cost curve.
 - **Fail closed vs. fail open** is a policy decision, not an architectural one: critical actions (payments, transfers) should fail closed on evaluation errors; informational actions may fail open with monitoring.
 
 ## Out of scope for this document

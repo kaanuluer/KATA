@@ -42,10 +42,14 @@ KATA's stance is **standards-neutral**: where a credible standard exists, KATA c
 - **What it covers:** Emerging work on how agents identify each other, discover capabilities, and exchange structured messages (various industry and open-source efforts are active and evolving).
 - **How KATA relates:** KATA needs *some* agent identity substrate to function — it does not prescribe which one. Any agent protocol that provides attributable identity and structured action proposals can feed the KATA evaluation model. Interoperability here is an open research area (see [KATA.md](../KATA.md#25-open-questions)).
 
-### Emerging agentic payment frameworks
+### Agentic payment & agent-identity frameworks (emerging)
 
-- **What it covers:** Industry efforts to let agents initiate payments safely (delegated payment credentials, agent-aware 3-D Secure flows, etc.).
-- **How KATA relates:** These are the *transaction rails* KATA would protect. KATA is the trust layer above the rails: it decides whether the agent should be making *this* payment, while the payment framework executes it.
+- **What they cover:** Industry efforts to give agents signed, credentialed identity and safe payment rails:
+  - **Visa Trusted Agent Protocol** — signed, credentialed agent identity for commerce.
+  - **Mastercard Agent Pay (with Verifiable Intent)** — carries a description of the user's grant alongside the transaction; the closest industry analogue to KATA's structured intent + delegation objects.
+  - **Google AP2 (Agent Payments Protocol)** — mandates around agent-initiated payments.
+  - **Stripe Agentic Commerce Suite** — agent-oriented commerce infrastructure.
+- **How KATA relates:** These are the *transaction rails and identity substrates* KATA would protect and consume. KATA is the trust layer above the rails: it decides whether the agent should be making *this* payment — *is the agent legitimate, and does this action match the grant?* — while the payment framework executes it. KATA stays neutral and interoperable across them; KATA's intent-schema work should track Verifiable Intent's direction.
 
 ## Payment authentication standards
 
