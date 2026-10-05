@@ -1,6 +1,6 @@
 <div align="center">
 
-![KATA — Know And Trust Agents](assets/kata-hero.png)
+![KATA — Know And Trust Agents](assets/kata-hero.jpg)
 
 [![Concept · Open Design](https://img.shields.io/badge/Status-Concept%20%C2%B7%20Open%20Design-blue)](KATA.md)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-green)](LICENSE)
