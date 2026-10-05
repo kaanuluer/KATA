@@ -42,14 +42,29 @@ KATA's stance is **standards-neutral**: where a credible standard exists, KATA c
 - **What it covers:** Emerging work on how agents identify each other, discover capabilities, and exchange structured messages (various industry and open-source efforts are active and evolving).
 - **How KATA relates:** KATA needs *some* agent identity substrate to function — it does not prescribe which one. Any agent protocol that provides attributable identity and structured action proposals can feed the KATA evaluation model. Interoperability here is an open research area (see [KATA.md](../KATA.md#25-open-questions)).
 
-### Agentic payment & agent-identity frameworks (emerging)
+### Agentic commerce & payment protocols (emerging)
 
-- **What they cover:** Industry efforts to give agents signed, credentialed identity and safe payment rails:
-  - **Visa Trusted Agent Protocol** — signed, credentialed agent identity for commerce.
-  - **Mastercard Agent Pay (with Verifiable Intent)** — carries a description of the user's grant alongside the transaction; the closest industry analogue to KATA's structured intent + delegation objects.
-  - **Google AP2 (Agent Payments Protocol)** — mandates around agent-initiated payments.
-  - **Stripe Agentic Commerce Suite** — agent-oriented commerce infrastructure.
-- **How KATA relates:** These are the *transaction rails and identity substrates* KATA would protect and consume. KATA is the trust layer above the rails: it decides whether the agent should be making *this* payment — *is the agent legitimate, and does this action match the grant?* — while the payment framework executes it. KATA stays neutral and interoperable across them; KATA's intent-schema work should track Verifiable Intent's direction.
+Industry efforts to give agents signed, credentialed identity and safe payment rails. KATA's stance: these are the *transaction rails and identity substrates* KATA protects and consumes. KATA is the trust layer above the rails — it decides whether the agent should be making *this* payment (*is the agent legitimate, and does this action match the grant?*) — while these protocols execute it. KATA stays neutral and interoperable across all of them.
+
+#### Universal Commerce Protocol (UCP)
+
+- **What it covers:** Open-source commerce standard (Apache 2.0; announced January 2026 by Google, co-developed with Shopify, Etsy, Wayfair, Target, Walmart; 20+ endorsers including Visa, Mastercard, Stripe, Adyen, Amex). Standardizes the full shopping journey for AI agents: capability discovery via `/.well-known/ucp` manifests, checkout sessions (cart, totals, `ready_for_complete` state), discounts, fulfillment, order management, post-purchase. The merchant remains merchant of record. Composable with AP2 (payments), A2A and MCP (transports).
+- **Trust-relevant primitives:** `UCP-Agent` profile header + `request-signature` (agent identity evidence); Identity Linking via OAuth 2.0 — the agent acts on the buyer's behalf without holding credentials (delegation evidence, e.g. scope `dev.ucp.shopping.checkout`); tokenized payments; verifiable credentials; cryptographic proof of user consent on authorizations.
+- **How KATA relates:** UCP standardizes the *commerce* layer but defines no trust decision. Its checkout session is a structured, machine-readable **action object** — the ideal pre-execution evaluation point for KATA (evaluate at `ready_for_complete`: does this checkout match the principal's intent?). Its agent headers and OAuth identity-linking are **identity and delegation evidence** KATA consumes. See [examples/ucp-checkout/](../examples/ucp-checkout/) for a worked evaluation.
+
+#### Agent Payments Protocol (AP2)
+
+- **What it covers:** The payment-authorization companion to UCP. Uses W3C Verifiable Digital Credentials ("mandates") as cryptographically signed contracts:
+  - **Cart Mandate** (human-present): payer/payee, exact payment method, risk payload, line-item details, refund conditions — signed by the user (e.g., hardware-backed device key).
+  - **Intent Mandate** (human-not-present): pre-authorization for autonomous shopping — payer/payee, chargeable methods, risk payload, **shopping intent (categories, SKUs, budget limits)**, prompt playback, TTL.
+  - **Payment Mandate**: minimal credential for issuers — agent-presence indicator, modality, fraud signals.
+- **How KATA relates:** The **Intent Mandate is the closest industry realization of KATA's structured intent** — budget limits, categories, and TTL as machine-readable constraints. KATA's intent-schema work should explicitly map to it. But AP2 stops at *capturing* authorization: nothing in the stack *evaluates* whether the resulting checkout matches the mandate, monitors the agent's behavior across sessions, or makes graduated risk decisions — that is KATA's layer. AP2's separation of principal / agent / issuer with non-repudiable audit trails pairs naturally with KATA's explainable decisions.
+
+#### Other efforts
+
+- **Visa Trusted Agent Protocol** — signed, credentialed agent identity for commerce; identity evidence for KATA.
+- **Mastercard Agent Pay (with Verifiable Intent)** — carries the user's grant with the transaction; track alongside AP2's Intent Mandate for intent-schema direction.
+- **Stripe Agentic Commerce Suite** — agent-oriented commerce infrastructure; transaction evidence.
 
 ## Payment authentication standards
 

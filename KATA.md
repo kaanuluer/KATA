@@ -751,7 +751,7 @@ Potentially relevant technologies and standards include:
 * Delegation standards
 * Payment authentication standards
 * AI agent protocols
-* Emerging agentic payment and agent-identity frameworks (e.g., Visa's Trusted Agent Protocol, Mastercard Agent Pay with Verifiable Intent, Google AP2, Stripe's Agentic Commerce Suite)
+* Emerging agentic commerce and payment frameworks (e.g., Universal Commerce Protocol (UCP), Visa's Trusted Agent Protocol, Mastercard Agent Pay with Verifiable Intent, Google AP2, Stripe's Agentic Commerce Suite)
 
 KATA should consume identity and authorization evidence and convert it into a broader **trust and risk decision**.
 

@@ -213,7 +213,7 @@ This is conceptual — the framework will eventually define formal schemas and A
 | Delegation model | [docs/delegation-model.md](docs/delegation-model.md) |
 | Agent identity | [docs/agent-identity.md](docs/agent-identity.md) |
 | Schemas | [schemas/](schemas/) — `agent`, `delegation`, `intent`, `action`, `decision` |
-| Examples | [examples/](examples/) — `shopping-agent`, `payment-agent`, `banking-agent` |
+| Examples | [examples/](examples/) — `shopping-agent`, `payment-agent`, `banking-agent`, `ucp-checkout` (UCP + AP2 Intent Mandate evaluation) |
 | Research | [research/fraud-signals.md](research/fraud-signals.md), [research/standards.md](research/standards.md) |
 
 ## Contributing
