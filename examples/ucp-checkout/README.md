@@ -56,6 +56,8 @@ This example shows KATA evaluating a real protocol flow: a shopping agent operat
 
 **Decision: `STEP_UP`** — the overage is small and possibly legitimate (tax, price drift), so KATA does not block outright. It requires human approval before the checkout completes. A larger deviation, or one paired with behavioral anomalies, would escalate to `BLOCK`.
 
+A disclosed `tax` line inside the intent's `fee_policy` is the evidence that separates this from an undisclosed fee. The fields for that comparison, and a case that does block, are in [`examples/price-integrity/`](../price-integrity/). Equality between the mandate total and the checkout total is the wrong test: honest prices move.
+
 ## Why this example matters
 
 - **UCP gives KATA a structured action to evaluate.** The checkout session — line items, totals, status — is machine-readable by design. `ready_for_complete` is a natural pre-execution hook.

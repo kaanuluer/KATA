@@ -49,7 +49,7 @@ KATA is built on four questions that traditional auth never asks:
 | 1 | **WHO** is the agent? | Identity and provenance of the agent |
 | 2 | **WHO** authorized the agent? | The principal↔agent delegation relationship |
 | 3 | **WHAT** was the agent authorized to do? | Original intent, scope, limits, constraints |
-| 4 | **IS THE AGENT** behaving consistently with that authorization? | Behavior and action vs. declared intent |
+| 4 | **IS THE AGENT** behaving consistently with that authorization? | Behavior and action vs. declared intent, including price and counterparty terms |
 
 ## Core trust model
 
@@ -108,9 +108,12 @@ KATA continuously measures the **distance between declared intent and observed a
 | | Intent | Observed action | Match |
 |---|---|---|---|
 | Shopping agent | Max CAD 1,500 laptop | CAD 4,200 MacBook Pro | ❌ Failed → **BLOCK** |
-| Shopping agent | Max CAD 1,500 laptop | CAD 1,300 laptop | ✅ OK → **ALLOW** |
+| Shopping agent | Max CAD 1,500 laptop | CAD 1,300 laptop at the quoted and listed price | ✅ OK → **ALLOW** |
+| Shopping agent | Max CAD 1,500; quoted and listed CAD 1,000 | CAD 1,300 charge, undisclosed fee | ❌ Under the ceiling, still not OK → **BLOCK** |
 
 **Valid identity + valid authorization ≠ valid action.**
+
+**Amount under the ceiling ≠ a price that matches the quote.** A genuine merchant can be the party that takes the extra value. The CAD 1,300 row is `ALLOW` only when quote, list, and fees agree. The worked counterparty case is [`examples/price-integrity/`](examples/price-integrity/).
 
 ## Decision model
 
@@ -127,6 +130,8 @@ KATA decisions are not limited to allow/block. The framework proposes seven grad
 | `QUARANTINE` | The agent is temporarily restricted pending investigation |
 
 Trust is **dynamic and continuous** — an agent trusted five minutes ago may become untrusted if its behavior, scope, infrastructure, or intent drifts.
+
+The same seven outcomes cover a cheating counterparty. `BLOCK` stops a charge that breaks the quote or the fee policy. `REVOKE` is for the delegation, not for the merchant.
 
 ## Traditional fraud vs. agentic fraud
 
@@ -196,10 +201,17 @@ This is conceptual — the framework will eventually define formal schemas and A
 - [ ] Formal JSON Schemas — *drafted, see [`schemas/`](schemas/)*
 - [ ] Reference evaluation implementation (policy + decision engine sketch)
 - [ ] Threat model — *drafted, see [docs/threat-model.md](docs/threat-model.md)*
-- [ ] Intent schema & natural-language intent capture guidance
+- [ ] Intent schema & natural-language intent capture guidance — *price, fees, and counterparty drafted*
 - [ ] Delegation lifecycle & revocation protocol concepts
 - [ ] Example evaluations — *drafted, see [`examples/`](examples/)*
 - [ ] Interoperability notes for verifiable credentials & agent protocols
+- [ ] External evaluation — *not started; blocked on the reference implementation*
+
+### Evaluation
+
+KATA does not claim measured coverage. The class table in [docs/threat-model.md](docs/threat-model.md) is a design comparison with [AgentCommerceBench](https://github.com/BuildWithGordonAI/agentcommercebench) (BuildWithGordonAI, Apache-2.0), not a result.
+
+Once a reference implementation exists, evaluate it against the [AgentCommerceBench dataset](https://huggingface.co/datasets/dpaul93/agentcommercebench) (`dpaul93/agentcommercebench`): the `benchmark` config holds 1,000 sessions (25 of each of the 20 classes, plus 500 clean), and `production` holds 30 de-identified settled actions. Report recall at a stated false-positive budget, per class, and name the classes the implementation cannot see. Silent downgrade (F6), in particular, needs delivery evidence the payment itself does not carry. Until that run exists, do not cite a coverage number.
 
 ## Docs & schemas
 
@@ -213,7 +225,7 @@ This is conceptual — the framework will eventually define formal schemas and A
 | Delegation model | [docs/delegation-model.md](docs/delegation-model.md) |
 | Agent identity | [docs/agent-identity.md](docs/agent-identity.md) |
 | Schemas | [schemas/](schemas/) — `agent`, `delegation`, `intent`, `action`, `decision` |
-| Examples | [examples/](examples/) — `shopping-agent`, `payment-agent`, `banking-agent`, `ucp-checkout` (UCP + AP2 Intent Mandate evaluation) |
+| Examples | [examples/](examples/) — `shopping-agent`, `price-integrity`, `payment-agent`, `banking-agent`, `ucp-checkout` (UCP + AP2 Intent Mandate evaluation) |
 | Research | [research/fraud-signals.md](research/fraud-signals.md), [research/standards.md](research/standards.md) |
 
 ## Contributing
