@@ -49,7 +49,7 @@ flowchart TD
 ## Data flow
 
 1. **Intercept.** The agent submits an intended action to the KATA Gateway *before* execution (pre-execution evaluation). Read-only/low-risk actions may be evaluated asynchronously.
-2. **Enrich.** The gateway loads the agent's identity record, the active delegation, the structured intent, and recent behavioral history.
+2. **Enrich.** The gateway loads the agent's identity record, the active delegation, the structured intent, and recent behavioral history. A verified payment mandate (Verifiable Intent, AP2, or the same shape from another issuer) is one way that delegation and intent evidence arrives. See [interoperability.md](interoperability.md).
 3. **Evaluate.** The risk engine correlates the action against identity + delegation + intent + behavior + context, producing component risks and a combined assessment. The action comparison includes price integrity (quote, list, fees, charge) and the counterparty, not only the intent ceiling.
 4. **Decide.** Policy maps the assessment to a decision. `ALLOW` proceeds; `STEP_UP` / `HUMAN_APPROVAL` pause for verification; `BLOCK` / `REVOKE` / `QUARANTINE` stop the action and may change the delegation's state. Conceptually, every decision resolves two verdicts: *is this agent legitimate* (identity + delegation + provenance) and *does this action match the grant* (intent + behavior + action vs. authorization).
 5. **Record.** Every evaluation — inputs, signals, decision, and rationale — is logged as an auditable trail. This feeds the behavior module for continuous verification.

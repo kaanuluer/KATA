@@ -1,0 +1,171 @@
+{
+  "note": "Decoded claims for the KATA worked example. Stand-in strings replace runtime nonces and hashes. JWK x/y from examples/helpers.py are omitted.",
+  "spec": "verifiable-intent 0.1-draft, commit 356c29635f1c44df7de02edb58699ca9f29bece6",
+  "layer1": {
+    "iss": "https://www.mastercard.com",
+    "sub": "user-alice-001",
+    "iat": 1700000000,
+    "exp": 1731536000,
+    "vct": "https://credentials.mastercard.com/card",
+    "pan_last_four": "1234",
+    "scheme": "Mastercard",
+    "email": "alice@example.com"
+  },
+  "layer2_open_checkout": {
+    "vct": "mandate.checkout.open.1",
+    "cnf": {
+      "jwk": {
+        "kid": "agent-key-1"
+      }
+    },
+    "prompt_summary": "Buy a Babolat tennis racket under $400",
+    "constraints": [
+      {
+        "type": "mandate.checkout.allowed_merchants",
+        "allowed": [
+          {
+            "id": "merchant-uuid-1",
+            "name": "Tennis Warehouse",
+            "website": "https://tennis-warehouse.com"
+          },
+          {
+            "id": "merchant-uuid-2",
+            "name": "Babolat",
+            "website": "https://babolat.com"
+          }
+        ]
+      },
+      {
+        "type": "mandate.checkout.line_items",
+        "items": [
+          {
+            "id": "line-item-1",
+            "acceptable_items": [
+              {
+                "id": "BAB86345",
+                "title": "Babolat Pure Aero Tennis Racket"
+              },
+              {
+                "id": "HEA23102",
+                "title": "Head Graphene 360 Speed"
+              }
+            ],
+            "quantity": 1
+          }
+        ]
+      }
+    ]
+  },
+  "layer2_open_payment": {
+    "vct": "mandate.payment.open.1",
+    "cnf": {
+      "jwk": {
+        "kid": "agent-key-1"
+      }
+    },
+    "payment_instrument": {
+      "type": "mastercard.srcDigitalCard",
+      "id": "f199c3dd-7106-478b-9b5f-7af9ca725170",
+      "description": "Mastercard **** 1234"
+    },
+    "risk_data": {
+      "device_id": "android1234",
+      "ip_address": "192.168.1.100"
+    },
+    "constraints": [
+      {
+        "type": "mandate.payment.amount_range",
+        "currency": "USD",
+        "min": 10000,
+        "max": 40000
+      },
+      {
+        "type": "mandate.payment.allowed_payees",
+        "allowed": [
+          {
+            "id": "merchant-uuid-1",
+            "name": "Tennis Warehouse",
+            "website": "https://tennis-warehouse.com"
+          },
+          {
+            "id": "merchant-uuid-2",
+            "name": "Babolat",
+            "website": "https://babolat.com"
+          }
+        ]
+      },
+      {
+        "type": "mandate.payment.recurrence",
+        "frequency": "YEAR",
+        "start_date": "2026-01-01",
+        "end_date": "2028-01-01",
+        "number": 3
+      },
+      {
+        "type": "mandate.payment.reference",
+        "conditional_transaction_id": "stand-in-checkout-disclosure-hash"
+      }
+    ]
+  },
+  "layer2_envelope_claims": {
+    "nonce": "stand-in-l2-nonce",
+    "aud": "https://agent.verifiable-intent.example",
+    "iss": "https://wallet.example.com",
+    "iat": 1700000000,
+    "exp": 1700086400
+  },
+  "layer3a_payment": {
+    "nonce": "stand-in-l3-nonce",
+    "aud": "https://www.mastercard.com",
+    "iss": "https://agent.example.com",
+    "iat": 1700000000,
+    "exp": 1700000300,
+    "mandate": {
+      "vct": "mandate.payment.1",
+      "transaction_id": "stand-in-checkout-hash",
+      "payee": {
+        "id": "merchant-uuid-1",
+        "name": "Tennis Warehouse",
+        "website": "https://tennis-warehouse.com"
+      },
+      "payment_amount": {
+        "currency": "USD",
+        "amount": 27999
+      },
+      "payment_instrument": {
+        "type": "mastercard.srcDigitalCard",
+        "id": "f199c3dd-7106-478b-9b5f-7af9ca725170",
+        "description": "Mastercard **** 1234"
+      }
+    }
+  },
+  "layer3b_checkout": {
+    "aud": "https://tennis-warehouse.com",
+    "iss": "https://agent.example.com",
+    "mandate": {
+      "vct": "mandate.checkout.1",
+      "checkout_hash": "stand-in-checkout-hash"
+    }
+  },
+  "example_checkout_jwt_payload": {
+    "iss": "https://tennis-warehouse.com",
+    "sub": "cart_checkout",
+    "cart": {
+      "items": [
+        {
+          "sku": "BAB86345",
+          "name": "Babolat Pure Aero Tennis Racket",
+          "size": 3,
+          "size_label": "4 3/8",
+          "color": "white",
+          "quantity": 1,
+          "unitPrice": 279.99
+        }
+      ],
+      "subTotal": {
+        "amount": 279.99,
+        "currencyCode": "USD"
+      }
+    }
+  }
+}

@@ -757,7 +757,7 @@ Potentially relevant technologies and standards include:
 * AI agent protocols
 * Emerging agentic commerce and payment frameworks (e.g., Universal Commerce Protocol (UCP), Visa's Trusted Agent Protocol, Mastercard Agent Pay with Verifiable Intent, Google AP2, Stripe's Agentic Commerce Suite)
 
-KATA should consume identity and authorization evidence and convert it into a broader **trust and risk decision**.
+KATA should consume identity and authorization evidence and convert it into a broader **trust and risk decision**. Field mapping for Verifiable Intent, AP2, Visa Trusted Agent Protocol, and AGNTCY identity is in [docs/interoperability.md](docs/interoperability.md).
 
 The framework should remain standards-neutral where possible.
 
@@ -944,6 +944,7 @@ docs/
     intent-model.md
     delegation-model.md
     agent-identity.md
+    interoperability.md
 
 schemas/
     agent.json
@@ -957,6 +958,8 @@ examples/
     price-integrity/
     payment-agent/
     banking-agent/
+    verifiable-intent/
+    ap2-checkout/
 
 research/
     fraud-signals.md
