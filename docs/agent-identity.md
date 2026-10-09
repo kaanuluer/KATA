@@ -67,5 +67,7 @@ KATA does not replace authentication. It sits **above and alongside** existing i
 - OAuth 2.0 / OpenID Connect → delegation-adjacent authorization evidence
 - WebAuthn → principal authentication strength
 - SPIFFE/SPIRE → workload cryptographic identity
+- Visa Trusted Agent Protocol → RFC 9421 signatures and a registry key (`key_id`, `public_key`, `algorithm`)
+- AGNTCY identity → ResolverMetadata `verification_method.public_key_jwk` and badge credentials
 
-See [research/standards.md](../research/standards.md) for the full landscape. KATA remains standards-neutral: it converts identity evidence into a broader trust and risk decision.
+The last two answer Q1 only. They do not carry a purchase intent. See [interoperability.md](interoperability.md) and [research/standards.md](../research/standards.md). KATA remains standards-neutral: it converts identity evidence into a broader trust and risk decision.

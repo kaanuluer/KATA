@@ -55,16 +55,14 @@ Industry efforts to give agents signed, credentialed identity and safe payment r
 
 #### Agent Payments Protocol (AP2)
 
-- **What it covers:** The payment-authorization companion to UCP. Uses W3C Verifiable Digital Credentials ("mandates") as cryptographically signed contracts:
-  - **Cart Mandate** (human-present): payer/payee, exact payment method, risk payload, line-item details, refund conditions — signed by the user (e.g., hardware-backed device key).
-  - **Intent Mandate** (human-not-present): pre-authorization for autonomous shopping — payer/payee, chargeable methods, risk payload, **shopping intent (categories, SKUs, budget limits)**, prompt playback, TTL.
-  - **Payment Mandate**: minimal credential for issuers — agent-presence indicator, modality, fraud signals.
-- **How KATA relates:** The **Intent Mandate is the closest industry realization of KATA's structured intent** — budget limits, categories, and TTL as machine-readable constraints. KATA's intent-schema work should explicitly map to it. But AP2 stops at *capturing* authorization: nothing in the stack *evaluates* whether the resulting checkout matches the mandate, monitors the agent's behavior across sessions, or makes graduated risk decisions — that is KATA's layer. AP2's separation of principal / agent / issuer with non-repudiable audit trails pairs naturally with KATA's explainable decisions.
+- **What it covers:** The payment-authorization companion to UCP. Current text is **v0.2** (open and closed Checkout Mandate, open and closed Payment Mandate). The names Intent Mandate and Cart Mandate are **v0.1** (`IntentMandate`, `CartMandate`, `PaymentMandate` in `mandate.py` at commit `e66fc0b`). v0.2 does not use those names. Field mapping, the unit conversion (integer minor units → KATA major units), and where `POST /kata/evaluate` sits are in [docs/interoperability.md](../docs/interoperability.md).
+- **How KATA relates:** A verified mandate is Q2/Q3 evidence. AP2 does not score behavior, compare a quote to a charge, or return `REVOKE` / `QUARANTINE`. The worked v0.2 sample is [examples/ap2-checkout/](../examples/ap2-checkout/). [examples/ucp-checkout/](../examples/ucp-checkout/) is an earlier sketch whose property names are not spec fields.
 
 #### Other efforts
 
-- **Visa Trusted Agent Protocol** — signed, credentialed agent identity for commerce; identity evidence for KATA.
-- **Mastercard Agent Pay (with Verifiable Intent)** — carries the user's grant with the transaction; track alongside AP2's Intent Mandate for intent-schema direction.
+- **Visa Trusted Agent Protocol** — RFC 9421 agent signatures and a key registry. Q1 evidence. Brief map in [docs/interoperability.md](../docs/interoperability.md).
+- **Verifiable Intent** (Mastercard-maintained, draft v0.1) — SD-JWT chain credential provider → user → agent, with amount range, line items, and merchant constraints. Field map and worked example: [docs/interoperability.md](../docs/interoperability.md), [examples/verifiable-intent/](../examples/verifiable-intent/).
+- **AGNTCY identity** — agent id, ResolverMetadata, and badge verifiable credentials. Q1 only. Same interoperability note.
 - **Stripe Agentic Commerce Suite** — agent-oriented commerce infrastructure; transaction evidence.
 
 ## Payment authentication standards

@@ -204,7 +204,7 @@ This is conceptual — the framework will eventually define formal schemas and A
 - [ ] Intent schema & natural-language intent capture guidance — *price, fees, and counterparty drafted*
 - [ ] Delegation lifecycle & revocation protocol concepts
 - [ ] Example evaluations — *drafted, see [`examples/`](examples/)*
-- [ ] Interoperability notes for verifiable credentials & agent protocols
+- [ ] Interoperability notes for verifiable credentials & agent protocols — *drafted, see [docs/interoperability.md](docs/interoperability.md)*
 - [ ] External evaluation — *not started; blocked on the reference implementation*
 
 ### Evaluation
@@ -225,7 +225,8 @@ Once a reference implementation exists, evaluate it against the [AgentCommerceBe
 | Delegation model | [docs/delegation-model.md](docs/delegation-model.md) |
 | Agent identity | [docs/agent-identity.md](docs/agent-identity.md) |
 | Schemas | [schemas/](schemas/) — `agent`, `delegation`, `intent`, `action`, `decision` |
-| Examples | [examples/](examples/) — `shopping-agent`, `price-integrity`, `payment-agent`, `banking-agent`, `ucp-checkout` (UCP + AP2 Intent Mandate evaluation) |
+| Interoperability | [docs/interoperability.md](docs/interoperability.md) — Verifiable Intent, AP2 v0.2 (and the v0.1 Intent/Cart/Payment names), Visa TAP, AGNTCY |
+| Examples | [examples/](examples/) — `shopping-agent`, `price-integrity`, `payment-agent`, `banking-agent`, `ucp-checkout` (UCP sketch), `verifiable-intent`, `ap2-checkout` |
 | Research | [research/fraud-signals.md](research/fraud-signals.md), [research/standards.md](research/standards.md) |
 
 ## Contributing

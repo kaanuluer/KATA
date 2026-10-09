@@ -2,18 +2,18 @@
 
 **Status: Concept / Open Design — not production ready.**
 
-This example shows KATA evaluating a real protocol flow: a shopping agent operating over the **Universal Commerce Protocol (UCP)**, authorized by an **AP2 Intent Mandate**. It demonstrates where KATA sits relative to these protocols — they provide the rails and the evidence; KATA makes the trust decision.
+This example shows KATA evaluating a shopping agent on the **Universal Commerce Protocol (UCP)** against a **simplified** AP2-style grant. The JSON below is a sketch. `mandate_type`, `shopping_intent.budget_limit`, and `categories` are not fields in AP2 v0.1 `IntentMandate` and not fields in AP2 v0.2. The field-accurate v0.2 mapping is [docs/interoperability.md](../../docs/interoperability.md) and [examples/ap2-checkout/](../ap2-checkout/). The sketch still shows where KATA sits: the protocols supply the action and the grant; KATA makes the trust decision.
 
 ## The setup
 
-1. **Principal** grants an AP2 **Intent Mandate** (human-not-present): *"Buy a bouquet of red roses under $40."* Machine-readable: category `flowers`, budget limit $40.00, TTL 24h.
+1. **Principal** grants a human-not-present shopping limit, written here in sketch form (the v0.1 name was Intent Mandate; v0.2 uses open Checkout and Payment Mandates): *"Buy a bouquet of red roses under $40."* Machine-readable in this sketch: category `flowers`, budget limit $40.00, TTL 24h.
 2. **Agent** discovers the merchant's capabilities via `/.well-known/ucp` and links identity via **OAuth 2.0** (UCP Identity Linking) — the delegation. Scope: `dev.ucp.shopping.checkout`.
 3. **Agent** creates a UCP **checkout session**: 1× Bouquet of Red Roses at $42.00. Session status: `ready_for_complete`.
 4. **KATA** evaluates the checkout *before* completion — the pre-execution evaluation point.
 
 ## The protocol objects (simplified)
 
-**AP2 Intent Mandate** (intent evidence):
+**Sketch grant** (not an AP2 spec object):
 
 ```json
 {
@@ -61,7 +61,7 @@ A disclosed `tax` line inside the intent's `fee_policy` is the evidence that sep
 ## Why this example matters
 
 - **UCP gives KATA a structured action to evaluate.** The checkout session — line items, totals, status — is machine-readable by design. `ready_for_complete` is a natural pre-execution hook.
-- **AP2 gives KATA a structured intent to evaluate against.** The Intent Mandate's budget limit and categories are exactly the "intent as a first-class signal" KATA proposes. KATA's intent schema should map to it.
+- **A mandate can give KATA a structured intent.** Budget, category, and TTL in this sketch are the idea. The v0.2 objects that actually carry constraints are the open Checkout Mandate and open Payment Mandate, mapped in [docs/interoperability.md](../../docs/interoperability.md).
 - **Neither protocol makes a risk decision.** AP2 captures authorization; UCP executes commerce. Neither measures intent-vs-action distance, profiles agent behavior, or issues graduated decisions. That missing layer is KATA.
 
 ## Files

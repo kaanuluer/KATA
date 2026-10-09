@@ -1,0 +1,132 @@
+{
+  "note": "Claims from the decoded disclosures in AP2 v0.2 checkout_mandate.md and payment_mandate.md. Nested merchant and item objects are the resolved disclosure values; the spec file leaves them as separate disclosure entries. Not a KATA request.",
+  "spec": "Agentic Payment Protocol (v0.2), commit e1ea56db72a6385bce3e5c1112b3a56ce60acb43",
+  "open_checkout_header": {
+    "alg": "ES256",
+    "typ": "example+sd-jwt",
+    "kid": "agent-provider-key-1"
+  },
+  "open_checkout": {
+    "vct": "mandate.checkout.open.1",
+    "constraints": [
+      {
+        "type": "checkout.line_items",
+        "items": [
+          {
+            "id": "line_1",
+            "acceptable_items": [
+              {
+                "id": "supershoe_limited_edition_gold_sneaker_womens_9_0",
+                "title": "SuperShoe Limited Edition Gold"
+              }
+            ],
+            "quantity": 1
+          }
+        ]
+      },
+      {
+        "type": "checkout.allowed_merchants",
+        "allowed": [
+          {
+            "id": "merchant_1",
+            "name": "Demo Merchant",
+            "website": "https://demo-merchant.example"
+          }
+        ]
+      }
+    ],
+    "cnf": {
+      "jwk": {
+        "crv": "P-256",
+        "kty": "EC",
+        "x": "QpSyxPQHy38xckypDr54gZ3T42zj9iLtV4koyb5U27c",
+        "y": "37HLd7JJinxjJIn8J7HijssoeclbfhdW-gUL7feI9lw"
+      }
+    },
+    "iat": 1777342357,
+    "exp": 1777345957
+  },
+  "open_payment": {
+    "vct": "mandate.payment.open.1",
+    "constraints": [
+      {
+        "type": "payment.amount_range",
+        "currency": "USD",
+        "max": 20000,
+        "min": 0
+      },
+      {
+        "type": "payment.allowed_payees",
+        "allowed": [
+          {
+            "id": "merchant_1",
+            "name": "Demo Merchant",
+            "website": "https://demo-merchant.example"
+          }
+        ]
+      },
+      {
+        "type": "payment.reference",
+        "conditional_transaction_id": "FzLoxbbtgQGYZxoSM2NJYJtkFTSsdfUBoVEQ12k7JN8"
+      }
+    ],
+    "cnf": {
+      "jwk": {
+        "crv": "P-256",
+        "kty": "EC",
+        "x": "QpSyxPQHy38xckypDr54gZ3T42zj9iLtV4koyb5U27c",
+        "y": "37HLd7JJinxjJIn8J7HijssoeclbfhdW-gUL7feI9lw"
+      }
+    },
+    "iat": 1777342357,
+    "exp": 1777345957
+  },
+  "closed_payment_envelope": {
+    "iat": 1777342370,
+    "aud": "credential-provider",
+    "nonce": "a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3",
+    "sd_hash": "uixoHemmfrrCSbPREo9j-ziLuMkqExsPeWrwA-PK0Ck"
+  },
+  "closed_payment": {
+    "vct": "mandate.payment.1",
+    "transaction_id": "NivWhuqfzcvZNapvIEJ2-3tsdQLkiuIcye2g46WVgX8",
+    "payee": {
+      "id": "merchant_1",
+      "name": "Demo Merchant",
+      "website": "https://demo-merchant.example"
+    },
+    "payment_amount": {
+      "amount": 19900,
+      "currency": "USD"
+    },
+    "payment_instrument": {
+      "id": "stub",
+      "type": "card",
+      "description": "Card ••••4242"
+    }
+  },
+  "example_checkout_payload": {
+    "order_id": "09414145-b7bi-432e-bf5c-ha0ba0bc4580",
+    "merchant": {
+      "id": "merchant_1",
+      "name": "Demo Merchant",
+      "website": "https://demo-merchant.example"
+    },
+    "line_items": [
+      {
+        "id": "line_1",
+        "product": {
+          "id": "supershoe_limited_edition_gold_sneaker_womens_9_0",
+          "title": "SuperShoe Limited Edition Gold — Women's 9",
+          "price": 199.0,
+          "currency": "USD"
+        },
+        "quantity": 1
+      }
+    ],
+    "total_price": 199.0,
+    "currency": "USD",
+    "shipping_policy": "Standard Shipping",
+    "return_policy": "30-day returns"
+  }
+}
