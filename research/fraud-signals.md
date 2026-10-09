@@ -71,6 +71,8 @@ Session hijacking, session anomalies, and session age have direct analogues: age
 
 Fraud systems score merchants; KATA scores the *relationship* — is this agent interacting with merchants inside or outside its intent constraints? A shopping agent suddenly paying an unknown offshore merchant is the agentic version of a card being used at a high-risk MCC.
 
+Merchant risk is also the price. A counterparty with the right domain and the right settlement address can still charge above its own list, add a fee that was never disclosed, or collect twice after reporting a failure. Identity-keyed checks stay quiet, correctly, because the identity is not what is wrong. [AgentCommerceBench](https://github.com/BuildWithGordonAI/agentcommercebench) (Apache-2.0) isolates that shape as its F-family. The class mapping and the draft price and counterparty fields are in [docs/threat-model.md](../docs/threat-model.md) and [docs/intent-model.md](../docs/intent-model.md).
+
 ## How agentic AI shifts each signal
 
 Every variable above was designed for one actor per session: a human at a device. Agentic commerce adds a second actor — an AI agent transacting as the human's delegate. Some signals go flat, some matter more. (After the reference article, §12.)
@@ -100,7 +102,7 @@ Every variable above was designed for one actor per session: a human at a device
 | **Payment instrument** | BIN profile, prepaid flags, and issuing-country mismatches are card-level, not device-level. The wallet network token the agent transacts with becomes the trust anchor: issuance recency, spend caps, merchant allowlists. | Transaction-risk component unchanged; token metadata becomes first-class intent constraints. |
 | **Bank account** | Ownership validation and return history change little by channel. Agent-initiated payouts raise the stakes on payee and payout-destination changes — step up the *change itself*, not just the transaction. | Destination-change actions should trigger re-evaluation even when the amount looks normal. |
 
-**The net effect: assessment shifts from device trust to delegation trust.** Risk decisions split into two verdicts: *is this agent legitimate, and does this action match the grant?* — which is exactly KATA's WHO/authorized-by-WHOM vs. WHAT/intended/BEHAVING split.
+**The net effect: assessment shifts from device trust to delegation trust.** Risk decisions split into two verdicts: *is this agent legitimate, and does this action match the grant?* — which is exactly KATA's WHO/authorized-by-WHOM vs. WHAT/intended/BEHAVING split. Production settlements point the same way: AgentCommerceBench keys history on `agent_id` because that field is populated on 100% of settlements and `session_id` on 0.47%. A session is a weak join key. The agent, and the delegation behind it, is the one that is actually there.
 
 ## The correlation principle
 

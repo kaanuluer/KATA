@@ -341,7 +341,9 @@ The action should be evaluated against:
 3. Intent
 4. Behavioral history
 5. Risk signals
-6. Transaction context
+6. Transaction context, including price (quote, list, fees, charge) and the counterparty (merchant, settlement address, reputation)
+
+A charge under the intent ceiling can still be the wrong price. Quote and list are part of the action, not a second identity check.
 
 ---
 
@@ -584,7 +586,9 @@ Decision:
 BLOCK
 ```
 
-Another example:
+A second example keeps the amount inside the ceiling and still fails, for a different reason. A CAD 1,300 laptop under a CAD 1,500 ceiling matches the amount limit. That is not a price check. If the merchant listed and quoted that laptop at CAD 1,000, identity, delegation, and the ceiling can all hold while the charge does not. See [docs/intent-model.md](docs/intent-model.md) and [examples/price-integrity/](examples/price-integrity/).
+
+A third example:
 
 The agent selects a CAD 1,300 laptop but suddenly attempts to access the user's investment account.
 
@@ -839,6 +843,10 @@ How should natural-language intent become structured and verifiable?
 
 How should the system detect when an agent's actions gradually diverge from the original intent?
 
+### Price integrity
+
+How wide should a tolerance band be when honest price movement and overcharge overlap? Who supplies peer prices and delivery evidence? A draft of the fields is in [docs/intent-model.md](docs/intent-model.md). The width of the band is not settled.
+
 ### Behavioral Trust
 
 How much historical behavior should influence trust?
@@ -946,6 +954,7 @@ schemas/
 
 examples/
     shopping-agent/
+    price-integrity/
     payment-agent/
     banking-agent/
 

@@ -33,6 +33,10 @@ Valid identity + valid authorization ≠ valid action
 
 → **[`BLOCK`](../schemas/decision.json)** — `risk_score: 94`, reasons `ACTION_EXCEEDS_INTENT` and `DELEGATION_SCOPE_MISMATCH`, required action `HUMAN_APPROVAL`.
 
+## What this example does not cover
+
+This case fails because CAD 4,200 is over the CAD 1,500 ceiling. The inverse is not automatically safe. A CAD 1,300 laptop under that ceiling used to read as `ALLOW`, including when the merchant had listed and quoted it at CAD 1,000. That case is [`examples/price-integrity/`](../price-integrity/).
+
 ## Files
 
 - [`evaluate-request.json`](evaluate-request.json) — the `POST /kata/evaluate` payload

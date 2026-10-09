@@ -22,6 +22,9 @@ Structured intent turns "what did the human mean?" into something measurable: th
 | `maximum_amount` | number | Hard spending ceiling for the intent (in `currency`). |
 | `currency` | string | ISO 4217 currency code, e.g. `CAD`. |
 | `merchant_constraints` | array | Allowed / blocked merchants or merchant categories. Empty = no constraint. |
+| `price_expectation` | object | Optional quote and list anchors (`quoted_price`, `listed_price`) and a `tolerance_ratio`. A charge under `maximum_amount` can still disagree with the quote. |
+| `fee_policy` | object | Fees the principal has already accepted (`allowed_codes`, `allow_undisclosed`). |
+| `counterparty_constraints` | object | Who may be paid: merchant ids, settlement addresses, maximum counterparty risk. Complements `merchant_constraints`. |
 | `time_limit` | string (datetime) | The intent expires after this timestamp. |
 | `allowed_actions` | array of strings | Verbs the agent may perform under this intent: `search`, `compare`, `purchase`, `cancel`, etc. |
 | `constraints` | object | Additional key-value limits (e.g., `{"max_items": 1, "shipping": "standard"}`). |
@@ -46,7 +49,29 @@ Conceptual example:
 }
 ```
 
-The normative schema draft is [`schemas/intent.json`](../schemas/intent.json).
+The normative schema draft is [`schemas/intent.json`](../schemas/intent.json). Observed price, fees, settlement, and the counterparty live on the action — [`schemas/action.json`](../schemas/action.json) — because they are facts about the charge, not about the grant.
+
+## Price integrity
+
+`maximum_amount` answers "is this under the ceiling the principal set?" It does not answer "is this the price that was quoted?"
+
+> You tell an agent: **"Find and buy a laptop for me, maximum CAD 1,500."** The agent buys a CAD 1,300 laptop. The ceiling holds. The merchant had listed and quoted that laptop at CAD 1,000.
+
+Identity, delegation, and intent can all be valid while value still leaves. The party taking the extra is the counterparty, not a forged agent. KATA's draft separates three comparisons:
+
+| Comparison | Fields | What a mismatch means |
+|---|---|---|
+| Ceiling | `maximum_amount` vs. `amount` | The agent went past the grant. |
+| Quote and list | `price_expectation` vs. action `price.quoted_price`, `listed_price`, `charged_amount` | The charge moved off the price the principal was shown. |
+| Fees | `fee_policy` vs. `price.fee_breakdown` | A line was added that the principal had not accepted. |
+
+**Do not test quote equality.** Honest prices move. [AgentCommerceBench](https://github.com/BuildWithGordonAI/agentcommercebench) (BuildWithGordonAI, Apache-2.0) reports that 14.6% of legitimate purchases exceed 1.15× the quoted price and 4.8% exceed 1.45×, and its overcharge class overlaps that tail on purpose. A cut placed in a gap between "honest" and "attack" would measure nothing, because that gap is not there. `tolerance_ratio` is a band the principal declared for *this* intent. It is not a universal fraud line.
+
+**A per-agent spend baseline complements the ceiling. It does not replace it.** The same benchmark builds each agent's limit as a multiple of that agent's own typical spend, so one amount is over-limit for one agent and ordinary for another. The action may carry `agent_spend_baseline` for that relative check. A charge inside both the user's ceiling and the agent's own baseline can still be an overcharge against the list price.
+
+The counterparty block on the action (`merchant_id`, domain, `settlement_address` against `registered_settlement_address`, reputation and risk) is how KATA records *who is paid*. A matching settlement address is evidence the payee is the merchant it claims to be. It is not evidence the price is fair.
+
+Worked case: [`examples/price-integrity/`](../examples/price-integrity/).
 
 ## Intent capture UX (concept)
 
@@ -70,7 +95,7 @@ Action 3:         attempt purchase CAD 4,200          → BLOCK (ACTION_EXCEEDS_
 
 Detection approach:
 
-- **Per-action distance.** Each action is scored against the intent fields (amount over limit, disallowed merchant, expired time window, action verb not in `allowed_actions`).
+- **Per-action distance.** Each action is scored against the intent fields (amount over limit, quote or list outside `tolerance_ratio`, fee outside `fee_policy`, disallowed merchant or settlement address, expired time window, action verb not in `allowed_actions`).
 - **Cumulative drift.** A running measure of how far the session has moved from intent. Small deviations accumulate; the trend can trigger escalation before any single action crosses a hard line.
 - **Re-baselining requires the principal.** If the principal genuinely changes their mind, intent must be *explicitly re-declared* (new version) — the agent must never silently widen its own mandate.
 
@@ -83,4 +108,4 @@ Detection approach:
 
 ## Examples
 
-See [`examples/shopping-agent/`](../examples/shopping-agent/) for a worked intent-mismatch evaluation, and [`schemas/intent.json`](../schemas/intent.json) for the schema draft.
+See [`examples/shopping-agent/`](../examples/shopping-agent/) for a worked ceiling mismatch, [`examples/price-integrity/`](../examples/price-integrity/) for a charge under the ceiling that still fails the quote, and [`schemas/intent.json`](../schemas/intent.json) for the schema draft.
