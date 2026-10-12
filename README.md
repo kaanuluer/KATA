@@ -53,6 +53,20 @@ KATA is built on four questions that traditional auth never asks:
 
 Sardine's 2026 report describes a Know Your Agent (KYA) layer with four jobs: tell that the caller is a bot, check that it is authorized for a verified user, detect agent spoofing, and check that it stays inside a declared scope. Those jobs line up with Q1–Q4. KATA asks for a signed delegation and a signed structured intent, then a behavior check, and it keeps the decision record a cardholder can point at when they say they did not authorize the charge. The mapping is in [KATA.md](KATA.md#know-your-agent-kya).
 
+## Core vs. optional
+
+An implementation needs the core. Profiles and related work are optional.
+
+**Core (required).** The four questions above. The intent and delegation schemas ([`schemas/intent.json`](schemas/intent.json), [`schemas/delegation.json`](schemas/delegation.json)). The seven [decision outcomes](#decision-model).
+
+**Profiles / extensions (optional).** Use-case examples — payments, MCP or other tool calls, checkout — in [`examples/`](examples/).
+
+**Related work.** External references that position KATA. They add no question, schema, or decision.
+
+- [Sardine, *Rethinking Fraud Prevention for Agentic Commerce*](https://www.sardine.ai/whitepapers/rethinking-fraud-prevention-for-agentic-commerce) (2026). The Know Your Agent mapping is in [KATA.md](KATA.md#know-your-agent-kya).
+- [Darwinium press release, 8 October 2026](https://rss.globenewswire.com/news-release/2026/10/08/3377318/0/en/darwinium-puts-intent-intelligence-at-the-center-of-fraud-prevention-for-ai-agents-humans-and-bots.html). Intent Intelligence infers intent from behavior. Journey Transition Probability compares the order and timing of steps with typical behavior. MCP Protection ties an agent's MCP tool calls to that journey, verifies agent credentials, and can require a step-up before a payment. Darwinium reports that about one in four agentic transactions on its network self-declare. Darwinium infers intent from the path. KATA records a signed intent and measures behavior against that record. The one-in-four figure is Darwinium's.
+- [AgentCommerceBench](https://github.com/BuildWithGordonAI/agentcommercebench) (BuildWithGordonAI, Apache-2.0). A later evaluation set, not a coverage claim. See [Evaluation](#evaluation).
+
 ## Core trust model
 
 ```mermaid
@@ -233,6 +247,8 @@ Once a reference implementation exists, evaluate it against the [AgentCommerceBe
 | Changelog | [CHANGELOG.md](CHANGELOG.md) |
 
 ## What's new
+
+**2026-10-12.** README separates core (four questions, intent and delegation schemas, decision outcomes) from optional profiles and related work, including Darwinium. Details: [CHANGELOG.md](CHANGELOG.md).
 
 **2026-10-12.** The docs were updated from a reading of Sardine's public report *[Rethinking Fraud Prevention for Agentic Commerce](https://www.sardine.ai/whitepapers/rethinking-fraud-prevention-for-agentic-commerce)* (2026). KYA is mapped onto Q1–Q4. The threat model adds upstream AI-application account takeover, agent spoofing, undeclared automation, and merchant, first-party, and third-party typologies in agentic flows. Agent identity cites [IETF Web Bot Auth](https://datatracker.ietf.org/wg/webbotauth/about/). The risk model covers segmented agentic scoring, configurable `STEP_UP` thresholds, and degraded device and behavior signals. The liability note is that trust along the chain (user, AI provider, merchant, PSP or acquirer, network, issuer) is transitive, while liability is not. Nothing in the update is a measured result. Details: [CHANGELOG.md](CHANGELOG.md).
 

@@ -113,6 +113,8 @@ Can we determine the original intent, scope, limits, and constraints of the dele
 
 Does the agent's actual behavior and action remain consistent with the original intent?
 
+Example sources for that check: the sequence of MCP tool calls, and drift that shows up only across many requests. Both sit under this question.
+
 These questions form the foundation of KATA.
 
 ### Know Your Agent (KYA)
