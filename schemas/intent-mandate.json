@@ -1,0 +1,154 @@
+{
+  "$id": "https://KATA.org/schemas/intent-mandate.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "KATA Intent Mandate",
+  "description": "Immutable signed intent bound to one agent key. The principal's signature covers the intent, the limits, the human-readable rendering, and the agent key. Status: Concept / Open Design — not production ready. The agreement record that carries this mandate is schemas/agreement.json. amounts stay major units, as in schemas/intent.json.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["mandate_id", "version", "principal", "agent", "intent"],
+  "properties": {
+    "mandate_id": {
+      "type": "string",
+      "description": "Identifier of this mandate version. A new version uses a new mandate_id."
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Mandate version. Amendments increment it. intent.version is kept equal to it."
+    },
+    "supersedes": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "Hash of the signing document of the mandate version this one replaces."
+    },
+    "principal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["human", "business", "institution", "system", "agent"]
+        },
+        "id": { "type": "string" },
+        "display_name": { "type": "string" },
+        "public_key": { "$ref": "#/$defs/publicJwk" }
+      }
+    },
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["agent_id", "public_key_fingerprint"],
+      "properties": {
+        "agent_id": { "type": "string" },
+        "public_key_fingerprint": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "SHA-256 of the raw 32-byte Ed25519 public key."
+        },
+        "public_key": { "$ref": "#/$defs/publicJwk" }
+      }
+    },
+    "delegation_id": {
+      "type": "string",
+      "description": "Delegation this mandate is bound to. The delegation itself stays schemas/delegation.json."
+    },
+    "intent": {
+      "$ref": "intent.json",
+      "description": "Structured intent. maximum_amount is the per-transaction ceiling."
+    },
+    "limits": { "$ref": "#/$defs/limits" },
+    "not_before": { "type": "string", "format": "date-time" },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the mandate lapses. When intent.time_limit is also set, the two are the same instant."
+    },
+    "required_acknowledgements": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["agent", "merchant", "psp", "issuer"] },
+      "description": "Roles that must countersign before the agreement is active."
+    },
+    "revocation_endpoint": {
+      "type": "string",
+      "description": "Where a verifier reads revocation status. The reference library does not fetch it. If this is set, evaluation steps up until the caller says the endpoint was checked."
+    },
+    "rendering": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "hash"],
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "Human-readable confirmation, kata_mandate version 1. The principal signs this text."
+        },
+        "hash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "SHA-256 of the UTF-8 rendering text."
+        }
+      }
+    },
+    "signature": { "$ref": "#/$defs/jws" }
+  },
+  "$defs": {
+    "publicJwk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kty", "crv", "x"],
+      "properties": {
+        "kty": { "const": "OKP" },
+        "crv": { "const": "Ed25519" },
+        "x": { "type": "string" },
+        "kid": { "type": "string" }
+      },
+      "description": "Public OKP JWK (RFC 8037). The private parameter d is not a member of this object."
+    },
+    "jws": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protected", "payload", "signature"],
+      "properties": {
+        "protected": { "type": "string" },
+        "payload": { "type": "string" },
+        "signature": { "type": "string" }
+      },
+      "description": "Flattened JWS (RFC 7515), alg EdDSA. Protected header and payload are KATA canonical JSON."
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+        "per_transaction_maximum": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Restatement of intent.maximum_amount. The two must be equal. This is not a second ceiling."
+        },
+        "cumulative_maximum": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Total that may be spent under this agreement. Distinct from the per-transaction ceiling. Enforcement needs a ledger the mandate does not carry."
+        },
+        "frequency": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["max_count", "per"],
+          "properties": {
+            "max_count": { "type": "integer", "minimum": 1 },
+            "per": {
+              "type": "string",
+              "enum": ["agreement", "P1D", "P7D", "P1M"],
+              "description": "agreement is the whole window. P1D is one day, P7D is seven days, P1M is thirty days."
+            }
+          }
+        },
+        "merchant_denylist": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Merchants refused even when merchant_constraints is empty. Empty merchant_constraints still means no allowlist."
+        }
+      }
+    }
+  }
+}

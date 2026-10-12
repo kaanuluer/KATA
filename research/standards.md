@@ -28,7 +28,12 @@ KATA's stance is **standards-neutral**: where a credible standard exists, KATA c
 ### OAuth 2.0
 
 - **What it covers:** Delegated authorization: a client acts with scoped, revocable tokens on a resource owner's behalf.
-- **How KATA relates:** Conceptually adjacent — OAuth is the closest existing model to "delegation." But OAuth scopes are coarse and static; KATA needs intent-aware, behaviorally-monitored, continuously-evaluated delegation. KATA consumes OAuth tokens as delegation *evidence* while adding the intent/behavior/action layers OAuth never had.
+- **How KATA relates:** Conceptually adjacent — OAuth is the closest existing model to "delegation." But OAuth scopes are coarse and static; KATA needs intent-aware, behaviorally-monitored, continuously-evaluated delegation. KATA consumes OAuth tokens as delegation *evidence* while adding the intent/behavior/action layers OAuth never had. RFC 9396 Rich Authorization Requests can carry a KATA intent as `authorization_details`. The intent schema stays KATA's. See [docs/intent-agreement.md](../docs/intent-agreement.md).
+
+### GNAP (RFC 9635)
+
+- **What it covers:** Grant negotiation: a client asks an authorization server for access, the user may interact, and the resulting grant is bound to a key.
+- **How KATA relates:** The negotiate-then-grant loop is the same shape as an intent agreement's clarify-then-accept. A GNAP token is delegation evidence. GNAP access rights are not a KATA ceiling, a price band, or a behavior check. The signed mandate in [docs/intent-agreement.md](../docs/intent-agreement.md) stays the authority object.
 
 ### OpenID Connect
 
@@ -78,8 +83,8 @@ Industry efforts to give agents signed, credentialed identity and safe payment r
 
 ## What KATA deliberately does not standardize (yet)
 
-- The cryptographic format of delegation tokens.
-- The exact intent schema (a draft exists in [`schemas/`](../schemas/); formalization is future work).
+- The cryptographic format of delegation tokens. A reference signature for the **intent mandate** (Ed25519 JWS, canonical JSON) is drafted in [docs/intent-agreement.md](../docs/intent-agreement.md). It is a reference, not a claim that the wire format is finished.
+- The exact intent schema (a draft exists in [`schemas/`](../schemas/); the signed mandate embeds it).
 - The wire protocol for exchanging trust decisions between institutions.
 - Reputation exchange formats and privacy-preserving reputation protocols.
 

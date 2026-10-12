@@ -106,6 +106,12 @@ Detection approach:
 - Evaluations always reference the intent version in force at the time of the action.
 - Revocation of a delegation invalidates all intents bound to it.
 
+## Signed agreement
+
+The fields above are the intent. The **intent mandate** is that object signed by the principal and bound to one agent key. The **agreement** is the lifecycle around the mandate: propose, clarify, accept, acknowledge, amend, revoke, expire. `maximum_amount` stays the per-transaction ceiling. A cumulative cap and a frequency cap live on the mandate as `limits`, because they need a ledger the intent does not carry.
+
+Specification, threat notes, and the reference check: [intent-agreement.md](intent-agreement.md).
+
 ## Examples
 
-See [`examples/shopping-agent/`](../examples/shopping-agent/) for a worked ceiling mismatch, [`examples/price-integrity/`](../examples/price-integrity/) for a charge under the ceiling that still fails the quote, and [`schemas/intent.json`](../schemas/intent.json) for the schema draft.
+See [`examples/shopping-agent/`](../examples/shopping-agent/) for a worked ceiling mismatch, [`examples/price-integrity/`](../examples/price-integrity/) for a charge under the ceiling that still fails the quote, and [`schemas/intent.json`](../schemas/intent.json) for the schema draft. The runnable in-scope / out-of-scope check is [`reference/python/examples/purchase_check.py`](../reference/python/examples/purchase_check.py).

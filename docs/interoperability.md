@@ -267,6 +267,12 @@ Commit `8f7c1b5`, package `v1alpha1`. README: a unique id, ResolverMetadata, and
 
 No purchase constraints, no price fields, no seven-level decision.
 
+## KATA intent agreement
+
+The objects above are evidence. The signed agreement the principal actually confirms is specified in [intent-agreement.md](intent-agreement.md): an intent mandate (`schemas/intent-mandate.json`) inside an agreement record (`schemas/agreement.json`). That specification is authoritative for KATA. A verified AP2 or Verifiable Intent mandate can populate the intent fields, using the tables in this document, and it does not replace the KATA signature or the `ALLOW` / `STEP_UP` / `DENY` check.
+
+The reference library signs with Ed25519. It does not parse an AP2 JWS or an SD-JWT. Amounts in the KATA mandate stay major units.
+
 ## Shared rules
 
 - Do not map an amount ceiling onto `price_expectation.quoted_price`.

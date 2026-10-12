@@ -1,0 +1,142 @@
+{
+  "$id": "https://KATA.org/schemas/agreement.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "KATA Intent Agreement",
+  "description": "Lifecycle record for one intent mandate: proposal, clarification, acceptance, acknowledgement, amendment, revocation, and expiry. The event log is an audit trail. It is not, by itself, a revocation status service. Status: Concept / Open Design — not production ready.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["agreement_id", "status", "mandate", "events"],
+  "properties": {
+    "agreement_id": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["proposed", "clarifying", "accepted", "active", "revoked", "expired"],
+      "description": "Advisory. Evaluators derive authority from the signature, the window, the revocation signature, and required acknowledgements."
+    },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "mandate": {
+      "$ref": "intent-mandate.json",
+      "description": "The current mandate version."
+    },
+    "mandate_history": {
+      "type": "array",
+      "items": { "$ref": "intent-mandate.json" },
+      "description": "Earlier mandate versions, newest amendment's predecessor last. Not authoritative for a new action."
+    },
+    "acknowledgements": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/acknowledgement" },
+      "description": "Countersignatures of the current mandate hash. An acknowledgement of an older hash does not count."
+    },
+    "revocation": { "$ref": "#/$defs/revocation" },
+    "events": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/event" }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "status": { "enum": ["accepted", "active", "expired"] } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "mandate": {
+            "required": ["signature", "rendering"],
+            "properties": {
+              "principal": { "required": ["public_key"] }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "jws": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protected", "payload", "signature"],
+      "properties": {
+        "protected": { "type": "string" },
+        "payload": { "type": "string" },
+        "signature": { "type": "string" }
+      }
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "id"],
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": ["principal", "agent", "merchant", "psp", "issuer", "policy"]
+        },
+        "id": { "type": "string" }
+      }
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_id", "type", "at", "actor", "agreement_id", "mandate_hash", "event_hash"],
+      "properties": {
+        "event_id": { "type": "string" },
+        "type": {
+          "type": "string",
+          "enum": ["proposed", "clarified", "accepted", "activated", "acknowledged", "amended", "revoked", "expired"]
+        },
+        "at": { "type": "string", "format": "date-time" },
+        "actor": { "$ref": "#/$defs/actor" },
+        "agreement_id": { "type": "string" },
+        "mandate_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "prev_event_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "event_hash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "SHA-256 of the canonical event with this field removed. Each event names the previous event_hash."
+        },
+        "note": { "type": "string" },
+        "detail": { "type": "object" }
+      }
+    },
+    "acknowledgement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kata_ack", "agreement_id", "mandate_hash", "role", "id", "at", "public_key", "signature"],
+      "properties": {
+        "kata_ack": { "const": "1" },
+        "agreement_id": { "type": "string" },
+        "mandate_hash": { "type": "string" },
+        "role": { "type": "string", "enum": ["agent", "merchant", "psp", "issuer"] },
+        "id": { "type": "string" },
+        "at": { "type": "string", "format": "date-time" },
+        "public_key": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kty", "crv", "x"],
+          "properties": {
+            "kty": { "const": "OKP" },
+            "crv": { "const": "Ed25519" },
+            "x": { "type": "string" },
+            "kid": { "type": "string" }
+          }
+        },
+        "signature": { "$ref": "#/$defs/jws" }
+      }
+    },
+    "revocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kata_revocation", "agreement_id", "mandate_hash", "at", "reason", "signature"],
+      "properties": {
+        "kata_revocation": { "const": "1" },
+        "agreement_id": { "type": "string" },
+        "mandate_hash": { "type": "string" },
+        "at": { "type": "string", "format": "date-time" },
+        "reason": { "type": "string" },
+        "signature": { "$ref": "#/$defs/jws" }
+      }
+    }
+  }
+}

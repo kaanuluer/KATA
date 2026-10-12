@@ -57,7 +57,7 @@ Sardine's 2026 report describes a Know Your Agent (KYA) layer with four jobs: te
 
 An implementation needs the core. Profiles and related work are optional.
 
-**Core (required).** The four questions above. The intent and delegation schemas ([`schemas/intent.json`](schemas/intent.json), [`schemas/delegation.json`](schemas/delegation.json)). The seven [decision outcomes](#decision-model).
+**Core (required).** The four questions above. The intent and delegation schemas ([`schemas/intent.json`](schemas/intent.json), [`schemas/delegation.json`](schemas/delegation.json)), and the signed intent agreement that binds an intent to an agent ([`schemas/intent-mandate.json`](schemas/intent-mandate.json), [`schemas/agreement.json`](schemas/agreement.json)). The seven [decision outcomes](#decision-model).
 
 **Profiles / extensions (optional).** Use-case examples — payments, MCP or other tool calls, checkout — in [`examples/`](examples/).
 
@@ -215,13 +215,14 @@ This is conceptual — the framework will eventually define formal schemas and A
 ## What's next · Roadmap
 
 - [ ] Formal JSON Schemas — *drafted, see [`schemas/`](schemas/)*
-- [ ] Reference evaluation implementation (policy + decision engine sketch)
+- [x] Intent agreement — *signed mandate, lifecycle, and action check, see [docs/intent-agreement.md](docs/intent-agreement.md) and [`reference/python`](reference/python)*
+- [ ] Reference evaluation implementation (full seven-outcome engine: identity, behavior, risk score)
 - [ ] Threat model — *drafted, see [docs/threat-model.md](docs/threat-model.md)*
-- [ ] Intent schema & natural-language intent capture guidance — *price, fees, and counterparty drafted*
-- [ ] Delegation lifecycle & revocation protocol concepts
+- [ ] Intent schema & natural-language intent capture guidance — *price, fees, and counterparty drafted; the signed agreement is specified*
+- [ ] Delegation lifecycle & revocation protocol concepts — *intent-agreement revocation is drafted; distribution is not*
 - [ ] Example evaluations — *drafted, see [`examples/`](examples/)*
 - [ ] Interoperability notes for verifiable credentials & agent protocols — *drafted, see [docs/interoperability.md](docs/interoperability.md)*
-- [ ] External evaluation — *not started; blocked on the reference implementation*
+- [ ] External evaluation — *not started. The intent check exists; the benchmark run waits on the classes that check can see, and on the classes it cannot*
 
 ### Evaluation
 
@@ -238,15 +239,19 @@ Once a reference implementation exists, evaluate it against the [AgentCommerceBe
 | Threat model | [docs/threat-model.md](docs/threat-model.md) |
 | Risk model | [docs/risk-model.md](docs/risk-model.md) |
 | Intent model | [docs/intent-model.md](docs/intent-model.md) |
+| Intent agreement | [docs/intent-agreement.md](docs/intent-agreement.md) — signed mandate, lifecycle, action check |
 | Delegation model | [docs/delegation-model.md](docs/delegation-model.md) |
 | Agent identity | [docs/agent-identity.md](docs/agent-identity.md) |
-| Schemas | [schemas/](schemas/) — `agent`, `delegation`, `intent`, `action`, `decision` |
+| Schemas | [schemas/](schemas/) — `agent`, `delegation`, `intent`, `intent-mandate`, `agreement`, `action`, `decision` |
+| Reference library | [`reference/python`](reference/python) — sign a mandate, verify it, evaluate an action |
 | Interoperability | [docs/interoperability.md](docs/interoperability.md) — Verifiable Intent, AP2 v0.2 (and the v0.1 Intent/Cart/Payment names), Visa TAP, AGNTCY |
 | Examples | [examples/](examples/) — `shopping-agent`, `price-integrity`, `payment-agent`, `banking-agent`, `ucp-checkout` (UCP sketch), `verifiable-intent`, `ap2-checkout` |
 | Research | [research/fraud-signals.md](research/fraud-signals.md), [research/standards.md](research/standards.md) |
 | Changelog | [CHANGELOG.md](CHANGELOG.md) |
 
 ## What's new
+
+**2026-10-12.** Intent agreement: a signed mandate, an auditable lifecycle, and a reference check that returns `ALLOW`, `STEP_UP`, or `DENY`. Design in [docs/intent-agreement.md](docs/intent-agreement.md). Schemas `intent-mandate` and `agreement`. Library in [`reference/python`](reference/python). Details: [CHANGELOG.md](CHANGELOG.md).
 
 **2026-10-12.** README separates core (four questions, intent and delegation schemas, decision outcomes) from optional profiles and related work, including Darwinium. Details: [CHANGELOG.md](CHANGELOG.md).
 

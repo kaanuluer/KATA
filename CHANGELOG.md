@@ -2,6 +2,14 @@
 
 ## 2026-10-12
 
+Intent agreement, the machinery for KATA's third question.
+
+- [docs/intent-agreement.md](docs/intent-agreement.md) specifies the signed intent mandate, the agreement lifecycle, the action check (`ALLOW`, `STEP_UP`, `DENY`), the threat controls, and how AP2, Verifiable Intent, OAuth, RAR, and GNAP sit beside it. KATA's schemas stay authoritative.
+- [schemas/intent-mandate.json](schemas/intent-mandate.json) and [schemas/agreement.json](schemas/agreement.json). `intent.maximum_amount` stays the per-transaction ceiling. Cumulative and frequency limits are separate because they need a ledger.
+- [`reference/python`](reference/python) signs a mandate with Ed25519, verifies it, evaluates an action, and revokes or expires the agreement. Tests and `examples/purchase_check.py` cover an in-scope purchase and an out-of-scope one. No risk score and no behavior model. Not production ready.
+
+## 2026-10-12
+
 README now states what is core and what is optional. An implementation needs the four questions, the intent and delegation schemas, and the decision outcomes. Use-case examples (payments, MCP or tool calls, checkout) are profiles. Sardine, Darwinium, and AgentCommerceBench are related work: they position KATA and do not extend it.
 
 Darwinium's press release of 8 October 2026 is that related-work entry. Intent Intelligence infers intent from behavior (Journey Transition Probability on the order and timing of steps; MCP Protection links tool calls to the journey, checks agent credentials, and can step up before a payment). Darwinium reports that about one in four agentic transactions on its network self-declare. KATA records a signed intent and measures behavior against it. Under Q4, MCP tool-call sequences and aggregate drift across many requests are named as example signal sources. No new question, layer, or schema.

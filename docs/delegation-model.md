@@ -77,6 +77,10 @@ When an agent delegates to a sub-agent:
 - Each link records who delegated to whom, when, and under what narrowed scope.
 - A break or revocation anywhere in the chain invalidates everything below it.
 
+## Intent agreement
+
+The delegation names the intent ids it covers. The signed intent itself, the human-readable confirmation, countersignatures, and the check of one action against that intent are the intent agreement: [intent-agreement.md](intent-agreement.md). Revoking the agreement is a signed act by the principal. Revoking the delegation remains the Q2 control. A price failure on an action does not, by itself, revoke either record.
+
 ## Evidence from payment mandates
 
 An open Verifiable Intent or AP2 mandate is delegation evidence: a user key (or trusted-surface key) confirms the agent key (`cnf`), `exp` bounds the grant, and the constraint set is the scope. KATA still monitors every later action and can `REVOKE` the grant. Constraint checking inside those protocols is not a KATA decision. Field mapping: [interoperability.md](interoperability.md).
