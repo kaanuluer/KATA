@@ -10,6 +10,8 @@ Decades of fraud-prevention knowledge don't become obsolete when agents enter th
 
 Primary reference: **"From Cookie IDs to Agentic AI: Have Fun with Fraud Variables"** (Priyanka Aggarwal, October 2026) — https://priyacali.github.io/fraud-risk-signals-article/
 
+Related: **"Rethinking Fraud Prevention for Agentic Commerce"** (Sardine, 2026) — https://www.sardine.ai/whitepapers/rethinking-fraud-prevention-for-agentic-commerce ([PDF](https://go.sardine.ai/hubfs/2026%20Rethinking%20fraud%20prevention%20for%20agentic%20commerce/Sardine_Rethinking%20Fraud%20Prevention%20for%20Agentic%20Commerce%20whitepaper.pdf)). Sardine's whitepaper page attributes the paper to Chen Zamir. KATA uses it for the Know Your Agent mapping, upstream AI-application account takeover, undeclared automation, segmented scoring, and the liability asymmetry. Those write-ups are in [KATA.md](../KATA.md#know-your-agent-kya), [docs/threat-model.md](../docs/threat-model.md), and [docs/risk-model.md](../docs/risk-model.md). The signal-shift tables below stay anchored on Aggarwal. The paragraph after the "signals that weaken" table is Sardine's addition: what happens to the data when that shift is incomplete.
+
 ## Terminology
 
 Following the reference article's usage:
@@ -84,6 +86,8 @@ Every variable above was designed for one actor per session: a human at a device
 | **IP address** | The agent runs in its provider's cloud — geolocation and ASN describe a datacenter, not a customer. A shopping agent on a cloud ASN is the expected pattern. | Signed request identity verified at the edge; credentialed agent identity. |
 | **Device intelligence** | There is no human hand on a phone; the "device" is an ephemeral container. Root/jailbreak checks go dark. | Agent identity and provenance: provider, model, version, attested deployment. |
 | **Cookies** | Agents don't browse like returning customers — sessions may be shared across users or discarded each task. | Agent session identifiers bound to delegation, not browser persistence. |
+
+Sardine's 2026 report pushes the same three variables one step further, and KATA treats this as interpretation rather than a measurement. The input can be missing, generic, or simply the agent's: the runtime's IP and user agent, passed through as if they were the cardholder's. Derived checks — IP versus ship-to, device linkage, a human biometric — then fail together, and they can raise false positives while they miss the attack. Separately, agent retries and challenges the agent cannot answer on a human's clock get logged on the cardholder. Later human purchases inherit that noise. The response in the risk model is to score and monitor the agentic slice on its own baseline. See [docs/risk-model.md](../docs/risk-model.md).
 
 ### Signals that strengthen
 

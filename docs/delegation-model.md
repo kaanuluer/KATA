@@ -18,7 +18,7 @@ flowchart LR
     style X fill:#b91c1c,stroke:#b91c1c,color:#fff
 ```
 
-1. **Grant.** The principal issues a delegation: to which agent, for what purpose, with what limits. Grants should be explicit — never inferred from ambient authority.
+1. **Grant.** The principal issues a delegation: to which agent, for what purpose, with what limits. Grants should be explicit — never inferred from ambient authority. A scope the agent declares at purchase time is a weaker object than this grant. A first-party dispute ("I didn't authorize this") is checked against the principal's signed delegation and the signed intent it binds. See the Know Your Agent comparison in [KATA.md](../KATA.md#know-your-agent-kya).
 2. **Scope.** The delegation binds to structured intent(s) and constraints: amounts, merchants, time windows, allowed actions.
 3. **Monitor.** Every action under the delegation is evaluated by KATA (see [risk-model.md](risk-model.md)). Behavior, intent distance, and validity are checked continuously.
 4. **Revoke / expire.** The principal — or policy, on the principal's behalf — can revoke at any time. Delegations should be short-lived by default; expiry is a safety net, not the primary control.

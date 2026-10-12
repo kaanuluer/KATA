@@ -61,7 +61,41 @@ Not every signal needs to run on every evaluation. Following fraud-orchestration
 - **Passive signals continuously** — behavioral profiles, reputation, velocity counters. Collected in the background, consulted on every decision.
 - **Expensive signals at step-up only** — identity re-verification, SIM-swap queries, deep reputation lookups, human approval. High friction, high cost, reserved for elevated risk.
 
-The architecture follows the cost curve: the fast path stays fast, and depth is spent where risk justifies it. See [docs/architecture.md](docs/architecture.md).
+The architecture follows the cost curve: the fast path stays fast, and depth is spent where risk justifies it. See [architecture.md](architecture.md).
+
+## Data integrity in agentic flows
+
+Device and behavior signals were built for a person at a device. In an agentic flow those inputs fail in three ways at once, which is the reading in Sardine's 2026 report *[Rethinking Fraud Prevention for Agentic Commerce](https://www.sardine.ai/whitepapers/rethinking-fraud-prevention-for-agentic-commerce)*:
+
+- **Missing.** An API-based agent call may carry no user agent and no browser device.
+- **Generic.** A default or shared value stands in for a real one, so linkage and velocity computed from it describe a crowd.
+- **Someone else's.** The IP, the user agent, and the "biometrics" belong to the agent runtime. Typing speed, scroll, and clickstream, when they exist, describe the agent. They are recorded as if they were the cardholder.
+
+Features derived from those inputs then fail together: IP against shipping address, device linkage to known bad actors, a human behavioral-biometric score. A rule or a model fed that input can fire on the wrong person, and it can stay quiet on the right one. KATA already treats missing evidence as risk, and already expects IP, device, and cookie signals to weaken ([research/fraud-signals.md](../research/fraud-signals.md)). The operational consequence is the split below. A human-device rule that cannot see a human device is recalibrated for the agentic segment, or left out of it.
+
+Agent retries create a second failure. An agent that walks several merchants, cards, or prices produces declines, partial authorizations, and abandoned checkouts as part of searching. A 3-D Secure challenge the agent cannot complete on a human's clock is logged as a failed verification. If those events land on the cardholder's ordinary profile, later human purchases look riskier. The harm is a feedback loop. It stays invisible unless agentic activity is labeled.
+
+## Segmenting agentic traffic
+
+Score and monitor agentic traffic on its own path, beside the human e-commerce path.
+
+- **Separate scoring.** The agentic segment is tuned on the signals that segment actually has: agent identity, delegation, intent match, action velocity, counterparty. It does not inherit thresholds fitted to browser device graphs.
+- **Separate monitoring.** Volume will jump when a model, a partnership, or a campaign ships. Fraud that lives in a small agentic slice looks like noise inside total volume until the slice is its own chart.
+- **A protected human baseline.** Agent-labeled events stay out of the features that describe human cardholders, so retries and asynchronous challenge failures do not raise the human's score.
+
+KATA's risk graph is the correlation layer for the agentic segment. It still consumes issuer, merchant, and device signals when those signals are about the actor they claim to describe.
+
+Early agentic traffic is a poor place to freeze a strategy. Sardine's caution, which KATA shares as a design stance, is that today's flows are mostly programmatic and today's users are early adopters. Patterns from that slice are a source of failure modes. They are not a steady-state prior. No coverage number follows from that.
+
+## Configurable step-up
+
+`STEP_UP` is a threshold, applied per session and per action. It is not a switch for the whole channel.
+
+Upstream takeover of an AI application is the case that makes one-time enrollment insufficient. After the account is stolen, the agent and the grant still verify. Re-verification inside the session — a 3-D Secure challenge, or another check that the funding instrument's human is present — is the control that reaches past that session. It is expensive. Applied to every agentic purchase, that challenge suppresses approval rates, and the failures it causes get written back as risk (see the feedback loop above). Sardine's point, which this model adopts as policy guidance, is that a control with only two settings — every session, or none — cannot track a pattern that is still moving.
+
+The threshold has to move. Policy should be able to raise or lower step-up by flow (API versus in-browser), by merchant segment, by signal (a new ship-to, digital goods, velocity, a weak upstream enrollment result when that result is actually shared), and by learning phase while the segment is new. The seven-decision ladder already has the intermediate rungs (`ALLOW_WITH_MONITORING`, `STEP_UP`, `HUMAN_APPROVAL`). What operation needs is the ability to change which rung a given signal pattern lands on.
+
+No numeric threshold is specified here. Calibration is an open question at the end of this document.
 
 ## Price integrity and the counterparty
 
@@ -142,3 +176,5 @@ Trust is **dynamic**: an agent trusted five minutes ago may become untrusted. Re
 - How wide a price-tolerance band should be. The benchmark shows honest movement and overcharge overlap; KATA does not pick 1.15× or 1.45× as a threshold.
 - Who supplies `peer_price` and delivery evidence. Without them, `PRICE_DISCRIMINATION` and `SERVICE_DOWNGRADE` stay silent.
 - How decisions and scores are exchanged between institutions without leaking sensitive behavioral data.
+- How agentic and human events are labeled when the network does not tag the payment. Separate scoring depends on that label.
+- Where a `STEP_UP` threshold should sit for a given flow. This document specifies that the threshold is configurable. It does not pick a number.

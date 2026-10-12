@@ -115,6 +115,23 @@ Does the agent's actual behavior and action remain consistent with the original 
 
 These questions form the foundation of KATA.
 
+### Know Your Agent (KYA)
+
+Sardine's 2026 white paper *[Rethinking Fraud Prevention for Agentic Commerce](https://www.sardine.ai/whitepapers/rethinking-fraud-prevention-for-agentic-commerce)* describes a Know Your Agent layer with four responsibilities. They correspond to KATA's questions. The table is a reading of that paper, not a joint specification and not a measured result.
+
+| KYA responsibility | KATA question | What KATA keeps in view |
+|---|---|---|
+| Identify that the actor is a bot | **Q1 — WHO** is the agent? | Q1 names a specific agent: provider, model, deployment, cryptographic identity. Recognizing automation is the start of that answer. |
+| Verify the bot is authorized to act for a verified user | **Q2 — WHO** authorized the agent? | The grant is a signed delegation record: who, to which agent, until when, under what conditions, checked for freshness and revocation. |
+| Detect agent spoofing | **Q1**, with behavior as a backstop | Cryptographic request identity, such as [IETF Web Bot Auth](docs/agent-identity.md#web-bot-auth), makes a borrowed name harder to wear. A signature that verifies is still only identity. |
+| Verify the bot is acting within its declared scope | **Q3 — WHAT**, then **Q4** | Q3 is the principal's signed structured intent. Q4 checks whether behavior and the action still match that record. |
+
+Two consequences follow from the last row.
+
+**The scope is a signed record.** Q3 is evidence the principal bound: amount, category, merchant, time, allowed verbs. A scope the agent announces about itself at checkout is a weaker object. Intent capture signs the confirmed limits so later tampering is detectable ([docs/intent-model.md](docs/intent-model.md)).
+
+**The same record is the exhibit for "I didn't authorize this."** First-party disputes in agentic checkout often take that sentence: the cardholder says the agent bought something they did not accept, or that an agent mistake should be undone. A signed delegation, a signed intent, and the decision log (what was allowed, and why) are what a reviewer can compare to the charge. They do not decide who pays. See [Liability](#liability).
+
 ---
 
 # 6. Core Trust Model
@@ -464,6 +481,8 @@ The transaction proceeds with enhanced monitoring.
 
 Additional verification is required.
 
+In an agentic flow this is a threshold, not a channel-wide switch. Policy should be able to require per-session re-verification — including a check such as 3-D Secure that the human still controls the funding instrument — for some flows, segments, and signals, and to leave it off for others. A one-time enrollment check does not see a later takeover of the AI application account. See [docs/risk-model.md](docs/risk-model.md).
+
 ### HUMAN_APPROVAL
 
 The agent cannot independently complete the action.
@@ -756,6 +775,7 @@ Potentially relevant technologies and standards include:
 * Payment authentication standards
 * AI agent protocols
 * Emerging agentic commerce and payment frameworks (e.g., Universal Commerce Protocol (UCP), Visa's Trusted Agent Protocol, Mastercard Agent Pay with Verifiable Intent, Google AP2, Stripe's Agentic Commerce Suite)
+* [IETF Web Bot Auth](https://datatracker.ietf.org/wg/webbotauth/about/) — cryptographic authentication of automated clients, used as the agent-authentication layer by Visa and Mastercard agentic protocols
 
 KATA should consume identity and authorization evidence and convert it into a broader **trust and risk decision**. Field mapping for Verifiable Intent, AP2, Visa Trusted Agent Protocol, and AGNTCY identity is in [docs/interoperability.md](docs/interoperability.md).
 
@@ -786,6 +806,8 @@ KATA adds:
 > "Is the agent behaving normally?"
 
 > "Should this action be allowed?"
+
+Sardine reaches the same intersection from the fraud side and names the middle layer Know Your Agent. The four KYA jobs map onto the four questions above; the mapping, and where a signed intent goes past a declared scope, is in [§5](#know-your-agent-kya). KYA is one layer among three in that paper (user verification, agent verification, risk-based decisioning). KATA is the decision that sits across all three.
 
 Therefore KATA sits at the intersection of:
 
@@ -857,7 +879,20 @@ How quickly should delegation be revoked?
 
 ### Liability
 
-Who is responsible when an authorized agent performs an unauthorized or harmful action? Dispute rules for agent-delegated transactions are still being written (an open question for 2026–27) — KATA's explainable decisions (what was the grant, what did the agent do, why was it allowed) are designed to give liability frameworks the evidence they will need.
+Who pays when an authorized agent causes harm is still open. Dispute rules for agent-delegated transactions are still being written (an open question for 2026–27).
+
+Sardine's report names the asymmetry: **trust becomes transitive while liability does not.** Each party verifies a slice of the chain and relies on the other slices. The party that usually remains financially responsible is often not the party that checked the slice that failed.
+
+| Party | What they are asked to trust | What stays with them |
+|---|---|---|
+| **User** | The AI application, often after a single enrollment check | The dispute, including a real agent mistake and the claim that they did not authorize the purchase |
+| **AI provider** | Its own user verification, and the agent it provisioned | An incentive to let commerce through. A weak enrollment result, or a string of failed card adds, may never reach the merchant. |
+| **Merchant** | An agent, a scheme protocol, and upstream authentication the merchant did not perform | Fraud losses and chargebacks on a transaction whose human the merchant never saw |
+| **PSP / acquirer** | Merchant onboarding and the scheme's agent protocol | Portfolio exposure when agentic volume concentrates, including merchant-side abuse, under the scheme monitoring they already live with |
+| **Network** | Its agent-authentication protocol, and whichever agentic fields it passes on | Issuers cannot assume a reliable "this payment was agentic" label on the authorization |
+| **Issuer** | Card-level signals, plus whatever insight the network shares | Model damage when agent retries and failed challenges are written onto the human cardholder. New direct liability is not the main exposure. |
+
+KATA does not move any of those obligations. The decision log is the evidence: which agent, which signed grant, which intent, which action, why it was allowed. A first-party claim that the user did not authorize the purchase can be checked against that record. The check leaves the loss where the rules put it.
 
 ### Human Responsibility
 
@@ -965,6 +1000,8 @@ research/
     fraud-signals.md
     standards.md
 
+CHANGELOG.md
+
 LICENSE
 ```
 
@@ -994,6 +1031,24 @@ KATA takes several ideas from it:
 * **From device trust to delegation trust** — assessment splits into two verdicts: *is this agent legitimate, and does this action match the grant?*
 * **Cost discipline** — cheap signals run on every event, passive signals layer on continuously, expensive high-friction checks fire only at step-up moments.
 * **Verify, don't just block** — agentic AI should be treated as a new channel to verify, with good agents welcomed and bad ones made expensive.
+
+A second reference, read the same way, is:
+
+**"Rethinking Fraud Prevention for Agentic Commerce"** (Sardine, 2026)
+
+https://www.sardine.ai/whitepapers/rethinking-fraud-prevention-for-agentic-commerce
+
+[PDF](https://go.sardine.ai/hubfs/2026%20Rethinking%20fraud%20prevention%20for%20agentic%20commerce/Sardine_Rethinking%20Fraud%20Prevention%20for%20Agentic%20Commerce%20whitepaper.pdf)
+
+Sardine's whitepaper page attributes the paper to Chen Zamir. KATA takes these ideas from it, in paraphrase:
+
+* **Know Your Agent has four jobs**, and they line up with Q1–Q4: recognize a bot, verify authorization for a verified user, detect spoofing, check declared scope. KATA then asks for signed delegation and intent records, and for a behavior check, so "declared" becomes evidence. See [§5](#know-your-agent-kya).
+* **Verification can succeed and the outcome can still be fraud.** A compromised AI application account is an upstream account-takeover path: the agent, the grant, and the card still check out. See [docs/threat-model.md](docs/threat-model.md).
+* **Declared agents and undeclared automation are different populations.** Bot detection stays in front of, and beside, agent verification. An attacker who never claims to be an agent never enters the KYA path.
+* **Authorized agents can still aim at an illegitimate outcome** — stolen credentials enrolled on a real agent, policy abuse, a scam the grant did not forbid.
+* **Device and behavior data degrade**, and agent activity can contaminate the human's risk profile. Agentic traffic needs its own scoring and monitoring, and `STEP_UP` needs a movable threshold. See [docs/risk-model.md](docs/risk-model.md).
+* **Trust becomes transitive while liability does not**, across the user, the AI provider, the merchant, the PSP or acquirer, the network, and the issuer. See [Liability](#liability).
+* **[IETF Web Bot Auth](https://datatracker.ietf.org/wg/webbotauth/about/)** is the emerging standard the paper, and the scheme protocols, point at for proving a caller is a declared agent. See [docs/agent-identity.md](docs/agent-identity.md#web-bot-auth).
 
 KATA extends these principles into agentic systems.
 

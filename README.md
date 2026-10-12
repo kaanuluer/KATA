@@ -51,6 +51,8 @@ KATA is built on four questions that traditional auth never asks:
 | 3 | **WHAT** was the agent authorized to do? | Original intent, scope, limits, constraints |
 | 4 | **IS THE AGENT** behaving consistently with that authorization? | Behavior and action vs. declared intent, including price and counterparty terms |
 
+Sardine's 2026 report describes a Know Your Agent (KYA) layer with four jobs: tell that the caller is a bot, check that it is authorized for a verified user, detect agent spoofing, and check that it stays inside a declared scope. Those jobs line up with Q1–Q4. KATA asks for a signed delegation and a signed structured intent, then a behavior check, and it keeps the decision record a cardholder can point at when they say they did not authorize the charge. The mapping is in [KATA.md](KATA.md#know-your-agent-kya).
+
 ## Core trust model
 
 ```mermaid
@@ -228,6 +230,11 @@ Once a reference implementation exists, evaluate it against the [AgentCommerceBe
 | Interoperability | [docs/interoperability.md](docs/interoperability.md) — Verifiable Intent, AP2 v0.2 (and the v0.1 Intent/Cart/Payment names), Visa TAP, AGNTCY |
 | Examples | [examples/](examples/) — `shopping-agent`, `price-integrity`, `payment-agent`, `banking-agent`, `ucp-checkout` (UCP sketch), `verifiable-intent`, `ap2-checkout` |
 | Research | [research/fraud-signals.md](research/fraud-signals.md), [research/standards.md](research/standards.md) |
+| Changelog | [CHANGELOG.md](CHANGELOG.md) |
+
+## What's new
+
+**2026-10-12.** The docs were updated from a reading of Sardine's public report *[Rethinking Fraud Prevention for Agentic Commerce](https://www.sardine.ai/whitepapers/rethinking-fraud-prevention-for-agentic-commerce)* (2026). KYA is mapped onto Q1–Q4. The threat model adds upstream AI-application account takeover, agent spoofing, undeclared automation, and merchant, first-party, and third-party typologies in agentic flows. Agent identity cites [IETF Web Bot Auth](https://datatracker.ietf.org/wg/webbotauth/about/). The risk model covers segmented agentic scoring, configurable `STEP_UP` thresholds, and degraded device and behavior signals. The liability note is that trust along the chain (user, AI provider, merchant, PSP or acquirer, network, issuer) is transitive, while liability is not. Nothing in the update is a measured result. Details: [CHANGELOG.md](CHANGELOG.md).
 
 ## Contributing
 
