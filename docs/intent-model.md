@@ -79,7 +79,7 @@ The hardest design problem: turning natural language into structured intent with
 
 1. **Parse.** The agent (or the KATA layer) proposes a structured intent from the human's instruction.
 2. **Confirm.** For anything consequential (money, data, commitments), the principal reviews and confirms the key limits — amount, scope, deadline — in plain language. *"So: one laptop, max CAD 1,500, by Oct 10. Right?"*
-3. **Sign.** The confirmed intent is recorded immutably (signed, versioned) so later tampering is detectable.
+3. **Sign.** The confirmed intent is recorded immutably (signed, versioned) so later tampering is detectable. A scope the agent declares at checkout is not this record. The signed intent is what a reviewer compares to the charge when the cardholder says they did not authorize it ([KATA.md](../KATA.md#know-your-agent-kya)).
 4. **Default tight.** When intent is ambiguous, KATA should prefer narrower scope and escalate (`STEP_UP` / `HUMAN_APPROVAL`) rather than assume.
 
 ## Intent drift detection (concept)

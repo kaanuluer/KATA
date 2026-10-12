@@ -53,7 +53,11 @@ flowchart TD
 3. **Evaluate.** The risk engine correlates the action against identity + delegation + intent + behavior + context, producing component risks and a combined assessment. The action comparison includes price integrity (quote, list, fees, charge) and the counterparty, not only the intent ceiling.
 4. **Decide.** Policy maps the assessment to a decision. `ALLOW` proceeds; `STEP_UP` / `HUMAN_APPROVAL` pause for verification; `BLOCK` / `REVOKE` / `QUARANTINE` stop the action and may change the delegation's state. Conceptually, every decision resolves two verdicts: *is this agent legitimate* (identity + delegation + provenance) and *does this action match the grant* (intent + behavior + action vs. authorization).
 5. **Record.** Every evaluation — inputs, signals, decision, and rationale — is logged as an auditable trail. This feeds the behavior module for continuous verification.
-6. **Re-evaluate.** Outcomes and new risk intelligence trigger re-evaluation of active sessions. Trust is never cached indefinitely.
+6. **Re-evaluate.** Outcomes and new risk intelligence trigger re-evaluation of active sessions. Trust is never cached indefinitely. A `STEP_UP` on a later action in the same session — including a funding-instrument challenge — is a normal output of that loop, not a second product.
+
+## Segmented decisioning
+
+Agentic actions should be scored and monitored apart from human-initiated payments. Device and behavior features on an agentic call often describe the agent runtime, and agent retries can raise the human cardholder's later risk if the two populations share one model and one baseline. The risk engine still correlates a signal when it is about the actor it claims to describe. The split is which baseline and which thresholds apply. Step-up thresholds are configurable per flow and per signal. See [risk-model.md](risk-model.md).
 
 ## API surface (conceptual)
 
@@ -79,7 +83,7 @@ All three are deployment *patterns*, not products. The framework is standards-ne
 ## Latency considerations
 
 - **Pre-execution evaluation** is on the critical path: keep the default path fast (cached identity/delegation/intent lookups, local policy), and push deep behavioral analysis to async re-evaluation where possible.
-- **Tier the checks (cost discipline).** Cheap signals run on every event (delegation validity, hard intent limits); passive signals (behavioral profiles, reputation) layer on continuously; expensive, high-friction checks (identity re-verification, SIM-swap queries, human approval) fire only at step-up moments. The architecture follows the cost curve.
+- **Tier the checks (cost discipline).** Cheap signals run on every event (delegation validity, hard intent limits); passive signals (behavioral profiles, reputation) layer on continuously; expensive, high-friction checks (identity re-verification, SIM-swap queries, human approval, per-session 3-D Secure) fire only at step-up moments. Which pattern reaches that rung is policy, and it should be movable per flow and per signal rather than fixed on or off for every agentic payment. The architecture follows the cost curve.
 - **Fail closed vs. fail open** is a policy decision, not an architectural one: critical actions (payments, transfers) should fail closed on evaluation errors; informational actions may fail open with monitoring.
 
 ## Out of scope for this document
