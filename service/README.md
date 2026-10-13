@@ -66,7 +66,17 @@ Put the three lines into Vercel environment variables. The notifier JWK is publi
 
 | Method | Path | Auth | Behavior |
 |---|---|---|---|
-| `GET` | `/` | none | Web page. Explains the four questions, runs a sample intent check, and shows the revocation list, published keys, and transparency-log head. |
+| `GET` | `/` | none | Web page. Explains the four questions, runs a sample intent check, shows the revocation list, published keys, and transparency-log head, and includes the repository timeline. Header and footer link to the GitHub repository. |
+| `GET` | `/history` | none | The same timeline: commit dates, `CHANGELOG.md`, and GitHub pull requests. |
+| `GET` | `/docs` | none | Documentation index: design, authorization, intent, threat model, related docs, schemas, and the API reference. |
+| `GET` | `/docs/design` | none | `docs/intent-agreement.md`, including the lifecycle section. |
+| `GET` | `/docs/authorization` | none | `docs/delegation-model.md`. |
+| `GET` | `/docs/intent` | none | `docs/intent-model.md`. |
+| `GET` | `/docs/threat-model` | none | `docs/threat-model.md`. |
+| `GET` | `/docs/schemas` | none | Index of `schemas/*.json`. |
+| `GET` | `/docs/schemas/{name}.json` | none | One schema file, unchanged, as `application/json`. |
+| `GET` | `/docs/api` | none | Endpoint reference with request and response examples. |
+| `GET` | `/docs/openapi` | none | FastAPI's generated OpenAPI page. `/openapi.json` is the document. |
 | `POST` | `/demo/check` | none | Signs a sample intent with the public demo keys and returns `ALLOW`, `DENY`, or `STEP_UP`. |
 | `GET` | `/v1/revocations` | none | Pull list. `Cache-Control: public, max-age=300`. Body is `{"revocations": [...]}`. |
 | `POST` | `/v1/revocations/push` | notifier JWS | Stores a principal revocation and appends it to the log. A second delivery of the same revocation does not append again. |

@@ -5,14 +5,26 @@
 from __future__ import annotations
 
 import hmac
+import html
 import re
+from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 
 from kata_service.demo import run_demo
+from kata_service.pages import (
+    DOCUMENT_SLUGS,
+    api_reference,
+    documentation_index,
+    history_page,
+    home_page,
+    render_document,
+    schema_bytes,
+    schema_index,
+)
 
 from kata_intent.canonical import canonical_bytes
 from kata_intent.errors import KataError
@@ -36,7 +48,7 @@ def create_app(
     """Build the service. Tests pass a memory store. Vercel uses ``app`` below."""
 
     resolved = settings if settings is not None else settings_from_env()
-    app = FastAPI(title="KATA deployment service", docs_url=None, redoc_url=None)
+    app = FastAPI(title="KATA deployment service", docs_url="/docs/openapi", redoc_url=None)
     app.state.settings = resolved
     app.state.store = store
     app.state.fx = fx_fetcher if fx_fetcher is not None else FrankfurterFx(resolved.fx_source_url)
@@ -45,7 +57,54 @@ def create_app(
 
     @app.get("/")
     def home():
-        return HTMLResponse((pages / "index.html").read_text(encoding="utf-8"))
+        return HTMLResponse(home_page())
+
+    @app.get("/history")
+    def history():
+        return HTMLResponse(history_page())
+
+    @app.get("/docs")
+    def docs():
+        return _page(documentation_index)
+
+    @app.get("/docs/api")
+    def docs_api():
+        return _page(api_reference)
+
+    @app.get("/docs/schemas")
+    def docs_schemas():
+        return _page(schema_index)
+
+    @app.get("/docs/schemas/{name}.json")
+    def docs_schema_file(name: str):
+        try:
+            payload = schema_bytes(f"{name}.json")
+        except FileNotFoundError as exc:
+            return _error(500, str(exc))
+        if payload is None:
+            return _error(404, "schema was not found")
+        return Response(payload, media_type="application/json")
+
+    def _bind_document(slug: str) -> Callable[[], HTMLResponse | JSONResponse]:
+        def handler():
+            try:
+                page = render_document(slug)
+            except FileNotFoundError as exc:
+                return _missing_docs(exc)
+            if page is None:
+                return _error(404, "document was not found")
+            return HTMLResponse(page)
+
+        handler.__name__ = "docs_" + slug.replace("-", "_")
+        return handler
+
+    for _slug in DOCUMENT_SLUGS:
+        app.add_api_route(
+            f"/docs/{_slug}",
+            _bind_document(_slug),
+            methods=["GET"],
+            response_model=None,
+        )
 
     @app.get("/assets/{name}")
     def asset(name: str):
@@ -272,6 +331,19 @@ def _static_dir():
 
 def _error(status: int, message: str) -> JSONResponse:
     return JSONResponse({"error": message}, status_code=status)
+
+
+def _missing_docs(exc: FileNotFoundError) -> HTMLResponse:
+    message = html.escape(str(exc))
+    return HTMLResponse(f"<p>{message}</p>", status_code=500)
+
+
+def _page(builder: Callable[[], str]) -> HTMLResponse:
+    try:
+        body = builder()
+    except FileNotFoundError as exc:
+        return _missing_docs(exc)
+    return HTMLResponse(body)
 
 
 app = create_app()

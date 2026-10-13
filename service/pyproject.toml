@@ -8,6 +8,7 @@ license = "Apache-2.0"
 authors = [{name = "Kaan Uluer"}]
 dependencies = [
   "fastapi>=0.117.1",
+  "markdown>=3.7",
   "psycopg[binary]>=3.2",
 ]
 

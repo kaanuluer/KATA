@@ -1,139 +1,105 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>KATA — Know And Trust Agents</title>
-  <meta name="description" content="KATA checks who an agent is, who authorized it, what it was authorized to do, and whether this action still matches.">
-  <link rel="icon" href="/assets/kata-icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/assets/app.css">
-</head>
-<body>
-  <a class="skip" href="#demo">Skip to the demo</a>
-  <div class="wrap">
-    <header class="site">
-      <a class="brand" href="#top">
-        <img class="logo" src="/assets/kata-logo.svg" alt="KATA" width="247" height="64">
-        <span>Know And Trust Agents</span>
-      </a>
-      <nav class="site" aria-label="Page">
-        <a href="#questions">Questions</a>
-        <a href="#demo">Demo</a>
-        <a href="#operations">Live status</a>
-      </nav>
-    </header>
+<section class="hero">
+  <p class="kicker">Concept · Not production ready</p>
+  <h1>Know the agent before the payment goes through.</h1>
+  <p class="lede">KATA is a framework for knowing who an AI agent is, who authorized it, what it was authorized to do, and whether the action it is about to take still matches that authorization. A valid identity is not the same thing as a valid action.</p>
+  <ol class="questions" id="questions">
+    <li>
+      <em>01</em>
+      <strong>Who is the agent?</strong>
+      <p>Identity and provenance of the agent that wants to act.</p>
+    </li>
+    <li>
+      <em>02</em>
+      <strong>Who authorized it?</strong>
+      <p>The principal who signed the delegation and the intent.</p>
+    </li>
+    <li>
+      <em>03</em>
+      <strong>What was it authorized to do?</strong>
+      <p>Purpose, ceiling, currency, merchants, and expiry.</p>
+    </li>
+    <li>
+      <em>04</em>
+      <strong>Does this behavior match?</strong>
+      <p>The payment is checked against that signed record.</p>
+    </li>
+  </ol>
+</section>
 
-    <main id="top">
-      <section class="hero">
-        <p class="kicker">Concept · Not production ready</p>
-        <h1>Know the agent before the payment goes through.</h1>
-        <p class="lede">KATA is a framework for knowing who an AI agent is, who authorized it, what it was authorized to do, and whether the action it is about to take still matches that authorization. A valid identity is not the same thing as a valid action.</p>
-        <ol class="questions" id="questions">
-          <li>
-            <em>01</em>
-            <strong>Who is the agent?</strong>
-            <p>Identity and provenance of the agent that wants to act.</p>
-          </li>
-          <li>
-            <em>02</em>
-            <strong>Who authorized it?</strong>
-            <p>The principal who signed the delegation and the intent.</p>
-          </li>
-          <li>
-            <em>03</em>
-            <strong>What was it authorized to do?</strong>
-            <p>Purpose, ceiling, currency, merchants, and expiry.</p>
-          </li>
-          <li>
-            <em>04</em>
-            <strong>Does this behavior match?</strong>
-            <p>The payment is checked against that signed record.</p>
-          </li>
-        </ol>
-      </section>
-
-      <section id="demo">
-        <h2>Try a signed intent</h2>
-        <p class="lede">This sample uses public demo keys for K. Uluer and the agent shopper-01. The page asks the reference library to render the confirmation, sign it, and return allow, deny, or step-up. It does not spend money.</p>
-        <form id="demo-form" class="panel">
-          <div class="demo-grid">
-            <fieldset>
-              <legend>Intent the principal signs</legend>
-              <label for="maximum_amount">Maximum amount</label>
-              <input id="maximum_amount" name="maximum_amount" type="number" min="0" step="0.01" value="1500" required>
-              <label for="intent_currency">Currency</label>
-              <input id="intent_currency" name="intent_currency" value="CAD" maxlength="3" required>
-              <label for="purpose">Purpose</label>
-              <select id="purpose" name="purpose">
-                <option value="purchase" selected>purchase</option>
-                <option value="payment">payment</option>
-                <option value="transfer">transfer</option>
-              </select>
-              <label for="category">Category</label>
-              <input id="category" name="category" value="electronics">
-              <label for="allowed_merchant">Allowed merchant, if any</label>
-              <input id="allowed_merchant" name="allowed_merchant" placeholder="Leave empty for any merchant">
-              <label for="natural_language">Instruction</label>
-              <textarea id="natural_language" name="natural_language">Find and buy a laptop for me, maximum CAD 1,500.</textarea>
-              <label class="check" for="include_expiry">
-                <input id="include_expiry" name="include_expiry" type="checkbox" checked>
-                Include an expiry. Without one, the check asks for approval.
-              </label>
-              <label for="time_limit">Expiry date</label>
-              <input id="time_limit" name="time_limit" type="date">
-            </fieldset>
-            <fieldset>
-              <legend>Payment the agent proposes</legend>
-              <label for="item">Item</label>
-              <input id="item" name="item" value="Laptop" required>
-              <label for="payment_amount">Amount</label>
-              <input id="payment_amount" name="payment_amount" type="number" min="0" step="0.01" value="1300" required>
-              <label for="payment_currency">Currency</label>
-              <input id="payment_currency" name="payment_currency" value="CAD" maxlength="3" required>
-              <label for="payment_merchant">Merchant</label>
-              <input id="payment_merchant" name="payment_merchant" value="techstore.example" required>
-              <div class="actions">
-                <button type="submit">Sign and check</button>
-                <button class="ghost" type="button" data-preset="allow">CAD 1,300 laptop</button>
-                <button class="ghost" type="button" data-preset="deny">CAD 4,200 laptop</button>
-                <button class="ghost" type="button" data-preset="step">No expiry</button>
-              </div>
-            </fieldset>
-          </div>
-          <div id="demo-result" class="result" hidden aria-live="polite"></div>
-        </form>
-      </section>
-
-      <section id="operations">
-        <div class="ops-head">
-          <h2>What this deployment is publishing</h2>
-          <button id="refresh-ops" class="ghost" type="button">Refresh</button>
+<section id="demo">
+  <h2>Try a signed intent</h2>
+  <p class="lede">This sample uses public demo keys for K. Uluer and the agent shopper-01. The page asks the reference library to render the confirmation, sign it, and return allow, deny, or step-up. It does not spend money.</p>
+  <form id="demo-form" class="panel">
+    <div class="demo-grid">
+      <fieldset>
+        <legend>Intent the principal signs</legend>
+        <label for="maximum_amount">Maximum amount</label>
+        <input id="maximum_amount" name="maximum_amount" type="number" min="0" step="0.01" value="1500" required>
+        <label for="intent_currency">Currency</label>
+        <input id="intent_currency" name="intent_currency" value="CAD" maxlength="3" required>
+        <label for="purpose">Purpose</label>
+        <select id="purpose" name="purpose">
+          <option value="purchase" selected>purchase</option>
+          <option value="payment">payment</option>
+          <option value="transfer">transfer</option>
+        </select>
+        <label for="category">Category</label>
+        <input id="category" name="category" value="electronics">
+        <label for="allowed_merchant">Allowed merchant, if any</label>
+        <input id="allowed_merchant" name="allowed_merchant" placeholder="Leave empty for any merchant">
+        <label for="natural_language">Instruction</label>
+        <textarea id="natural_language" name="natural_language">Find and buy a laptop for me, maximum CAD 1,500.</textarea>
+        <label class="check" for="include_expiry">
+          <input id="include_expiry" name="include_expiry" type="checkbox" checked>
+          Include an expiry. Without one, the check asks for approval.
+        </label>
+        <label for="time_limit">Expiry date</label>
+        <input id="time_limit" name="time_limit" type="date">
+      </fieldset>
+      <fieldset>
+        <legend>Payment the agent proposes</legend>
+        <label for="item">Item</label>
+        <input id="item" name="item" value="Laptop" required>
+        <label for="payment_amount">Amount</label>
+        <input id="payment_amount" name="payment_amount" type="number" min="0" step="0.01" value="1300" required>
+        <label for="payment_currency">Currency</label>
+        <input id="payment_currency" name="payment_currency" value="CAD" maxlength="3" required>
+        <label for="payment_merchant">Merchant</label>
+        <input id="payment_merchant" name="payment_merchant" value="techstore.example" required>
+        <div class="actions">
+          <button type="submit">Sign and check</button>
+          <button class="ghost" type="button" data-preset="allow">CAD 1,300 laptop</button>
+          <button class="ghost" type="button" data-preset="deny">CAD 4,200 laptop</button>
+          <button class="ghost" type="button" data-preset="step">No expiry</button>
         </div>
-        <div class="ops">
-          <article>
-            <h3>Revocation list</h3>
-            <p>Pulled from <span class="meta">GET /v1/revocations</span>. Cached for five minutes.</p>
-            <div id="revocation-body"><p>Loading the revocation list…</p></div>
-          </article>
-          <article>
-            <h3>Published keys</h3>
-            <p>The log public key and any extra records at <span class="meta">/.well-known/kata-keys.json</span>.</p>
-            <div id="keys-body"><p>Loading published keys…</p></div>
-          </article>
-          <article>
-            <h3>Transparency log</h3>
-            <p>The signed tree head from <span class="meta">GET /v1/log/head</span>.</p>
-            <div id="log-body"><p>Loading the tree head…</p></div>
-          </article>
-        </div>
-      </section>
-    </main>
+      </fieldset>
+    </div>
+    <div id="demo-result" class="result" hidden aria-live="polite"></div>
+  </form>
+</section>
 
-    <footer class="site">
-      <p>KATA. Copyright 2026 Kaan Uluer. PolyForm Noncommercial License.</p>
-      <p>The demo seed is public and is not a production signing key. Verdicts here are allow, deny, or step-up. Deny means block the action. It does not revoke the grant.</p>
-    </footer>
+<section id="operations">
+  <div class="ops-head">
+    <h2>What this deployment is publishing</h2>
+    <button id="refresh-ops" class="ghost" type="button">Refresh</button>
   </div>
-  <script src="/assets/app.js"></script>
-</body>
-</html>
+  <div class="ops">
+    <article>
+      <h3>Revocation list</h3>
+      <p>Pulled from <span class="meta">GET /v1/revocations</span>. Cached for five minutes.</p>
+      <div id="revocation-body"><p>Loading the revocation list…</p></div>
+    </article>
+    <article>
+      <h3>Published keys</h3>
+      <p>The log public key and any extra records at <span class="meta">/.well-known/kata-keys.json</span>.</p>
+      <div id="keys-body"><p>Loading published keys…</p></div>
+    </article>
+    <article>
+      <h3>Transparency log</h3>
+      <p>The signed tree head from <span class="meta">GET /v1/log/head</span>.</p>
+      <div id="log-body"><p>Loading the tree head…</p></div>
+    </article>
+  </div>
+</section>
+
+<!--HISTORY-->

@@ -7,6 +7,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from kata_service.asgi import create_app
+from kata_service.pages import schema_bytes
 from kata_service.settings import Settings
 from kata_service.store import MemoryStore
 
@@ -34,6 +35,120 @@ def test_home_page_explains_kata_in_english():
     assert "open source" not in body.lower()
     assert '/assets/kata-logo.svg' in body
     assert '/assets/kata-icon.svg' in body
+
+
+def test_home_links_github_history_and_docs():
+    body = _client().get("/").text
+    assert body.count('href="https://github.com/kaanuluer/KATA"') >= 2
+    assert 'href="/history"' in body
+    assert 'href="/docs"' in body
+    assert ">History<" in body
+    assert ">Docs<" in body
+    assert ">GitHub<" in body
+    assert "2026-10-04" in body
+    assert "a581f1c" in body
+    assert "PolyForm Noncommercial" in body
+    assert "open source" not in body.lower()
+    assert "open-source" not in body.lower()
+
+
+def test_history_page_uses_repository_facts():
+    page = _client().get("/history")
+    assert page.status_code == 200
+    assert "text/html" in page.headers["content-type"]
+    body = page.text
+    assert "2026-10-04" in body
+    assert "a581f1c" in body
+    assert "Initial commit" in body
+    assert "2026-10-08" in body
+    assert "2026-10-09T02:05:23Z" in body
+    assert "2026-10-12T22:46:54Z" in body
+    assert "2026-10-13T04:16:43Z" in body
+    assert 'href="https://github.com/kaanuluer/KATA"' in body
+    assert "PolyForm Noncommercial" in body
+    assert "Apache License, Version 2.0" in body
+    assert "open source" not in body.lower()
+    assert "open-source" not in body.lower()
+
+
+def test_docs_index_lists_the_requested_pages():
+    page = _client().get("/docs")
+    assert page.status_code == 200
+    body = page.text
+    for href in (
+        "/docs/design",
+        "/docs/design#lifecycle",
+        "/docs/authorization",
+        "/docs/intent",
+        "/docs/threat-model",
+        "/docs/schemas",
+        "/docs/api",
+    ):
+        assert f'href="{href}"' in body
+    assert "PolyForm Noncommercial" in body
+    assert "open source" not in body.lower()
+    assert "open-source" not in body.lower()
+
+
+def test_rendered_docs_come_from_the_repository():
+    client = _client()
+    design = client.get("/docs/design")
+    assert design.status_code == 200
+    assert "Intent Agreement" in design.text
+    assert "Lifecycle" in design.text
+    assert 'id="lifecycle"' in design.text
+    assert 'href="/docs/authorization"' in design.text
+    assert 'href="/docs/schemas/decision.json"' in design.text
+    assert "open source" not in design.text.lower()
+    assert "open-source" not in design.text.lower()
+
+    authorization = client.get("/docs/authorization")
+    assert authorization.status_code == 200
+    assert "Delegation" in authorization.text
+    assert "github.com/kaanuluer/KATA/blob/main/KATA.md" in authorization.text
+
+    intent = client.get("/docs/intent")
+    assert intent.status_code == 200
+    assert "Intent Model" in intent.text
+
+    threat = client.get("/docs/threat-model")
+    assert threat.status_code == 200
+    assert "Threat Model" in threat.text
+    assert "github.com/kaanuluer/KATA/blob/main/KATA.md" in threat.text
+    assert "open-source" not in threat.text.lower()
+
+
+def test_schema_index_and_raw_schema():
+    client = _client()
+    index = client.get("/docs/schemas")
+    assert index.status_code == 200
+    assert "agreement.json" in index.text
+    raw = client.get("/docs/schemas/agreement.json")
+    assert raw.status_code == 200
+    assert "application/json" in raw.headers["content-type"]
+    assert raw.json()["title"] == "KATA Intent Agreement"
+    missing = client.get("/docs/schemas/not-real.json")
+    assert missing.status_code == 404
+    assert schema_bytes("../agreement.json") is None
+    assert schema_bytes("..%2fagreement.json") is None
+
+
+def test_api_reference_and_openapi():
+    client = _client()
+    api = client.get("/docs/api")
+    assert api.status_code == 200
+    assert "/v1/revocations" in api.text
+    assert "/v1/revocations/push" in api.text
+    assert "/v1/log/entries" in api.text
+    assert "/.well-known/kata-keys.json" in api.text
+    assert "/v1/fx" in api.text
+    assert "/demo/check" in api.text
+    assert 'href="/docs/openapi"' in api.text
+    assert "PolyForm Noncommercial" in api.text
+    assert "open source" not in api.text.lower()
+    spec = client.get("/docs/openapi")
+    assert spec.status_code == 200
+    assert "text/html" in spec.headers["content-type"]
 
 
 def test_static_assets_are_served():

@@ -1,0 +1,666 @@
+# Copyright 2026 Kaan Uluer
+# SPDX-License-Identifier: Apache-2.0
+"""HTML shell, repository timeline, and rendered documentation."""
+
+from __future__ import annotations
+
+import html
+import json
+import re
+from pathlib import Path
+
+import markdown
+
+GITHUB = "https://github.com/kaanuluer/KATA"
+_SCHEMA_NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+_HREF = re.compile(r"""href=(["'])(.*?)(\1)""")
+
+# Slug, repository file, nav label, index blurb.
+DOCUMENTS: tuple[tuple[str, str, str, str], ...] = (
+    (
+        "design",
+        "intent-agreement.md",
+        "Design",
+        "The signed intent agreement: decisions, data model, lifecycle, and the action check.",
+    ),
+    (
+        "authorization",
+        "delegation-model.md",
+        "Authorization",
+        "Who authorized the agent: the delegation grant, scope, monitoring, and revocation.",
+    ),
+    (
+        "intent",
+        "intent-model.md",
+        "Intent",
+        "Structured intent, the fields the principal signs, and how that record is confirmed.",
+    ),
+    (
+        "threat-model",
+        "threat-model.md",
+        "Threat model",
+        "Assets, actors, and the threats the framework's layers are meant to see.",
+    ),
+    (
+        "architecture",
+        "architecture.md",
+        "Architecture",
+        "How the questions and modules sit together.",
+    ),
+    (
+        "risk-model",
+        "risk-model.md",
+        "Risk model",
+        "Signals and decision outcomes around a checked action.",
+    ),
+    (
+        "agent-identity",
+        "agent-identity.md",
+        "Agent identity",
+        "How an agent is named and how that identity is distinct from authorization.",
+    ),
+    (
+        "interoperability",
+        "interoperability.md",
+        "Interoperability",
+        "Field mapping from Verifiable Intent, AP2, TAP, and AGNTCY into KATA objects.",
+    ),
+)
+
+_FILE_TO_SLUG = {filename: slug for slug, filename, _label, _blurb in DOCUMENTS}
+DOCUMENT_SLUGS = tuple(slug for slug, _filename, _label, _blurb in DOCUMENTS)
+
+
+def repo_root() -> Path:
+    """Directory that contains docs/intent-agreement.md and schemas/."""
+
+    here = Path(__file__).resolve()
+    candidates = [Path.cwd(), *here.parents]
+    for candidate in candidates:
+        if (candidate / "docs" / "intent-agreement.md").is_file() and (candidate / "schemas").is_dir():
+            return candidate
+    raise FileNotFoundError("KATA docs were not found beside this service")
+
+
+def static_dir() -> Path:
+    return Path(__file__).resolve().parent / "static"
+
+
+def home_page() -> str:
+    fragment = (static_dir() / "index.html").read_text(encoding="utf-8")
+    fragment = fragment.replace("<!--HISTORY-->", history_section())
+    return shell(
+        "KATA — Know And Trust Agents",
+        "KATA checks who an agent is, who authorized it, what it was authorized to do, and whether this action still matches.",
+        fragment,
+        current="",
+        script=True,
+    )
+
+
+def history_page() -> str:
+    return shell(
+        "History — KATA",
+        "Milestones taken from the KATA commit history, changelog, and GitHub pull requests.",
+        history_section(),
+        current="/history",
+    )
+
+
+def documentation_index() -> str:
+    cards = []
+    cards.append(
+        _card(
+            "/docs/design#lifecycle",
+            "Intent lifecycle",
+            "Proposal, acceptance, acknowledgement, amendment, revocation, and expiry, in the design doc.",
+        )
+    )
+    for slug, _filename, label, blurb in DOCUMENTS:
+        cards.append(_card(f"/docs/{slug}", label, blurb))
+    cards.append(_card("/docs/schemas", "JSON schemas", "The schema files in schemas/, with each document served as JSON."))
+    cards.append(
+        _card(
+            "/docs/api",
+            "API reference",
+            "Endpoints on this service, with request and response shapes, plus the generated OpenAPI page.",
+        )
+    )
+    intro = (
+        "<p class=\"lede\">These pages render the Markdown in <code>docs/</code> and the JSON in "
+        "<code>schemas/</code>. The long-form framework note and the standards survey stay on "
+        f"<a href=\"{GITHUB}/blob/main/KATA.md\">GitHub</a> "
+        f"(<a href=\"{GITHUB}/blob/main/research/standards.md\">standards survey</a>).</p>"
+    )
+    body = "<h1>Documentation</h1>" + intro + "<div class=\"doc-grid\">" + "".join(cards) + "</div>"
+    return shell("Documentation — KATA", "KATA design, authorization, intent, threat model, schemas, and API.", body, current="/docs")
+
+
+def render_document(slug: str) -> str | None:
+    match = next((item for item in DOCUMENTS if item[0] == slug), None)
+    if match is None:
+        return None
+    _slug, filename, label, _blurb = match
+    source = (repo_root() / "docs" / filename).read_text(encoding="utf-8")
+    rendered = markdown.markdown(
+        source,
+        extensions=["tables", "fenced_code", "sane_lists", "toc"],
+        extension_configs={"toc": {"toc_depth": 6}},
+    )
+    rendered = _wrap_tables(_rewrite_links(rendered))
+    body = f"<article class=\"doc-body\">{rendered}</article>"
+    return shell(f"{label} — KATA", label, body, current="/docs")
+
+
+def schema_index() -> str:
+    root = repo_root() / "schemas"
+    cards = []
+    for path in sorted(root.glob("*.json")):
+        if not _SCHEMA_NAME.match(path.stem):
+            continue
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            document = {}
+        title = str(document.get("title") or path.name)
+        description = str(document.get("description") or "JSON schema.")
+        cards.append(
+            _card(
+                f"/docs/schemas/{path.name}",
+                title,
+                description,
+                extra=f"<p class=\"meta\">{html.escape(path.name)}</p>",
+            )
+        )
+    body = (
+        "<h1>JSON schemas</h1>"
+        "<p class=\"lede\">Each file in <code>schemas/</code> is served unchanged at "
+        "<code>/docs/schemas/&lt;name&gt;.json</code>.</p>"
+        "<div class=\"doc-grid\">" + "".join(cards) + "</div>"
+    )
+    return shell("JSON schemas — KATA", "KATA JSON schemas.", body, current="/docs")
+
+
+def schema_bytes(name: str) -> bytes | None:
+    """Raw schema file. ``name`` is the basename, including ``.json``."""
+
+    if not name.endswith(".json"):
+        return None
+    stem = name[: -len(".json")]
+    if not _SCHEMA_NAME.match(stem):
+        return None
+    path = repo_root() / "schemas" / f"{stem}.json"
+    if not path.is_file():
+        return None
+    return path.read_bytes()
+
+
+def api_reference() -> str:
+    blocks = [
+        "<h1>API reference</h1>",
+        "<p class=\"lede\">Shapes below are the fields this service returns. "
+        f"FastAPI generates the machine-readable description at <a href=\"/docs/openapi\">/docs/openapi</a> "
+        "and <a href=\"/openapi.json\">/openapi.json</a>.</p>",
+    ]
+    for item in _ENDPOINTS:
+        blocks.append("<section class=\"endpoint\">")
+        blocks.append(
+            f"<h2><span class=\"method\">{html.escape(item['method'])}</span> "
+            f"<code>{html.escape(item['path'])}</code></h2>"
+        )
+        blocks.append(f"<p>{item['summary']}</p>")
+        if item.get("request"):
+            blocks.append("<h3>Request</h3>")
+            blocks.append(f"<pre><code>{html.escape(item['request'])}</code></pre>")
+        blocks.append("<h3>Response</h3>")
+        blocks.append(f"<pre><code>{html.escape(item['response'])}</code></pre>")
+        if item.get("errors"):
+            blocks.append(f"<p class=\"meta\">{html.escape(item['errors'])}</p>")
+        blocks.append("</section>")
+    return shell("API reference — KATA", "KATA service endpoints.", "".join(blocks), current="/docs")
+
+
+def history_section() -> str:
+    return (
+        "<section id=\"history\">"
+        "<h2>History</h2>"
+        "<p class=\"lede\">Dates and titles below are the git history, "
+        "<code>CHANGELOG.md</code>, and the GitHub pull requests. "
+        "When a commit date and a GitHub merge time fall on different days, both are stated. "
+        f"The repository is <a href=\"{GITHUB}\">{GITHUB}</a>.</p>"
+        "<ol class=\"timeline\">"
+        + "".join(_MILESTONES)
+        + "</ol></section>"
+    )
+
+
+def shell(title: str, description: str, body: str, *, current: str, script: bool = False) -> str:
+    script_tag = '<script src="/assets/app.js"></script>' if script else ""
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{html.escape(title)}</title>
+  <meta name="description" content="{html.escape(description)}">
+  <link rel="icon" href="/assets/kata-icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/app.css">
+</head>
+<body>
+  <a class="skip" href="#top">Skip to content</a>
+  <div class="wrap">
+    <header class="site">
+      <a class="brand" href="/">
+        <img class="logo" src="/assets/kata-logo.svg" alt="KATA" width="247" height="64">
+        <span>Know And Trust Agents</span>
+      </a>
+      {_nav(current)}
+    </header>
+    <main id="top">
+      {_docs_nav(current)}
+      {body}
+    </main>
+    <footer class="site">
+      <p>KATA. Copyright 2026 Kaan Uluer. PolyForm Noncommercial License. <a href="{GITHUB}">GitHub</a>.</p>
+      <p>The demo seed is public and is not a production signing key. Verdicts here are allow, deny, or step-up. Deny means block the action. It does not revoke the grant.</p>
+    </footer>
+  </div>
+  {script_tag}
+</body>
+</html>
+"""
+
+
+def _nav(current: str) -> str:
+    items = [
+        ("/#questions", "Questions", ""),
+        ("/#demo", "Demo", ""),
+        ("/history", "History", "/history"),
+        ("/docs", "Docs", "/docs"),
+        ("/#operations", "Live status", ""),
+        (GITHUB, "GitHub", "github"),
+    ]
+    links = []
+    for href, label, key in items:
+        current_attr = ' aria-current="page"' if key and key == current else ""
+        extra = ' rel="noopener noreferrer"' if href.startswith("http") else ""
+        links.append(f'<a href="{href}"{current_attr}{extra}>{label}</a>')
+    return '<nav class="site" aria-label="Page">' + "".join(links) + "</nav>"
+
+
+def _docs_nav(current: str) -> str:
+    if current != "/docs":
+        return ""
+    links = ['<a href="/docs">Overview</a>']
+    links.append('<a href="/docs/design#lifecycle">Lifecycle</a>')
+    for slug, _filename, label, _blurb in DOCUMENTS:
+        links.append(f'<a href="/docs/{slug}">{html.escape(label)}</a>')
+    links.append('<a href="/docs/schemas">Schemas</a>')
+    links.append('<a href="/docs/api">API</a>')
+    links.append(f'<a href="{GITHUB}">GitHub</a>')
+    return '<nav class="docs" aria-label="Documentation">' + "".join(links) + "</nav>"
+
+
+def _card(href: str, title: str, blurb: str, extra: str = "") -> str:
+    return (
+        f'<a class="doc-card" href="{html.escape(href)}">'
+        f"<strong>{html.escape(title)}</strong>"
+        f"<span>{html.escape(blurb)}</span>"
+        f"{extra}</a>"
+    )
+
+
+def _commit(sha: str) -> str:
+    return f'<a href="{GITHUB}/commit/{sha}"><code>{sha}</code></a>'
+
+
+def _pr(number: int, title: str) -> str:
+    return f'<a href="{GITHUB}/pull/{number}">#{number} {html.escape(title)}</a>'
+
+
+def _mile(when: str, title: str, body: str) -> str:
+    return (
+        "<li>"
+        f"<time datetime=\"{html.escape(when)}\">{html.escape(when)}</time>"
+        f"<strong>{html.escape(title)}</strong>"
+        f"{body}"
+        "</li>"
+    )
+
+
+def _rewrite_links(rendered: str) -> str:
+    def replace(match: re.Match[str]) -> str:
+        quote, target, _end = match.group(1), match.group(2), match.group(3)
+        return f"href={quote}{html.escape(_rewrite_target(html.unescape(target)), quote=True)}{quote}"
+
+    return _HREF.sub(replace, rendered)
+
+
+def _rewrite_target(target: str) -> str:
+    if target.startswith(("http://", "https://", "mailto:", "#", "/")):
+        return target
+    path, fragment = (target.split("#", 1) + [""])[:2]
+    suffix = f"#{fragment}" if "#" in target else ""
+    basename = path.split("/")[-1]
+    if basename.endswith(".json") and "schemas" in path.split("/"):
+        return f"/docs/schemas/{basename}{suffix}"
+    if basename in _FILE_TO_SLUG:
+        return f"/docs/{_FILE_TO_SLUG[basename]}{suffix}"
+    cleaned = path
+    while cleaned.startswith("./"):
+        cleaned = cleaned[2:]
+    if cleaned.startswith("../"):
+        cleaned = cleaned[3:]
+    elif cleaned and not cleaned.startswith("docs/"):
+        cleaned = "docs/" + cleaned
+    kind = "tree" if cleaned.endswith("/") or "." not in cleaned.rsplit("/", 1)[-1] else "blob"
+    return f"{GITHUB}/{kind}/main/{cleaned}{suffix}"
+
+
+def _wrap_tables(rendered: str) -> str:
+    return rendered.replace("<table>", '<div class="table-scroll"><table>').replace("</table>", "</table></div>")
+
+
+_PR3 = "Update KATA docs from Sardine's 2026 agentic commerce fraud report"
+
+_MILESTONES = (
+    _mile(
+        "2026-10-04",
+        "Repository starts",
+        "<p>"
+        f"{_commit('a581f1c')} Initial commit. "
+        f"{_commit('c57c16c')} KATA framework initial content: README, docs, schemas, examples, research. "
+        f"{_commit('6ffc9f7')} KATA assets: logo. "
+        f"{_commit('d9037b3')} Remove corrupted logo upload (retry via web UI). "
+        f"{_commit('302ba83')} KATA assets: hero banner and logo."
+        "</p>"
+        "<p>Five commits that day share the message “KATA framework part 1: README, license, gitignore”: "
+        f"{_commit('3d5275a')}, {_commit('29899e1')}, {_commit('1a514d4')}, {_commit('e85217e')}, {_commit('2191ce3')}."
+        "</p>",
+    ),
+    _mile(
+        "2026-10-08",
+        "Price integrity, and a mapping onto other mandates",
+        "<p>"
+        f"{_commit('0129d8a')} Record price integrity and the AgentCommerceBench gap (#1). "
+        f"GitHub {_pr(1, 'Add price integrity and an AgentCommerceBench mapping')} "
+        "was opened 2026-10-09T02:02:58Z and merged 2026-10-09T02:05:23Z."
+        "</p>"
+        "<p>"
+        f"{_commit('2ab98f5')} Map KATA objects to Verifiable Intent and AP2 mandates. (#2). "
+        f"GitHub {_pr(2, 'Map KATA to Verifiable Intent, AP2, TAP, and AGNTCY')} "
+        "was opened 2026-10-09T02:42:08Z and merged 2026-10-09T02:52:11Z."
+        "</p>",
+    ),
+    _mile(
+        "2026-10-12",
+        "Related-work notes, then the intent agreement",
+        "<p>"
+        f"{_commit('37d54b0')} Record a reading of Sardine's agentic-commerce fraud report in the KATA docs. (#3). "
+        f"GitHub {_pr(3, _PR3)} "
+        "was opened 2026-10-12T05:06:29Z and merged 2026-10-12T05:07:08Z. "
+        "CHANGELOG.md for that day records the reading of Sardine's public report "
+        "Rethinking Fraud Prevention for Agentic Commerce (2026). The changelog says no schema or example changed, "
+        "and that nothing in the update is a measured result."
+        "</p>"
+        "<p>"
+        f"{_commit('d9d5712')} Separate the KATA core from optional profiles and related work. (#4). "
+        f"GitHub {_pr(4, 'Keep the KATA core lean: optional profiles and Darwinium as related work')} "
+        "was opened 2026-10-12T12:43:56Z and merged 2026-10-12T12:44:19Z. "
+        "The changelog says an implementation needs the four questions, the intent and delegation schemas, "
+        "and the decision outcomes, and that use-case examples are profiles. "
+        "It cites Darwinium's press release of 8 October 2026 as that related-work entry."
+        "</p>"
+        "<p>"
+        f"{_commit('8ca5197')} Add a signed intent agreement and a reference action check. "
+        "The changelog points at docs/intent-agreement.md, schemas/intent-mandate.json, schemas/agreement.json, "
+        "and the reference library's Ed25519 mandate, action check, and revoke-or-expire path."
+        "</p>"
+        "<p>"
+        f"GitHub {_pr(5, 'Add a signed intent agreement and a reference action check')} "
+        "was opened 2026-10-12T22:46:54Z. GitHub lists it as a draft and records no merge time."
+        "</p>",
+    ),
+    _mile(
+        "2026-10-13",
+        "Decisions, the deployment service, and this page",
+        "<p>"
+        f"{_commit('32711ab')} Apply Kaan's intent-agreement decisions to the spec and the reference check. "
+        "The changelog records the agreement inside the delegation, the spend ledger on the agreement, "
+        "several live intents inside one parent set, and the principal's signature as the activation."
+        "</p>"
+        "<p>"
+        f"{_commit('39c6328')} Apply the confirmation, ledger, revocation, FX, institution-key, and ES256 decisions. "
+        "The changelog records canonical confirmation text, a hash-chained ledger with a 60-second staleness step-up, "
+        "auto-selection of one matching intent, pull plus push plus a transparency log, "
+        "a pluggable daily FX ceiling, institution keys at .well-known plus an allowlist, and ES256 beside Ed25519."
+        "</p>"
+        "<p>"
+        f"{_commit('5df8892')} Add a Vercel service for the revocation list, transparency log, and daily FX. "
+        f"{_commit('2e36a7d')} Point the Vercel FastAPI entrypoint at the repository-root app.py. "
+        f"{_commit('28c0765')} Send a user agent on Frankfurter FX requests and use the v1 host."
+        "</p>"
+        "<p>"
+        f"{_commit('87d97e2')} Add an English KATA page with a sample intent check and live status. "
+        f"{_commit('b237da9')} Use the teal seal and KATA wordmark on the web page."
+        "</p>"
+        "<p>"
+        f"GitHub {_pr(6, 'Relicense KATA under PolyForm Noncommercial 1.0.0')} "
+        "was opened 2026-10-13T03:45:55Z and merged 2026-10-13T04:16:43Z. "
+        "The LICENSE file in this checkout is the Apache License, Version 2.0. "
+        "These pages use the PolyForm Noncommercial wording."
+        "</p>"
+        "<p>CHANGELOG.md for 2026-10-13 also records <code>/history</code> and <code>/docs</code> "
+        "(design, authorization, intent, threat model, schemas, and the API reference), "
+        "with FastAPI's generated OpenAPI page at <code>/docs/openapi</code>.</p>",
+    ),
+)
+
+
+_ENDPOINTS: tuple[dict[str, str], ...] = (
+    {
+        "method": "GET",
+        "path": "/v1/revocations",
+        "summary": "Pull list of stored principal revocations. The response sets Cache-Control: public, max-age=300.",
+        "response": '{\n  "revocations": []\n}',
+        "errors": '503 {"error": "DATABASE_URL is not set"} when storage is not configured.',
+    },
+    {
+        "method": "POST",
+        "path": "/v1/revocations/push",
+        "summary": (
+            "Notifier-signed webhook. The body is the object from sign_revocation_push: "
+            "at, kata_revocation_push \"1\", revocation, and signature. "
+            "signature is a flattened JWS whose protected header typ is kata-revocation-push+jws."
+        ),
+        "request": (
+            '{\n'
+            '  "at": "2026-10-04T18:00:00Z",\n'
+            '  "kata_revocation_push": "1",\n'
+            '  "revocation": {\n'
+            '    "agreement_id": "agr_demo",\n'
+            '    "at": "2026-10-04T18:00:00Z",\n'
+            '    "kata_revocation": "1",\n'
+            '    "mandate_hash": "sha256:…",\n'
+            '    "reason": "principal revoked",\n'
+            '    "signature": {"payload": "…", "protected": "…", "signature": "…"}\n'
+            "  },\n"
+            '  "signature": {"payload": "…", "protected": "…", "signature": "…"}\n'
+            "}"
+        ),
+        "response": '{\n  "stored": true,\n  "revocation_id": "sha256:…",\n  "sequence": 1\n}',
+        "errors": (
+            'A repeat of the same revocation returns {"stored": false, "revocation_id": "sha256:…"} and does not append again. '
+            '401 {"error": "revocation push did not verify"}. '
+            '503 when KATA_PUSH_NOTIFIER_JWK or KATA_LOG_SIGNING_SEED is unset. '
+            '400 when the body is not a JSON object.'
+        ),
+    },
+    {
+        "method": "POST",
+        "path": "/v1/log/entries",
+        "summary": "Append an agreement or a revocation and sign a new tree head. Authorization: Bearer <KATA_APPEND_TOKEN>.",
+        "request": '{\n  "kind": "agreement",\n  "body": {}\n}',
+        "response": (
+            '{\n'
+            '  "entry": {\n'
+            '    "kind": "agreement",\n'
+            '    "sequence": 1,\n'
+            '    "body": {},\n'
+            '    "entry_hash": "sha256:…"\n'
+            "  },\n"
+            '  "tree_head": {\n'
+            '    "algorithm": "EdDSA",\n'
+            '    "at": "2026-10-04T14:02:11Z",\n'
+            '    "kata_tree_head": "1",\n'
+            '    "root": "sha256:…",\n'
+            '    "tree_size": 1,\n'
+            '    "signature": {"payload": "…", "protected": "…", "signature": "…"}\n'
+            "  }\n"
+            "}"
+        ),
+        "errors": (
+            "kind is agreement or revocation. A later entry also carries prev_entry_hash. "
+            "The tree-head JWS typ is kata-tree-head+jws. "
+            '401 {"error": "append token does not match"}. '
+            '400 {"error": "log append needs kind and a body object"} and 400 when kind is rejected. '
+            "503 when KATA_APPEND_TOKEN or KATA_LOG_SIGNING_SEED is unset."
+        ),
+    },
+    {
+        "method": "GET",
+        "path": "/v1/log/entries/{sequence}",
+        "summary": "One hash-chained entry. sequence starts at 1.",
+        "response": (
+            '{\n'
+            '  "entry": {\n'
+            '    "kind": "revocation",\n'
+            '    "sequence": 1,\n'
+            '    "body": {},\n'
+            '    "entry_hash": "sha256:…"\n'
+            "  }\n"
+            "}"
+        ),
+        "errors": '404 {"error": "log entry was not found"} when the sequence is outside the log.',
+    },
+    {
+        "method": "GET",
+        "path": "/v1/log/entries/{sequence}/proof",
+        "summary": "Merkle inclusion proof for that entry. index is sequence minus 1. side is left or right.",
+        "response": (
+            '{\n'
+            '  "sequence": 1,\n'
+            '  "index": 0,\n'
+            '  "leaf": "sha256:…",\n'
+            '  "proof": [{"hash": "sha256:…", "side": "right"}],\n'
+            '  "root": "sha256:…",\n'
+            '  "tree_size": 1\n'
+            "}"
+        ),
+        "errors": "404 when the sequence is outside the tree.",
+    },
+    {
+        "method": "GET",
+        "path": "/v1/log/head",
+        "summary": "Signed tree head. The same fields are on tree_head from a log append.",
+        "response": (
+            '{\n'
+            '  "algorithm": "EdDSA",\n'
+            '  "at": "2026-10-04T14:02:11Z",\n'
+            '  "kata_tree_head": "1",\n'
+            '  "root": "sha256:…",\n'
+            '  "tree_size": 1,\n'
+            '  "signature": {"payload": "…", "protected": "…", "signature": "…"}\n'
+            "}"
+        ),
+        "errors": '404 {"error": "the transparency log has no signed tree head"} when nothing has been appended.',
+    },
+    {
+        "method": "GET",
+        "path": "/.well-known/kata-keys.json",
+        "summary": "Log public key, plus any records in KATA_PUBLISHED_KEYS. An empty key list is a 200 when no seed is set.",
+        "response": (
+            '{\n'
+            '  "keys": [\n'
+            '    {"public_key": {"crv": "Ed25519", "kid": "sha256:…", "kty": "OKP", "x": "…"}}\n'
+            "  ]\n"
+            "}"
+        ),
+        "errors": "500 when a configured key or seed fails to load.",
+    },
+    {
+        "method": "GET",
+        "path": "/v1/fx?currency=CAD&reference=USD&day=YYYY-MM-DD",
+        "summary": (
+            "Reference-currency units for one unit of currency on that UTC day. "
+            "reference_currency is an alias of reference. The default reference is USD. "
+            "day defaults to the current UTC date. The rate is a decimal string from the configured source "
+            "(default https://api.frankfurter.dev/v1). The same currency returns rate \"1\"."
+        ),
+        "response": (
+            '{\n'
+            '  "currency": "CAD",\n'
+            '  "reference_currency": "USD",\n'
+            '  "day": "2026-10-04",\n'
+            '  "rate": "…"\n'
+            "}"
+        ),
+        "errors": (
+            '400 when a currency is not three letters or day is not YYYY-MM-DD. '
+            '404 {"error": "no USD rate for CAD on YYYY-MM-DD"} when the source has no rate. '
+            '502 {"error": "FX source did not answer"}. '
+            "503 when DATABASE_URL is not set."
+        ),
+    },
+    {
+        "method": "POST",
+        "path": "/demo/check",
+        "summary": (
+            "Signs one sample agreement with the public demo keys and evaluates one payment. "
+            "principal is K. Uluer and the agent is shopper-01. demo is true. "
+            "verdict is ALLOW, DENY, or STEP_UP. kata_decision is ALLOW, BLOCK, or STEP_UP. DENY maps to BLOCK."
+        ),
+        "request": (
+            '{\n'
+            '  "intent": {\n'
+            '    "maximum_amount": 1500,\n'
+            '    "currency": "CAD",\n'
+            '    "purpose": "purchase",\n'
+            '    "category": "electronics",\n'
+            '    "natural_language": "Find and buy a laptop for me, maximum CAD 1,500.",\n'
+            '    "include_expiry": true,\n'
+            '    "time_limit": "2026-12-31"\n'
+            "  },\n"
+            '  "payment": {\n'
+            '    "amount": 1300,\n'
+            '    "currency": "CAD",\n'
+            '    "merchant": "techstore.example",\n'
+            '    "item": "Laptop"\n'
+            "  }\n"
+            "}"
+        ),
+        "response": (
+            '{\n'
+            '  "verdict": "ALLOW",\n'
+            '  "kata_decision": "ALLOW",\n'
+            '  "reasons": [],\n'
+            '  "messages": [],\n'
+            '  "required_action": "NONE",\n'
+            '  "confirmation_text": "…",\n'
+            '  "mandate_hash": "sha256:…",\n'
+            '  "principal": "K. Uluer",\n'
+            '  "principal_fingerprint": "sha256:…",\n'
+            '  "agent_id": "shopper-01",\n'
+            '  "agreement_id": "agr_demo",\n'
+            '  "status": "active",\n'
+            '  "demo": true\n'
+            "}"
+        ),
+        "errors": (
+            "A payment of 4200 CAD against that ceiling returns verdict DENY, kata_decision BLOCK, "
+            "and reasons including AMOUNT_ABOVE_INTENT_CEILING. "
+            "include_expiry false returns verdict STEP_UP and reasons including OVER_BROAD_INTENT. "
+            "400 when an amount or currency is unusable."
+        ),
+    },
+)
