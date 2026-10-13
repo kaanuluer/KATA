@@ -43,7 +43,7 @@ Set these on the Vercel project. Generate the secret values on your machine and 
 | `KATA_PUSH_NOTIFIER_JWK` | yes | no | Public JWK JSON of the key that signs revocation push webhooks. A private `d` parameter is rejected. |
 | `KATA_APPEND_TOKEN` | yes | yes | Bearer token for `POST /v1/log/entries`. |
 | `KATA_PUBLISHED_KEYS` | no | no | JSON array of extra `.well-known` key records. Each record has a public `public_key`. |
-| `KATA_FX_SOURCE_URL` | no | no | Daily rate origin. Default `https://api.frankfurter.app` (ECB rates, no API key). |
+| `KATA_FX_SOURCE_URL` | no | no | Daily rate origin. Default `https://api.frankfurter.dev/v1` (ECB rates, no API key). |
 
 Generate a log seed, a push notifier, and an append token:
 

@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 from decimal import Decimal
 from typing import Callable, Protocol
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 from kata_intent.canonical import encode_decimal
 from kata_intent.values import money
@@ -45,5 +45,12 @@ class FrankfurterFx:
 
 
 def _http_get(url: str) -> str:
-    with urlopen(url, timeout=10) as response:  # noqa: S310 — the host is the configured FX source
+    request = Request(
+        url,
+        headers={
+            "User-Agent": "kata-service/0.1 (+https://github.com/kaanuluer/KATA)",
+            "Accept": "application/json",
+        },
+    )
+    with urlopen(request, timeout=10) as response:  # noqa: S310 — the host is the configured FX source
         return response.read().decode("utf-8")

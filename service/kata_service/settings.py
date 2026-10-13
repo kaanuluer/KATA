@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from kata_intent.errors import KataError
 from kata_intent.keys import PrivateKey, public_key_from_jwk
 
-DEFAULT_FX_SOURCE_URL = "https://api.frankfurter.app"
+DEFAULT_FX_SOURCE_URL = "https://api.frankfurter.dev/v1"
 REVOCATION_MAX_AGE_SECONDS = 300
 
 

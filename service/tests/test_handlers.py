@@ -223,12 +223,40 @@ def test_settings_accept_the_neon_url_and_reject_a_private_jwk():
 
 def test_frankfurter_parser_reads_the_reference_rate():
     def opener(url: str) -> str:
-        assert url == "https://api.frankfurter.app/2026-10-04?from=CAD&to=USD"
+        assert url == "https://api.frankfurter.dev/v1/2026-10-04?from=CAD&to=USD"
         return '{"amount":1,"base":"CAD","date":"2026-10-04","rates":{"USD":0.75}}'
 
-    fx = FrankfurterFx("https://api.frankfurter.app", opener)
+    fx = FrankfurterFx("https://api.frankfurter.dev/v1", opener)
     assert fx.fetch("CAD", "2026-10-04", "USD") == "0.75"
     assert fx.fetch("USD", "2026-10-04", "USD") == "1"
+
+
+def test_frankfurter_request_sends_a_user_agent(monkeypatch):
+    captured = {}
+
+    class _Body:
+        def read(self) -> bytes:
+            return b'{"amount":1,"base":"CAD","date":"2026-10-04","rates":{"USD":0.75}}'
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> bool:
+            return False
+
+    def fake_urlopen(request, timeout=10):
+        captured["request"] = request
+        captured["timeout"] = timeout
+        return _Body()
+
+    monkeypatch.setattr("kata_service.fx.urlopen", fake_urlopen)
+    rate = FrankfurterFx("https://api.frankfurter.dev/v1").fetch("CAD", "2026-10-04", "USD")
+    assert rate == "0.75"
+    request = captured["request"]
+    assert request.full_url == "https://api.frankfurter.dev/v1/2026-10-04?from=CAD&to=USD"
+    assert request.get_header("User-agent") == "kata-service/0.1 (+https://github.com/kaanuluer/KATA)"
+    assert request.get_header("Accept") == "application/json"
+    assert captured["timeout"] == 10
 
 
 @pytest.fixture
