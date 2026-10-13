@@ -286,7 +286,7 @@ def shell(title: str, description: str, body: str, *, current: str, script: bool
   <div class="wrap">
     <header class="site">
       <a class="brand" href="/">
-        <img class="logo" src="/assets/gab-logo.svg" alt="GAB_ global.agent.bureau" width="120" height="64">
+        <img class="logo" src="/assets/gab-logo.svg" alt="GAB_ global.agent.bureau" width="142" height="76">
         <span>Powered by KATA · Know And Trust Agents</span>
       </a>
       {_nav(current)}
