@@ -12,4 +12,4 @@ dependencies = [
 packages = []
 
 [tool.vercel]
-entrypoint = "kata_service.asgi:app"
+entrypoint = "app:app"

@@ -1,6 +1,6 @@
 # Copyright 2026 Kaan Uluer
 # SPDX-License-Identifier: Apache-2.0
-"""FastAPI entrypoint. Vercel loads ``app`` from this module."""
+"""FastAPI application. The repository-root ``app.py`` re-exports ``app`` for Vercel."""
 
 from __future__ import annotations
 

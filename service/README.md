@@ -17,7 +17,7 @@ Create the project from this Git repository. Use these settings. Do not deploy f
 | Output Directory | empty |
 | Python | 3.12 |
 
-The root has to be the repository root because the install command installs both the reference library and this service. [`vercel.json`](../vercel.json) sets the FastAPI framework, the install command, the build command, and a 30-second function limit. [`pyproject.toml`](../pyproject.toml) points Vercel at `kata_service.asgi:app`. Secret values are not written there. Set the names below in the Vercel project.
+The root has to be the repository root because the install command installs both the reference library and this service. [`vercel.json`](../vercel.json) sets the FastAPI framework, the install command, the build command, and a 30-second function limit. [`pyproject.toml`](../pyproject.toml) points Vercel at `app:app`. The root [`app.py`](../app.py) imports that object from `kata_service.asgi`. Secret values are not written there. Set the names below in the Vercel project.
 
 Leave the Output Directory empty. This is a Function, not a static build.
 

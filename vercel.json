@@ -4,7 +4,7 @@
   "installCommand": "pip install ./reference/python ./service",
   "buildCommand": "python -c \"import kata_intent, kata_service.asgi\"",
   "functions": {
-    "service/kata_service/asgi.py": {
+    "app.py": {
       "maxDuration": 30
     }
   }
