@@ -33,8 +33,13 @@ def test_home_page_explains_kata_in_english():
     assert "Transparency log" in body
     assert "PolyForm Noncommercial" in body
     assert "open source" not in body.lower()
+    assert '/assets/gab-logo.svg' in body
+    assert "Global Agent Bureau" in body
+    assert 'href="/dashboard"' in body
+    assert 'href="/portal"' in body
     assert '/assets/kata-logo.svg' in body
     assert '/assets/kata-icon.svg' in body
+    assert "credit bureau" not in body.lower()
 
 
 def test_home_links_github_history_and_docs():
@@ -169,7 +174,33 @@ def test_static_assets_are_served():
     assert 'stroke="#4FE0C2"' in icon.text
     assert logo.status_code == 200
     assert "KATA" in logo.text
+    gab = client.get("/assets/gab-logo.svg")
+    assert gab.status_code == 200
+    assert "Global Agent Bureau" in gab.text
     assert client.get("/assets/secret.txt").status_code == 404
+
+
+def test_dashboard_and_portal_pages():
+    client = _client()
+    dashboard = client.get("/dashboard")
+    portal = client.get("/portal")
+    assert dashboard.status_code == 200
+    assert 'id="login-form"' in dashboard.text
+    assert "Run inquiry" in dashboard.text
+    assert "/assets/dashboard.js" in dashboard.text
+    assert portal.status_code == 200
+    assert 'id="portal-login"' in portal.text
+    assert "Dispute an incident" in portal.text
+    assert "/assets/portal.js" in portal.text
+    requirements = client.get("/docs/gab-requirements")
+    assert requirements.status_code == 200
+    assert "Trust score" in requirements.text
+    assert "DATABASE_URL" in requirements.text
+    assert "Supabase is not used" in requirements.text
+    for page in (dashboard.text, portal.text, requirements.text):
+        assert "open source" not in page.lower()
+        assert "open-source" not in page.lower()
+        assert "credit bureau" not in page.lower()
 
 
 def test_demo_allows_denies_and_steps_up():

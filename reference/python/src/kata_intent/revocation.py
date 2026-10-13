@@ -98,8 +98,8 @@ class TransparencyLog:
         self.entries: list[dict[str, Any]] = []
 
     def append(self, kind: str, body: Mapping[str, Any]) -> dict[str, Any]:
-        if kind not in {"agreement", "revocation"}:
-            raise KataError("transparency log entries are agreements or revocations")
+        if kind not in {"agreement", "revocation", "registration", "incident"}:
+            raise KataError("transparency log entries are agreements, revocations, registrations, or incidents")
         sequence = len(self.entries) + 1
         record: dict[str, Any] = {"body": dict(body), "kind": kind, "sequence": sequence}
         if self.entries:

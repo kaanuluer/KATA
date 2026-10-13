@@ -26,6 +26,13 @@ class Settings:
     published_keys: tuple[dict, ...]
     fx_source_url: str
     config_error: str | None = None
+    admin_token: str | None = None
+    rate_limit_per_minute: int = 120
+    demo: bool = False
+    dev_mailbox: bool = False
+    magic_link_ttl_seconds: int = 900
+    session_ttl_seconds: int = 43200
+    report_daily_cap: int = 20
 
     def log_key(self) -> PrivateKey | None:
         if self.log_signing_seed is None:
@@ -58,7 +65,29 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
         published_keys=published,
         fx_source_url=_blank(env.get("KATA_FX_SOURCE_URL")) or DEFAULT_FX_SOURCE_URL,
         config_error=error,
+        admin_token=_blank(env.get("GAB_ADMIN_TOKEN")),
+        rate_limit_per_minute=_positive_int(env.get("GAB_RATE_LIMIT_PER_MINUTE"), 120),
+        demo=_flag(env.get("GAB_DEMO")),
+        dev_mailbox=_flag(env.get("GAB_DEV_MAILBOX")),
+        magic_link_ttl_seconds=_positive_int(env.get("GAB_MAGIC_LINK_TTL_SECONDS"), 900),
+        session_ttl_seconds=_positive_int(env.get("GAB_SESSION_TTL_SECONDS"), 43200),
+        report_daily_cap=_positive_int(env.get("GAB_REPORT_DAILY_CAP"), 20),
     )
+
+
+def _flag(value: str | None) -> bool:
+    return (_blank(value) or "").lower() in {"1", "true", "yes"}
+
+
+def _positive_int(value: str | None, default: int) -> int:
+    text = _blank(value)
+    if text is None:
+        return default
+    try:
+        number = int(text)
+    except ValueError:
+        return default
+    return number if number > 0 else default
 
 
 def _blank(value: str | None) -> str | None:

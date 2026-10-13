@@ -7,6 +7,7 @@ from __future__ import annotations
 import hmac
 import html
 import re
+import secrets
 from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
@@ -14,13 +15,17 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 
+from kata_service.bureau import BureauError, BureauService, HttpWebhookSender, MemoryRepo, RecordingSender, token_hash
+from kata_service.bureau_http import build_router
 from kata_service.demo import run_demo
 from kata_service.pages import (
     DOCUMENT_SLUGS,
     api_reference,
+    dashboard_page,
     documentation_index,
     history_page,
     home_page,
+    portal_page,
     render_document,
     schema_bytes,
     schema_index,
@@ -48,7 +53,11 @@ def create_app(
     """Build the service. Tests pass a memory store. Vercel uses ``app`` below."""
 
     resolved = settings if settings is not None else settings_from_env()
-    app = FastAPI(title="KATA deployment service", docs_url="/docs/openapi", redoc_url=None)
+    if resolved.demo:
+        from kata_service.seed import demo_settings
+
+        resolved = demo_settings(resolved)
+    app = FastAPI(title="Global Agent Bureau", docs_url="/docs/openapi", redoc_url=None)
     app.state.settings = resolved
     app.state.store = store
     app.state.fx = fx_fetcher if fx_fetcher is not None else FrankfurterFx(resolved.fx_source_url)
@@ -62,6 +71,14 @@ def create_app(
     @app.get("/history")
     def history():
         return HTMLResponse(history_page())
+
+    @app.get("/dashboard")
+    def dashboard():
+        return HTMLResponse(dashboard_page())
+
+    @app.get("/portal")
+    def portal():
+        return HTMLResponse(portal_page())
 
     @app.get("/docs")
     def docs():
@@ -106,11 +123,51 @@ def create_app(
             response_model=None,
         )
 
+    app.include_router(build_router())
+
+    @app.middleware("http")
+    async def bureau_guard(request: Request, call_next):
+        path = request.url.path
+        if not path.startswith("/v1"):
+            return await call_next(request)
+        try:
+            bureau = ensure_bureau(app)
+        except BureauError as exc:
+            return _error(exc.status, exc.message)
+        header = request.headers.get("authorization", "")
+        token = header[7:].strip() if header.startswith("Bearer ") else ""
+        subject = token_hash(token) if token else (request.client.host if request.client else "anonymous")
+        limited = bureau.hit_rate(subject) > app.state.settings.rate_limit_per_minute
+        if limited:
+            response = _error(429, "rate limit exceeded")
+        else:
+            response = await call_next(request)
+        try:
+            bureau.repo.add_audit(
+                {
+                    "audit_id": "aud_" + secrets.token_hex(8),
+                    "at": bureau.stamp(),
+                    "org_id": getattr(request.state, "org_id", None),
+                    "key_id": getattr(request.state, "key_id", None),
+                    "method": request.method,
+                    "path": path,
+                    "status": response.status_code,
+                    "purpose_code": getattr(request.state, "purpose_code", None),
+                    "agent_id": getattr(request.state, "agent_id", None),
+                }
+            )
+        except Exception:
+            pass
+        return response
+
     @app.get("/assets/{name}")
     def asset(name: str):
         media = {
             "app.css": "text/css",
             "app.js": "text/javascript",
+            "dashboard.js": "text/javascript",
+            "portal.js": "text/javascript",
+            "gab-logo.svg": "image/svg+xml",
             "kata-icon.svg": "image/svg+xml",
             "kata-logo.svg": "image/svg+xml",
         }.get(name)
@@ -285,6 +342,61 @@ def create_app(
         return _fx_body(currency, target, chosen_day, rate)
 
     return app
+
+
+def ensure_bureau(app: FastAPI):
+    """Build the bureau on first use so importing the app does not open Postgres."""
+
+    existing = getattr(app.state, "bureau", None)
+    if existing is not None:
+        return existing
+    settings = app.state.settings
+    store = app.state.store
+    if settings.demo or not settings.database_url:
+        repo = MemoryRepo()
+        if store is None and settings.demo:
+            from kata_service.store import MemoryStore
+
+            store = MemoryStore()
+            app.state.store = store
+        service = BureauService(
+            repo,
+            log_store=store,
+            log_key=settings.log_key(),
+            sender=RecordingSender(),
+            magic_link_ttl_seconds=settings.magic_link_ttl_seconds,
+            session_ttl_seconds=settings.session_ttl_seconds,
+            report_daily_cap=settings.report_daily_cap,
+            dev_mailbox=settings.dev_mailbox or settings.demo,
+        )
+        if settings.demo:
+            from kata_service.seed import seed_demo
+
+            seed_demo(service)
+        app.state.bureau = service
+        return service
+    from kata_service.bureau_pg import PostgresRepo
+    from kata_service.store import open_store
+
+    try:
+        repo = PostgresRepo(settings.database_url, settings.schema_url)
+        if store is None:
+            store = open_store(settings.database_url, settings.schema_url)
+            app.state.store = store
+    except Exception as exc:
+        raise BureauError(503, f"storage is unavailable: {exc}") from exc
+    service = BureauService(
+        repo,
+        log_store=store,
+        log_key=settings.log_key(),
+        sender=HttpWebhookSender(),
+        magic_link_ttl_seconds=settings.magic_link_ttl_seconds,
+        session_ttl_seconds=settings.session_ttl_seconds,
+        report_daily_cap=settings.report_daily_cap,
+        dev_mailbox=settings.dev_mailbox,
+    )
+    app.state.bureau = service
+    return service
 
 
 def _fx_body(currency: str, reference_currency: str, day: str, rate: str) -> dict[str, str]:

@@ -1,8 +1,10 @@
-# KATA deployment service
+# Global Agent Bureau service
 
-**Status: Concept / Open Design — not production ready.**
+This is the Vercel host for Global Agent Bureau and for the KATA deployment pieces the reference library keeps behind interfaces: the revocation pull list, the signed push webhook, the transparency log, `/.well-known/kata-keys.json`, and a daily FX feed. The cryptographic objects are the ones in [`reference/python`](../reference/python).
 
-This is the Vercel host for the pieces the reference library keeps behind interfaces: the revocation pull list, the signed push webhook, the transparency log, `/.well-known/kata-keys.json`, and a daily FX feed. The cryptographic objects are the ones in [`reference/python`](../reference/python). This process does not render a wallet and it does not evaluate purchases.
+The bureau API registers organizations and agents, stores signed intents, verifies payments, records incidents, answers purpose-coded inquiries, and computes the rule-based trust score. Requirements are in [`docs/gab-requirements.md`](../docs/gab-requirements.md).
+
+One Postgres database is used. Neon is already connected on Vercel. Supabase is not used, and no Supabase environment variables are required.
 
 ## Vercel project
 
@@ -44,6 +46,13 @@ Set these on the Vercel project. Generate the secret values on your machine and 
 | `KATA_APPEND_TOKEN` | yes | yes | Bearer token for `POST /v1/log/entries`. |
 | `KATA_PUBLISHED_KEYS` | no | no | JSON array of extra `.well-known` key records. Each record has a public `public_key`. |
 | `KATA_FX_SOURCE_URL` | no | no | Daily rate origin. Default `https://api.frankfurter.dev/v1` (ECB rates, no API key). |
+| `GAB_ADMIN_TOKEN` | yes, to create organizations | yes | Bearer token for the admin bootstrap and dispute review. |
+| `GAB_RATE_LIMIT_PER_MINUTE` | no | no | Default 120 `/v1` calls per minute per credential hash. |
+| `GAB_REPORT_DAILY_CAP` | no | no | Default 20 reports per organization per UTC day. |
+| `GAB_MAGIC_LINK_TTL_SECONDS` | no | no | Default 900. |
+| `GAB_SESSION_TTL_SECONDS` | no | no | Default 43200. |
+| `GAB_DEV_MAILBOX` | no | no | `1` keeps the latest magic link in memory at `GET /v1/dev/mailbox`. Leave unset in production. |
+| `GAB_DEMO` | no | no | `1` seeds a memory bureau and ignores `DATABASE_URL`. Local demos only. |
 
 Generate a log seed, a push notifier, and an append token:
 
@@ -66,7 +75,9 @@ Put the three lines into Vercel environment variables. The notifier JWK is publi
 
 | Method | Path | Auth | Behavior |
 |---|---|---|---|
-| `GET` | `/` | none | Web page. Explains the four questions, runs a sample intent check, shows the revocation list, published keys, and transparency-log head, and includes the repository timeline. Header and footer link to the GitHub repository. |
+| `GET` | `/` | none | Global Agent Bureau home. Four KATA questions, sample intent check, revocation list, published keys, tree head, and the repository timeline. |
+| `GET` | `/dashboard` | browser session or API key | Organization dashboard. |
+| `GET` | `/portal` | browser session | Individual portal. |
 | `GET` | `/history` | none | The same timeline: commit dates, `CHANGELOG.md`, and GitHub pull requests. |
 | `GET` | `/docs` | none | Documentation index: design, authorization, intent, threat model, related docs, schemas, and the API reference. |
 | `GET` | `/docs/design` | none | `docs/intent-agreement.md`, including the lifecycle section. |
@@ -80,7 +91,7 @@ Put the three lines into Vercel environment variables. The notifier JWK is publi
 | `POST` | `/demo/check` | none | Signs a sample intent with the public demo keys and returns `ALLOW`, `DENY`, or `STEP_UP`. |
 | `GET` | `/v1/revocations` | none | Pull list. `Cache-Control: public, max-age=300`. Body is `{"revocations": [...]}`. |
 | `POST` | `/v1/revocations/push` | notifier JWS | Stores a principal revocation and appends it to the log. A second delivery of the same revocation does not append again. |
-| `POST` | `/v1/log/entries` | `Authorization: Bearer $KATA_APPEND_TOKEN` | Append `{ "kind": "agreement" or "revocation", "body": { ... } }` and sign a new tree head. |
+| `POST` | `/v1/log/entries` | `Authorization: Bearer $KATA_APPEND_TOKEN` | Append `{ "kind": "agreement", "revocation", "registration", or "incident", "body": { ... } }` and sign a new tree head. |
 | `GET` | `/v1/log/entries/{sequence}` | none | One hash-chained entry. |
 | `GET` | `/v1/log/entries/{sequence}/proof` | none | Merkle inclusion proof (`leaf`, `index`, `proof`, `root`, `tree_size`). |
 | `GET` | `/v1/log/head` | none | Signed tree head (`typ` `kata-tree-head+jws`). |
@@ -100,3 +111,24 @@ python3 -m pytest
 ```
 
 The handler tests use the memory store. They do not call Frankfurter and they do not need `DATABASE_URL`.
+
+## Bureau demo
+
+Local demo, in memory, with public credentials:
+
+```bash
+cd service
+GAB_DEMO=1 python3 -m uvicorn kata_service.asgi:app --host 127.0.0.1 --port 8765
+```
+
+Open `/dashboard` and `/portal`. The public demo keys are `gab_demo_operator_public`, `gab_demo_wallet_public`, `gab_demo_merchant_public`, and admin `gab-demo-admin`. The portal email is `principal@example.com`. With `GAB_DEMO=1` the development mailbox is on, so the page can exchange the latest magic link. Do not set `GAB_DEMO` on a production deployment.
+
+To create the tables on Neon and, optionally, insert the same demo rows:
+
+```bash
+cd service
+python3 -m kata_service.seed
+python3 -m kata_service.seed --demo
+```
+
+`seed` reads `DATABASE_URL`. It does not print secret values. Bureau routes under `/v1` are listed on `/docs/api` and `/docs/openapi`. Outbound alert webhooks are signed with `KATA_LOG_SIGNING_SEED` (`typ` `kata-bureau-alert+jws`) because `KATA_PUSH_NOTIFIER_JWK` is a public key.

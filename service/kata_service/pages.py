@@ -18,6 +18,12 @@ _HREF = re.compile(r"""href=(["'])(.*?)(\1)""")
 # Slug, repository file, nav label, index blurb.
 DOCUMENTS: tuple[tuple[str, str, str, str], ...] = (
     (
+        "gab-requirements",
+        "gab-requirements.md",
+        "Bureau requirements",
+        "Functional and non-functional requirements for the Global Agent Bureau.",
+    ),
+    (
         "design",
         "intent-agreement.md",
         "Design",
@@ -90,11 +96,33 @@ def home_page() -> str:
     fragment = (static_dir() / "index.html").read_text(encoding="utf-8")
     fragment = fragment.replace("<!--HISTORY-->", history_section())
     return shell(
-        "KATA — Know And Trust Agents",
-        "KATA checks who an agent is, who authorized it, what it was authorized to do, and whether this action still matches.",
+        "Global Agent Bureau",
+        "Global Agent Bureau registers agents and checks signed intents. Powered by KATA.",
         fragment,
         current="",
         script=True,
+    )
+
+
+def dashboard_page() -> str:
+    fragment = (static_dir() / "dashboard.html").read_text(encoding="utf-8")
+    return shell(
+        "Dashboard — Global Agent Bureau",
+        "Organization dashboard for the Global Agent Bureau.",
+        fragment,
+        current="/dashboard",
+        scripts=("dashboard.js",),
+    )
+
+
+def portal_page() -> str:
+    fragment = (static_dir() / "portal.html").read_text(encoding="utf-8")
+    return shell(
+        "Portal — Global Agent Bureau",
+        "Individual portal for the Global Agent Bureau.",
+        fragment,
+        current="/portal",
+        scripts=("portal.js",),
     )
 
 
@@ -234,8 +262,13 @@ def history_section() -> str:
     )
 
 
-def shell(title: str, description: str, body: str, *, current: str, script: bool = False) -> str:
-    script_tag = '<script src="/assets/app.js"></script>' if script else ""
+def shell(title: str, description: str, body: str, *, current: str, script: bool = False, scripts: tuple[str, ...] = ()) -> str:
+    tags = []
+    if script:
+        tags.append('<script src="/assets/app.js"></script>')
+    for src in scripts:
+        tags.append(f'<script src="/assets/{html.escape(src)}"></script>')
+    script_tag = "".join(tags)
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -243,7 +276,7 @@ def shell(title: str, description: str, body: str, *, current: str, script: bool
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{html.escape(title)}</title>
   <meta name="description" content="{html.escape(description)}">
-  <link rel="icon" href="/assets/kata-icon.svg" type="image/svg+xml">
+  <link rel="icon" href="/assets/gab-logo.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/assets/app.css">
 </head>
 <body>
@@ -251,8 +284,8 @@ def shell(title: str, description: str, body: str, *, current: str, script: bool
   <div class="wrap">
     <header class="site">
       <a class="brand" href="/">
-        <img class="logo" src="/assets/kata-logo.svg" alt="KATA" width="247" height="64">
-        <span>Know And Trust Agents</span>
+        <img class="logo" src="/assets/gab-logo.svg" alt="Global Agent Bureau" width="520" height="64">
+        <span>Powered by KATA · Know And Trust Agents</span>
       </a>
       {_nav(current)}
     </header>
@@ -261,8 +294,8 @@ def shell(title: str, description: str, body: str, *, current: str, script: bool
       {body}
     </main>
     <footer class="site">
-      <p>KATA. Copyright 2026 Kaan Uluer. PolyForm Noncommercial License. <a href="{GITHUB}">GitHub</a>.</p>
-      <p>The demo seed is public and is not a production signing key. Verdicts here are allow, deny, or step-up. Deny means block the action. It does not revoke the grant.</p>
+      <p>Global Agent Bureau. Powered by <img class="mark" src="/assets/kata-logo.svg" alt="KATA">. Copyright 2026 Kaan Uluer. PolyForm Noncommercial License. <a href="{GITHUB}">GitHub</a>.</p>
+      <p><img src="/assets/kata-icon.svg" alt="" width="28" height="28"> The demo seed is public and is not a production signing key. Verdicts here are allow, deny, or step-up. Deny means block the action. It does not revoke the grant.</p>
     </footer>
   </div>
   {script_tag}
@@ -275,6 +308,8 @@ def _nav(current: str) -> str:
     items = [
         ("/#questions", "Questions", ""),
         ("/#demo", "Demo", ""),
+        ("/dashboard", "Dashboard", "/dashboard"),
+        ("/portal", "Portal", "/portal"),
         ("/history", "History", "/history"),
         ("/docs", "Docs", "/docs"),
         ("/#operations", "Live status", ""),
@@ -452,7 +487,13 @@ _MILESTONES = (
         "</p>"
         "<p>CHANGELOG.md for 2026-10-13 also records <code>/history</code> and <code>/docs</code> "
         "(design, authorization, intent, threat model, schemas, and the API reference), "
-        "with FastAPI's generated OpenAPI page at <code>/docs/openapi</code>.</p>",
+        "with FastAPI's generated OpenAPI page at <code>/docs/openapi</code>.</p>"
+        "<p>This checkout adds the Global Agent Bureau on that service: organizations and hashed API keys, "
+        "the agent registry, stored intents and the verify API, incident reports, purpose-coded inquiries, "
+        "the rule-based trust score, signed alerts, the individual portal, and disputes. "
+        "The requirements are in <a href=\"/docs/gab-requirements\">docs/gab-requirements.md</a>. "
+        "The organization dashboard is <a href=\"/dashboard\">/dashboard</a> and the individual portal is "
+        "<a href=\"/portal\">/portal</a>.</p>",
     ),
 )
 
@@ -499,7 +540,7 @@ _ENDPOINTS: tuple[dict[str, str], ...] = (
     {
         "method": "POST",
         "path": "/v1/log/entries",
-        "summary": "Append an agreement or a revocation and sign a new tree head. Authorization: Bearer <KATA_APPEND_TOKEN>.",
+        "summary": "Append an agreement, revocation, registration, or incident and sign a new tree head. Authorization: Bearer <KATA_APPEND_TOKEN>. Bureau registrations, revocations, and incidents are appended by the service itself.",
         "request": '{\n  "kind": "agreement",\n  "body": {}\n}',
         "response": (
             '{\n'
@@ -520,7 +561,7 @@ _ENDPOINTS: tuple[dict[str, str], ...] = (
             "}"
         ),
         "errors": (
-            "kind is agreement or revocation. A later entry also carries prev_entry_hash. "
+            "kind is agreement, revocation, registration, or incident. A later entry also carries prev_entry_hash. "
             "The tree-head JWS typ is kata-tree-head+jws. "
             '401 {"error": "append token does not match"}. '
             '400 {"error": "log append needs kind and a body object"} and 400 when kind is rejected. '
@@ -662,5 +703,69 @@ _ENDPOINTS: tuple[dict[str, str], ...] = (
             "include_expiry false returns verdict STEP_UP and reasons including OVER_BROAD_INTENT. "
             "400 when an amount or currency is unusable."
         ),
+    },
+    {
+        "method": "POST",
+        "path": "/v1/orgs",
+        "summary": "Admin bootstrap. Creates a participant organization. org_type is agent_operator, wallet, bank_issuer, processor_psp, or merchant.",
+        "request": '{\n  "name": "Harbor Agents",\n  "org_type": "agent_operator"\n}',
+        "response": '{\n  "org_id": "org_…",\n  "name": "Harbor Agents",\n  "org_type": "agent_operator",\n  "status": "active"\n}',
+        "errors": "401 without the admin token. 403 for any other credential. 400 for an unknown org_type.",
+    },
+    {
+        "method": "POST",
+        "path": "/v1/orgs/{org_id}/keys",
+        "summary": "Issues an API key. The raw token is returned once. Stored value is the SHA-256 hash. List responses omit the token.",
+        "request": '{\n  "name": "primary"\n}',
+        "response": '{\n  "key_id": "key_…",\n  "prefix": "…",\n  "scopes": ["registry:read"],\n  "token": "gab_…"\n}',
+        "errors": "404 when another organization asks. 401 when the key is revoked.",
+    },
+    {
+        "method": "POST",
+        "path": "/v1/agents",
+        "summary": "An agent operator registers an agent. public_key is an Ed25519 or P-256 JWK with no private d. principal_id is a pseudonymous id.",
+        "request": '{\n  "agent_id": "shopper-01",\n  "principal_id": "prn_demo",\n  "verification_level": "operator_verified",\n  "public_key": {"kty": "OKP", "crv": "Ed25519", "x": "…"}\n}',
+        "response": '{\n  "agent_id": "shopper-01",\n  "status": "active",\n  "verification_level": "operator_verified",\n  "fingerprint": "sha256:…",\n  "score": 700\n}',
+        "errors": "Other tenants do not receive principal_id. 409 when the agent id or key is already registered.",
+    },
+    {
+        "method": "POST",
+        "path": "/v1/verify",
+        "summary": "Checks a payment action against the agent's active stored agreement. ALLOW records the spend. DENY maps to kata_decision BLOCK.",
+        "request": '{\n  "agent_id": "shopper-01",\n  "action": {"action_id": "act_1", "action_type": "purchase", "amount": 1300, "currency": "CAD", "proposed_at": "2026-10-04T13:55:00Z"}\n}',
+        "response": '{\n  "verdict": "ALLOW",\n  "kata_decision": "ALLOW",\n  "reasons": [],\n  "agent_id": "shopper-01",\n  "agreement_id": "agr_demo"\n}',
+        "errors": "AGENT_NOT_ACTIVE, NO_ACTIVE_AGREEMENT, and AGREEMENT_NOT_SELECTED are bureau reasons. Library reasons such as AMOUNT_ABOVE_INTENT_CEILING are passed through.",
+    },
+    {
+        "method": "POST",
+        "path": "/v1/inquiries",
+        "summary": "Purpose-coded inquiry. Returns identity, verification, active authorizations, revocations, incident counts, and the trust score. Contributors also receive recent evidence hashes.",
+        "request": '{\n  "agent_id": "shopper-01",\n  "purpose_code": "payment_authorization"\n}',
+        "response": '{\n  "inquiry_id": "inq_…",\n  "agent": {"agent_id": "shopper-01", "status": "active", "verification_level": "institution_attested"},\n  "trust_score": {"score": 724, "cold_start": false, "reasons": [{"code": "CHARGEBACK", "points": -56}]}\n}',
+        "errors": "400 when purpose_code is missing. The body does not include an email address or principal_id.",
+    },
+    {
+        "method": "POST",
+        "path": "/v1/reports",
+        "summary": "Files a transaction outcome, fraud incident, chargeback, or policy violation. evidence_hash is sha256 and 64 hex characters. The same reporter, agent, kind, and hash is a duplicate.",
+        "request": '{\n  "agent_id": "shopper-01",\n  "kind": "chargeback",\n  "evidence_hash": "sha256:…",\n  "summary": "Disputed purchase."\n}',
+        "response": '{\n  "report_id": "rpt_…",\n  "kind": "chargeback"\n}',
+        "errors": "409 duplicate report. 429 when the organization exceeds the daily cap.",
+    },
+    {
+        "method": "POST",
+        "path": "/v1/subscriptions",
+        "summary": "Subscribes the caller to signed webhooks for revocation, a new incident, and a score drop of 50 points or more. The signature typ is kata-bureau-alert+jws and uses the log signing key.",
+        "request": '{\n  "agent_id": "shopper-01",\n  "webhook_url": "https://merchant.example/hooks/gab"\n}',
+        "response": '{\n  "subscription_id": "sub_…",\n  "agent_id": "shopper-01"\n}',
+        "errors": "400 unless the URL is https, or http on localhost.",
+    },
+    {
+        "method": "POST",
+        "path": "/v1/portal/magic-link",
+        "summary": "Sends a portal sign-in link. The response is always sent true. In development, GAB_DEV_MAILBOX=1 keeps the latest link at GET /v1/dev/mailbox.",
+        "request": '{\n  "email": "principal@example.com"\n}',
+        "response": '{\n  "sent": true\n}',
+        "errors": "POST /v1/sessions exchanges the token. A new email creates a new principal id.",
     },
 )

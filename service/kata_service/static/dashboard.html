@@ -1,0 +1,140 @@
+<section class="hero">
+  <p class="kicker">Organizations</p>
+  <h1>Dashboard</h1>
+  <p class="lede">Register agents, check a payment against a stored intent, inquire with a purpose code, and read the trust score. Sign in with an API key or an organization email. Demo keys are public and are not production credentials.</p>
+</section>
+
+<form id="login-form" class="panel">
+  <label for="api-key">API key</label>
+  <input id="api-key" name="api-key" autocomplete="off" placeholder="gab_…">
+  <div class="actions">
+    <button type="submit">Sign in with API key</button>
+    <button class="ghost" type="button" data-demo-key="gab_demo_operator_public">Demo operator</button>
+    <button class="ghost" type="button" data-demo-key="gab_demo_wallet_public">Demo wallet</button>
+    <button class="ghost" type="button" data-demo-key="gab_demo_merchant_public">Demo merchant</button>
+    <button class="ghost" type="button" data-demo-key="gab-demo-admin">Demo admin</button>
+  </div>
+  <label for="org-email">Organization email</label>
+  <input id="org-email" name="org-email" type="email" value="ops@harbor.example" autocomplete="username">
+  <div class="actions">
+    <button class="ghost" id="email-link" type="button">Email a sign-in link</button>
+    <button class="ghost" id="dev-mailbox" type="button">Open the development mailbox</button>
+  </div>
+  <p id="login-status" class="meta" role="status"></p>
+</form>
+
+<div id="workspace" hidden>
+  <div class="ops-head">
+    <p id="who" class="meta"></p>
+    <button id="sign-out" class="ghost" type="button">Sign out</button>
+  </div>
+  <nav class="tabs" aria-label="Dashboard">
+    <button type="button" data-tab="agents" aria-current="true">Agents</button>
+    <button type="button" data-tab="inquiry">Inquiry</button>
+    <button type="button" data-tab="incidents">Incidents</button>
+    <button type="button" data-tab="alerts">Alerts</button>
+    <button type="button" data-tab="keys">API keys</button>
+    <button type="button" data-tab="disputes">Disputes</button>
+  </nav>
+
+  <section id="tab-agents" class="panel">
+    <h2>Register an agent</h2>
+    <form id="agent-form">
+      <div class="demo-grid">
+        <div>
+          <label for="agent-id">Agent id</label>
+          <input id="agent-id" required value="shopper-02">
+          <label for="principal-id">Principal id</label>
+          <input id="principal-id" required value="prn_demo_2" placeholder="Pseudonymous id">
+          <label for="verification-level">Verification level</label>
+          <select id="verification-level">
+            <option value="key_bound">key_bound</option>
+            <option value="operator_verified" selected>operator_verified</option>
+            <option value="unverified">unverified</option>
+          </select>
+        </div>
+        <div>
+          <label for="public-key">Agent public key JWK</label>
+          <textarea id="public-key" required placeholder='{"kty":"OKP","crv":"Ed25519","x":"…"}'></textarea>
+          <button type="submit">Register</button>
+        </div>
+      </div>
+    </form>
+    <h2>Look up</h2>
+    <form id="lookup-form" class="actions">
+      <input id="lookup-id" placeholder="agent id" value="shopper-01">
+      <button type="submit">Look up</button>
+    </form>
+    <div id="agent-result" class="result" hidden></div>
+  </section>
+
+  <section id="tab-inquiry" class="panel" hidden>
+    <h2>Inquiry</h2>
+    <p class="lede">A purpose code is required. The report lists identity, verification, active authorizations, revocations, incident counts, and the trust score. Wallets, banks, processors, and merchants can inquire. An operator key does not include the inquire scope.</p>
+    <form id="inquiry-form">
+      <label for="inquiry-agent">Agent id</label>
+      <input id="inquiry-agent" value="shopper-01" required>
+      <label for="purpose-code">Purpose code</label>
+      <select id="purpose-code">
+        <option value="payment_authorization">payment_authorization</option>
+        <option value="account_opening">account_opening</option>
+        <option value="fraud_investigation">fraud_investigation</option>
+        <option value="dispute_resolution">dispute_resolution</option>
+        <option value="ongoing_monitoring">ongoing_monitoring</option>
+        <option value="agent_onboarding">agent_onboarding</option>
+      </select>
+      <button type="submit">Run inquiry</button>
+    </form>
+    <div id="inquiry-result" class="result" hidden></div>
+  </section>
+
+  <section id="tab-incidents" class="panel" hidden>
+    <h2>Report an incident</h2>
+    <form id="report-form">
+      <label for="report-agent">Agent id</label>
+      <input id="report-agent" value="shopper-01" required>
+      <label for="report-kind">Kind</label>
+      <select id="report-kind">
+        <option value="transaction_outcome">transaction_outcome</option>
+        <option value="fraud_incident">fraud_incident</option>
+        <option value="chargeback" selected>chargeback</option>
+        <option value="policy_violation">policy_violation</option>
+      </select>
+      <label for="evidence-hash">Evidence hash</label>
+      <input id="evidence-hash" required placeholder="sha256: and 64 hex characters">
+      <label for="report-summary">Summary</label>
+      <textarea id="report-summary" required>Disputed purchase.</textarea>
+      <button type="submit">File report</button>
+    </form>
+    <div id="report-result" class="result" hidden></div>
+  </section>
+
+  <section id="tab-alerts" class="panel" hidden>
+    <h2>Alerts</h2>
+    <form id="subscribe-form" class="actions">
+      <input id="subscribe-agent" value="shopper-01" placeholder="agent id">
+      <input id="subscribe-url" value="http://127.0.0.1:8765/demo-hook" placeholder="https webhook">
+      <button type="submit">Subscribe</button>
+      <button class="ghost" id="refresh-alerts" type="button">Refresh</button>
+    </form>
+    <div id="alerts-result" class="result" hidden></div>
+  </section>
+
+  <section id="tab-keys" class="panel" hidden>
+    <h2>API keys</h2>
+    <form id="key-form" class="actions">
+      <input id="key-org" placeholder="org id" required>
+      <input id="key-name" placeholder="key name" value="rotated">
+      <button type="submit">Issue key</button>
+      <button class="ghost" id="refresh-keys" type="button">List keys</button>
+    </form>
+    <div id="keys-result" class="result" hidden></div>
+  </section>
+
+  <section id="tab-disputes" class="panel" hidden>
+    <h2>Admin review</h2>
+    <p class="lede">This queue answers only to the admin token.</p>
+    <button id="refresh-disputes" type="button">Load disputes</button>
+    <div id="disputes-result" class="result" hidden></div>
+  </section>
+</div>
