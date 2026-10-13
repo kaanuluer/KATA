@@ -179,6 +179,21 @@ def build_router() -> APIRouter:
     async def portal_disputes(request: Request):
         return await _run(request, lambda auth, body: _bureau(request).portal_disputes(auth), read_body=False)
 
+    @router.post("/v1/admin/seed-demo", summary="Insert the public demo rows when the host allows it")
+    async def seed_demo_route(request: Request):
+        def action(auth, body):
+            if not auth.admin:
+                raise BureauError(403, "admin credentials are required")
+            if not request.app.state.settings.allow_demo_seed:
+                raise BureauError(403, "demo seed is disabled")
+            from kata_service.seed import seed_demo
+
+            seeded = seed_demo(_bureau(request))
+            seeded.pop("admin_token", None)
+            return seeded
+
+        return await _run(request, action, read_body=False)
+
     @router.get("/v1/admin/disputes", summary="Admin dispute queue")
     async def admin_disputes(request: Request):
         return await _run(request, lambda auth, body: _bureau(request).admin_disputes(auth), read_body=False)

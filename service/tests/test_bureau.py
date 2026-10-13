@@ -422,3 +422,40 @@ def test_es256_agent_key_registers():
     )
     assert response.status_code == 200, response.text
     assert response.json()["algorithm"] == "ES256"
+
+
+def test_admin_seed_is_idempotent_and_stays_off_unless_allowed():
+    from kata_service.seed import DEMO_OPERATOR_KEY
+    from kata_service.settings import settings_from_env
+
+    assert settings_from_env({"GAB_ALLOW_DEMO_SEED": "1"}).allow_demo_seed is True
+    assert settings_from_env({}).allow_demo_seed is False
+    blocked = _client(demo=False, allow_demo_seed=False)
+    refused = blocked.post("/v1/admin/seed-demo", headers=_auth("admin-test-token"))
+    assert refused.status_code == 403
+    assert refused.json()["error"] == "demo seed is disabled"
+    assert blocked.app.state.bureau.repo.get_agent("shopper-01") is None
+    client = _client(demo=False, allow_demo_seed=True)
+    anonymous = client.post("/v1/admin/seed-demo")
+    assert anonymous.status_code == 401
+    operator = _org(client, "Other Operator", "agent_operator")
+    operator_key = _key(client, operator["org_id"])
+    forbidden = client.post("/v1/admin/seed-demo", headers=_auth(operator_key))
+    assert forbidden.status_code == 403
+    first = client.post("/v1/admin/seed-demo", headers=_auth("admin-test-token"))
+    assert first.status_code == 200, first.text
+    body = first.json()
+    assert body["agent_id"] == "shopper-01"
+    assert body["already_present"] == "false"
+    assert "admin_token" not in body
+    assert "admin-test-token" not in first.text
+    second = client.post("/v1/admin/seed-demo", headers=_auth("admin-test-token"))
+    assert second.status_code == 200, second.text
+    assert second.json()["already_present"] == "true"
+    assert len(client.app.state.bureau.repo.orgs) == 4
+    again = client.post("/v1/admin/seed-demo", headers=_auth(DEMO_OPERATOR_KEY))
+    assert again.status_code == 403
+    assert len(client.app.state.bureau.repo.orgs) == 4
+    agent = client.get("/v1/agents/shopper-01", headers=_auth(DEMO_OPERATOR_KEY))
+    assert agent.status_code == 200
+    assert agent.json()["verification_level"] == "institution_attested"

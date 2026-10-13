@@ -147,6 +147,8 @@ Acceptance: an upheld policy-violation dispute leaves the score greater than or 
 - `GAB_DEMO=1` uses the memory repository even when `DATABASE_URL` is set, turns on the development mailbox, and seeds Harbor Agents, Northwind Wallet, Techstore, agent `shopper-01`, agreement `agr_demo`, one chargeback, and a localhost subscription.
 - Public demo credentials, which must not be used in production: admin `gab-demo-admin`, operator `gab_demo_operator_public`, wallet `gab_demo_wallet_public`, merchant `gab_demo_merchant_public`, portal `principal@example.com`, organization email `ops@harbor.example`.
 - `python3 -m kata_service.seed` applies the SQL migration to `DATABASE_URL`. `--demo` also inserts that data. Without `DATABASE_URL` the script exits and tells the operator to use `GAB_DEMO=1` for a local demo.
+- `POST /v1/admin/seed-demo` inserts the same public demo rows into whatever repository the process is using, including Neon, without `GAB_DEMO`. The caller must send the `GAB_ADMIN_TOKEN` bearer. The route returns 403 `demo seed is disabled` unless `GAB_ALLOW_DEMO_SEED=1`. A second call keeps the same organizations, agent, agreement, chargeback, and subscription. The response lists the public demo keys and does not echo the admin token.
+- The SQL file `kata_service/migrations/001_bureau.sql` is package data, so an installed copy can apply the schema. `GAB_DEMO` is not required for that route and must stay unset on Vercel, because demo mode ignores `DATABASE_URL`.
 
 ## 3. Non-functional requirements
 
@@ -211,6 +213,7 @@ Set secrets in the host. Do not commit values.
 | `GAB_SESSION_TTL_SECONDS` | No | no | Default 43200. |
 | `GAB_DEV_MAILBOX` | No | no | `1` keeps the latest magic link in memory. |
 | `GAB_DEMO` | No | no | `1` seeds memory and ignores Postgres. Local only. |
+| `GAB_ALLOW_DEMO_SEED` | No | no | `1` allows `POST /v1/admin/seed-demo` to write the public demo rows into the live database. Leave unset except while loading a demo. |
 
 Supabase is not part of this deployment. There is no `SUPABASE_URL`, anon key, or service-role key.
 

@@ -53,6 +53,7 @@ Set these on the Vercel project. Generate the secret values on your machine and 
 | `GAB_SESSION_TTL_SECONDS` | no | no | Default 43200. |
 | `GAB_DEV_MAILBOX` | no | no | `1` keeps the latest magic link in memory at `GET /v1/dev/mailbox`. Leave unset in production. |
 | `GAB_DEMO` | no | no | `1` seeds a memory bureau and ignores `DATABASE_URL`. Local demos only. |
+| `GAB_ALLOW_DEMO_SEED` | no | no | `1` allows `POST /v1/admin/seed-demo`. The bearer is `GAB_ADMIN_TOKEN`. The call writes the public demo into the live database and can be repeated. |
 
 Generate a log seed, a push notifier, and an append token:
 
@@ -132,3 +133,5 @@ python3 -m kata_service.seed --demo
 ```
 
 `seed` reads `DATABASE_URL`. It does not print secret values. Bureau routes under `/v1` are listed on `/docs/api` and `/docs/openapi`. Outbound alert webhooks are signed with `KATA_LOG_SIGNING_SEED` (`typ` `kata-bureau-alert+jws`) because `KATA_PUSH_NOTIFIER_JWK` is a public key.
+
+On a deployed service that can see Neon, set `GAB_ALLOW_DEMO_SEED=1` and call `POST /v1/admin/seed-demo` with `Authorization: Bearer $GAB_ADMIN_TOKEN`. Leave `GAB_DEMO` unset so the write goes to Postgres. The route is idempotent. Unset `GAB_ALLOW_DEMO_SEED` after the demo rows are in place. The migration file is packaged with the service (`migrations/*.sql`), so the first `/v1` request can create the tables from the installed copy.

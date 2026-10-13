@@ -33,6 +33,7 @@ class Settings:
     magic_link_ttl_seconds: int = 900
     session_ttl_seconds: int = 43200
     report_daily_cap: int = 20
+    allow_demo_seed: bool = False
 
     def log_key(self) -> PrivateKey | None:
         if self.log_signing_seed is None:
@@ -72,6 +73,7 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
         magic_link_ttl_seconds=_positive_int(env.get("GAB_MAGIC_LINK_TTL_SECONDS"), 900),
         session_ttl_seconds=_positive_int(env.get("GAB_SESSION_TTL_SECONDS"), 43200),
         report_daily_cap=_positive_int(env.get("GAB_REPORT_DAILY_CAP"), 20),
+        allow_demo_seed=_flag(env.get("GAB_ALLOW_DEMO_SEED")),
     )
 
 

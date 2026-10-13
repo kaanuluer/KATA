@@ -2,6 +2,8 @@
 
 ## 2026-10-13
 
+The bureau migration ships inside the installed package (`kata_service/migrations/001_bureau.sql`). `POST /v1/admin/seed-demo` writes the public demo into the live database when the bearer is `GAB_ADMIN_TOKEN` and `GAB_ALLOW_DEMO_SEED=1`. It does not require `GAB_DEMO`, and a second call does not insert another copy.
+
 Global Agent Bureau now runs on the KATA service. Organizations authenticate with hashed API keys, the registry binds an agent key to a pseudonymous principal, stored intents are checked by `POST /v1/verify`, and participants file incidents, inquire with a purpose code, and subscribe to signed alerts. The trust score is a rule-based 0–1000 value with reason codes. Individuals sign in with a magic link. Requirements are in [docs/gab-requirements.md](docs/gab-requirements.md). The home page, `/dashboard`, and `/portal` use the Global Agent Bureau wordmark. Storage stays on the existing Neon `DATABASE_URL`. Supabase is not used.
 
 The repository license changed from Apache-2.0 to the PolyForm Noncommercial License 1.0.0. Commercial use requires a separate license from Kaan Uluer. Versions published before this change were released under Apache-2.0 and remain available under those terms. This change applies from this commit forward. Third-party projects cited in the docs, including AgentCommerceBench, keep their own licenses.

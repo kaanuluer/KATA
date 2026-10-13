@@ -768,4 +768,25 @@ _ENDPOINTS: tuple[dict[str, str], ...] = (
         "response": '{\n  "sent": true\n}',
         "errors": "POST /v1/sessions exchanges the token. A new email creates a new principal id.",
     },
+    {
+        "method": "POST",
+        "path": "/v1/admin/seed-demo",
+        "summary": (
+            "Inserts the public demo organizations, shopper-01, and agr_demo into the live repository. "
+            "Authorization is the GAB_ADMIN_TOKEN bearer. The route stays closed unless GAB_ALLOW_DEMO_SEED=1. "
+            "It does not require GAB_DEMO. A second call returns already_present true and does not insert another copy. "
+            "The response omits the admin token."
+        ),
+        "response": (
+            '{\n'
+            '  "operator_key": "gab_demo_operator_public",\n'
+            '  "wallet_key": "gab_demo_wallet_public",\n'
+            '  "merchant_key": "gab_demo_merchant_public",\n'
+            '  "agent_id": "shopper-01",\n'
+            '  "agreement_id": "agr_demo",\n'
+            '  "already_present": "false"\n'
+            "}"
+        ),
+        "errors": "401 without a bearer. 403 for a non-admin key. 403 {\"error\": \"demo seed is disabled\"} when the flag is unset.",
+    },
 )
