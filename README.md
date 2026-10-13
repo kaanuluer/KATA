@@ -251,6 +251,8 @@ Once a reference implementation exists, evaluate it against the [AgentCommerceBe
 
 ## What's new
 
+**2026-10-13.** A Vercel service hosts revocation, the transparency log, institution keys, and a daily FX stub. Project settings are in [service/README.md](service/README.md).
+
 **2026-10-13.** The intent agreement now follows the rest of Kaan's decisions: canonical confirmation text for the wallet to display, a hash-chained ledger with a 60-second freshness bound, auto-selection when one live intent matches, pull plus push revocation and a transparency log, an optional FX ceiling, institution keys at `.well-known` with a 7-day grace, and ES256 beside Ed25519. Details: [CHANGELOG.md](CHANGELOG.md).
 
 **2026-10-12.** Intent agreement: a signed mandate, an auditable lifecycle, and a reference check that returns `ALLOW`, `STEP_UP`, or `DENY`. Design in [docs/intent-agreement.md](docs/intent-agreement.md). Schemas `intent-mandate` and `agreement`. Library in [`reference/python`](reference/python). Details: [CHANGELOG.md](CHANGELOG.md).

@@ -386,8 +386,4 @@ The next slices, in the order they unblock each other:
 
 Decisions 1 through 20 are applied. These are not:
 
-- The reference library does not open a socket. The pull fetcher, the webhook receiver, and the FX source are interfaces a deployment supplies.
-- Who operates the transparency log, and which key is trusted for tree heads, is a deployment choice. The library verifies a supplied key. Gossip between logs is not built.
-- The institution-key grace defaults to 7 days, and the reference currency defaults to USD. Those two values are this design's choice.
-- Merkle inclusion is implemented. Production hosting of the log is not.
-- The wallet or bank app displays the confirmation. KATA does not render that user interface, and this repository does not include one.
+- The reference library does not open a socket. [`service/`](../service/) is a Vercel host for the pull list, the push webhook, the transparency log, `.well-known/kata-keys.json`, and a Frankfurter FX stub. Gossip between logs is still not built. The wallet or bank app still displays the confirmation.

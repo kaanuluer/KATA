@@ -2,6 +2,10 @@
 
 ## 2026-10-13
 
+A Vercel service in [`service/`](service/) hosts the revocation pull list, the signed push webhook, the transparency log, `/.well-known/kata-keys.json`, and a Frankfurter daily FX stub. Neon Postgres is the storage integration. Secrets stay in the Vercel project.
+
+## 2026-10-13
+
 Kaan decided the remaining open points on the intent agreement.
 
 - KATA produces the canonical confirmation text and its hash. The wallet or bank app displays that text and collects the signature. The verifier checks the signed hash against the text KATA produced. Another language is canonical only through a renderer registered on both sides.

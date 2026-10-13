@@ -1,0 +1,22 @@
+[project]
+name = "kata-service"
+version = "0.1.0"
+description = "Vercel deployment service for KATA revocation, the transparency log, institution keys, and daily FX. Concept / open design, not production ready."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+authors = [{name = "Kaan Uluer"}]
+dependencies = [
+  "fastapi>=0.117.1",
+  "psycopg[binary]>=3.2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "httpx>=0.27"]
+
+[tool.setuptools.packages.find]
+include = ["kata_service*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "../reference/python/src"]

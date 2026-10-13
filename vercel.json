@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "fastapi",
+  "installCommand": "pip install ./reference/python ./service",
+  "buildCommand": "python -c \"import kata_intent, kata_service.asgi\"",
+  "functions": {
+    "service/kata_service/asgi.py": {
+      "maxDuration": 30
+    }
+  }
+}
