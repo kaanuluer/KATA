@@ -10,23 +10,37 @@ KATA's own objects are authoritative here. AP2 mandates, Verifiable Intent crede
 
 ## Decisions
 
-1. **The agreement is a new object.** Delegation stays the answer to who authorized the agent ([delegation-model.md](delegation-model.md), [schemas/delegation.json](../schemas/delegation.json)). The structured intent stays [schemas/intent.json](../schemas/intent.json). The new **intent mandate** is that intent, signed, and bound to one agent key. The new **agreement** is the lifecycle record around the mandate.
-2. **`maximum_amount` stays the per-transaction ceiling.** A cumulative cap and a frequency cap are separate fields. They need a running ledger, which the mandate does not contain. That matches the interoperability note that a payment-mandate budget is not `maximum_amount`.
-3. **The principal's signature is what makes the intent real.** An intent the agent announces at checkout is not this record. The agent cannot widen a signed mandate. Amendments are a new version, signed again.
-4. **The check returns `ALLOW`, `STEP_UP`, or `DENY`.** `DENY` is the KATA decision `BLOCK`. A price miss or a bad charge does not revoke the grant. `REVOKE` and `QUARANTINE` stay decisions of the wider engine, or an explicit signed revocation by the principal.
-5. **Amounts stay major units** (`1500`, not `150000` cents), as in the rest of KATA. Canonical JSON gives those numbers one encoding so two languages do not sign different bytes for the same amount.
-6. **Version 1 signs with Ed25519**, carried as a flattened JWS (`alg: EdDSA`). Verifiable Intent uses ES256. A second algorithm is a later choice, not a silent alias.
+Kaan answered the open questions. The agreement lives inside the delegation, KATA holds the spend ledger, and one delegation may carry several live intents as long as they stay inside the parent set. The table is the source for those choices. A short answer that could be read more than one way has its interpretation in the last column.
+
+| # | Question | Decision | How it is applied |
+|---|---|---|---|
+| 1 | Should the signed agreement stay beside the delegation, or go inside it? | Include it inside ("içine girsin"). | `delegation.intent_agreement` holds the agreement. `Agreement.to_delegation()` writes it there. Evaluating a delegation uses that record and checks the delegation scope. |
+| 2 | Is `maximum_amount` the per-transaction ceiling, with the cumulative cap kept separate? | Keep the total limit tracked separately. | `maximum_amount` stays per transaction. `limits.cumulative_maximum` is that intent's slice. `parent_limits.cumulative_maximum` is the total for the delegation. |
+| 3 | Who holds the spend ledger, and is a missing total a step-up or a rejection? | KATA will hold it; reject ("Kata tutacak, red"). | The agreement's `ledger` starts empty, which means nothing has been spent. `record_allowed` appends charges. If a cumulative or frequency limit is signed and the ledger field is missing, the verdict is `DENY`. |
+| 4 | Is the principal's signature enough to activate, without a counterparty countersignature? | That is sufficient. | Default `required_acknowledgements` is empty. A countersignature is required only when the mandate names that role. |
+| 5 | Should a missing expiry or a missing ceiling hard-deny, or ask for approval? | It should ask for approval. | `OVER_BROAD_INTENT` is `STEP_UP` with `required_action` `HUMAN_APPROVAL`. |
+| 6 | Major units and Ed25519, or minor units and ES256 so the principal signs an AP2 or Verifiable Intent payload? | "I will sign it." | **Interpretation.** The principal signs the KATA mandate. Version 1 stays major units and Ed25519. The signed payload does not switch to minor units or ES256. |
+| 7 | Must every payment step up until a revocation endpoint is checked, even when the mandate names none? | It should drop ("düşsün"). | **Interpretation.** Do not step up only because no endpoint is named. When an endpoint is named and the caller has not checked it, `ALLOW` drops to `STEP_UP` / `REVOCATION_ENDPOINT_UNCHECKED`. That miss is not, by itself, a `DENY`. |
+| 8 | May anyone other than the signing principal revoke? | No. | `revoke` accepts only the principal key that signed the mandate. |
+| 9 | Does a price or fee miss block the charge without revoking the grant? | Correct. | Those reason codes are `DENY` with `required_action` `NONE`. The mandate stays active. |
+| 10 | Should `P1M` be a calendar month instead of 30 days? | No. | `P1M` remains thirty days. |
+| 11 | Must the signed confirmation be the English rendering? | Any language may be used. | **Interpretation.** The signer may supply the confirmation text. The signature covers that text, and the verifier checks that `rendering.hash` is the SHA-256 of `rendering.text`. The text does not have to equal the English renderer. When no text is supplied, the English renderer is what gets signed. An unsigned translation has no force. |
+| 12 | One live intent per agreement, or several? | Several. | `mandates` is a list. `add_intent` appends another signed intent. With more than one live intent, the action must name `intent_id`. Otherwise the verdict is `STEP_UP` / `INTENT_NOT_SELECTED`. |
+| 13 | Must an asserted or added intent equal the parent, or may it be a subset? | Subsets are accepted, but a subset must not exceed the parent set's volume. | **Interpretation.** A child may be narrower. Each child's per-transaction ceiling is at most the parent's. Each child's cumulative slice is at most the parent's cumulative cap, and the sum of the live slices is at most that cap. Per-transaction ceilings are not added together. Allowed actions must be a subset. A merchant list must be a subset when the parent names merchants. Expiry must not be later. Category, currency, and purpose must match. The same subset rule applies to an asserted intent. A higher amount, an extra verb, or a later expiry is `ASSERTED_INTENT_MISMATCH`. |
+
+The structured intent stays [schemas/intent.json](../schemas/intent.json). Delegation stays the answer to who authorized the agent ([delegation-model.md](delegation-model.md)). Amounts stay major units (`1500`, not `150000` cents). Version 1 signs with Ed25519, carried as a flattened JWS (`alg: EdDSA`). The check returns `ALLOW`, `STEP_UP`, or `DENY`. `DENY` is the KATA decision `BLOCK`. `REVOKE` and `QUARANTINE` stay decisions of the wider engine, or an explicit signed revocation by the principal.
 
 ## Where it sits
 
 ```mermaid
 flowchart TD
-    P[Principal reads the rendering] --> S[Principal signs the mandate]
-    S --> A[Agreement is active]
+    D[Delegation] --> A[Agreement inside the delegation]
+    P[Principal reads the confirmation, any language] --> S[Principal signs each mandate]
+    S --> A
     C[Merchant, PSP, or issuer] -.->|optional acknowledgement| A
     AG[Agent proposes an action] --> E[Intent check]
     A --> E
-    L[Spend ledger] --> E
+    L[Ledger KATA stores on the agreement] --> E
     R[Revocation log] --> E
     E --> V{Verdict}
     V --> ALLOW
@@ -52,18 +66,19 @@ Schema: [schemas/intent-mandate.json](../schemas/intent-mandate.json).
 | `agent` | `agent_id`, the public JWK, and `public_key_fingerprint`. The fingerprint is SHA-256 over the raw 32-byte public key, lowercase hex, prefixed `sha256:`. |
 | `delegation_id` | The Q2 grant this mandate belongs to, when there is one. |
 | `intent` | A [KATA intent](../schemas/intent.json). `maximum_amount` is the per-transaction ceiling. |
-| `limits` | Cumulative cap, frequency, merchant denylist, and a restatement of the per-transaction ceiling. See below. |
+| `limits` | This intent's cumulative slice, frequency, merchant denylist, and a restatement of the per-transaction ceiling. See below. |
+| `parent_limits` | The parent set signed into every live mandate: per-transaction cap, cumulative total, currency, and the scope the children must stay inside. |
 | `not_before`, `expires_at` | The window. When `intent.time_limit` is also set, it is the same instant as `expires_at`. |
 | `required_acknowledgements` | Roles that must countersign before the agreement is active: `agent`, `merchant`, `psp`, `issuer`. |
 | `revocation_endpoint` | Where revocation is published. The reference library does not fetch the URL. |
-| `rendering` | The human-readable text and its SHA-256. Both are inside the signature. |
+| `rendering` | The confirmation text, in any language, and its SHA-256. Both are inside the signature. |
 | `signature` | Flattened JWS over the signing document. |
 
 The signing document is those fields except `signature`, plus `"kata_mandate": "1"`. The JWS protected header is `{"alg":"EdDSA","kid":"<fingerprint>","typ":"kata-mandate+jws"}`. Header and payload are both canonical JSON.
 
 `limits.per_transaction_maximum`, when present, equals `intent.maximum_amount`. It is a restatement so a reader of the agreement sees the ceiling next to the cumulative cap. It is not a second, looser ceiling.
 
-`limits.cumulative_maximum` is the total that may be charged under the agreement, in `limits.currency` (the intent currency).
+`limits.cumulative_maximum` is this intent's slice of the parent total, in `limits.currency` (the intent currency). It is not the per-transaction ceiling. The parent total is `parent_limits.cumulative_maximum`. The sum of the live slices must not exceed that total. Per-transaction ceilings are not added together.
 
 `limits.frequency` is `{max_count, per}`. `per` is `agreement` (the whole window), `P1D` (one day), `P7D` (seven days), or `P1M` (thirty days, not a calendar month).
 
@@ -77,7 +92,9 @@ Schema: [schemas/agreement.json](../schemas/agreement.json).
 |---|---|
 | `agreement_id` | Stable id across versions. |
 | `status` | `proposed`, `clarifying`, `accepted`, `active`, `revoked`, `expired`. Advisory. The evaluator does not treat the word `active` as authority. |
-| `mandate` | The current signed version. |
+| `mandates` | The live signed intents. One agreement may hold several. |
+| `parent_limits` | The parent set. Each live intent carries the same object inside its signature. |
+| `ledger` | Charges KATA has recorded. Empty means nothing has been spent. Absent means the total is unknown, and evaluation denies. |
 | `mandate_history` | Superseded versions, retained. |
 | `acknowledgements` | Countersignatures of a mandate hash. |
 | `revocation` | A signed revocation, when the record still contains it. |
@@ -101,7 +118,7 @@ Signatures are over UTF-8 JSON with:
 
 ### What the signature does not cover
 
-The event log, `status`, `created_at`, and `updated_at` are outside the mandate signature. Each event stores `event_hash`, the SHA-256 of the canonical event with that field removed, and `prev_event_hash` of the previous event. An edit in the middle no longer matches.
+The event log, the spend ledger, `status`, `created_at`, and `updated_at` are outside the mandate signature. KATA's copy of the ledger is the one evaluation uses. A shortened copy is not detected yet. Each event stores `event_hash`, the SHA-256 of the canonical event with that field removed, and `prev_event_hash` of the previous event. An edit in the middle no longer matches.
 
 That chain does not stop the holder of the file from dropping the tail and keeping an older prefix: the prefix still hashes. A verifier that has stored a previous head can pass it as `expected_log_head` and detect the drop. A verifier that has not seen the log before cannot.
 
@@ -109,7 +126,7 @@ Revocation distribution is the control for that gap, not the hash chain. See [Th
 
 ## Human-readable rendering
 
-The hardest fraud problem at grant time is a principal signing limits they did not read, or reading a sentence the agent rewrote. Version 1 makes the confirmation text part of the signed document. The reference renderer produces a fixed sequence of lines from the structured fields. Verifiers recompute the text. A stored rendering that differs does not verify.
+The hardest fraud problem at grant time is a principal signing limits they did not read, or reading a sentence the agent rewrote. The confirmation text is part of the signed document, in whatever language the principal was shown. The reference renderer produces a fixed English sequence from the structured fields, and that text is what gets signed when the caller does not supply one. Verifiers do not retranslate. They check that `rendering.hash` is the SHA-256 of the signed `rendering.text`. A text whose hash does not match does not verify. An unsigned translation has no force.
 
 Whitespace inside the quoted instruction is collapsed to single spaces, so a newline in the source cannot push the ceilings below a one-line display.
 
@@ -129,9 +146,7 @@ Delegation: dlg_77.
 The agent cannot change these limits. You can revoke this agreement.
 ```
 
-`accept` takes the text the principal was shown. If it differs from the text just rendered, the library refuses to sign. The line order is normative for `kata_mandate` version `1`. A later version may change the words; it must not pretend to be version 1.
-
-The rendering is English and fixed. Localization, and who must display it (wallet, AI application, merchant), are open.
+`accept`, `amend`, and `add_intent` take `rendering_text` for that confirmation. `confirmed_text`, when passed, must equal the text about to be signed. The English line order is the default for `kata_mandate` version `1`, not the only legal text. Who must display the confirmation (wallet, AI application, merchant) is still open.
 
 ## Lifecycle
 
@@ -156,7 +171,8 @@ flowchart LR
 | Clarify | Any party | The draft is replaced. Event `clarified`. Status `clarifying`. Nothing is signed yet, so a clarification cannot widen a grant that does not exist. |
 | Accept | Principal, with the principal's key | Rendering and Ed25519 signature. Event `accepted`. If every required acknowledgement is already present, event `activated` and status `active`. Otherwise status `accepted`. |
 | Acknowledge | Agent, merchant, PSP, or issuer | Countersignature of the current mandate hash. Event `acknowledged`. The agreement becomes `active` when the required roles are covered. |
-| Amend | Principal | New mandate version, previous version moved to history, old acknowledgements dropped. Event `amended`. The old hash no longer authorizes an action. |
+| Amend | Principal | New version of one live intent, previous version moved to history, acknowledgements of that hash dropped. Event `amended`. The old hash no longer authorizes an action. The amended intent must still fit the parent set. |
+| Add intent | Principal | Another live mandate under the same parent set. Event `added`. Rejected when the per-transaction ceiling, the cumulative slice, or the sum of slices would exceed the parent. |
 | Revoke | Principal | Signed revocation. Event `revoked`. Status `revoked`. The revocation object is also returned so a log outside the agreement can store it. |
 | Expire | Time | Evaluation denies once `now` or the action time is past the window, even if nobody has written an `expired` event. `expire` records the event when called after the window. |
 
@@ -176,7 +192,7 @@ Inputs beyond the action:
 |---|---|
 | Principal public key the verifier expects | The embedded JWK only proves the signature matches itself. Passing the expected key binds it to the principal the verifier already knows. Omitting it is `STEP_UP` / `PRINCIPAL_KEY_UNBOUND`. |
 | Agent id and agent public key | Checked against the bound agent. |
-| Ledger of prior charges | Required to enforce cumulative and frequency limits. `[]` means nothing has been spent. `None` means the verifier does not know, which steps up. |
+| Ledger of prior charges | KATA stores this on the agreement. Omit the argument to use that record. `[]` means nothing has been spent. A missing ledger field, when a cumulative or frequency limit is signed, is `DENY`. |
 | `now` | The verifier's clock. Expiry is enforced here, not only at issuance. |
 | `seen_action_ids` | Replay of an action id. |
 | `extra_revocations` | Signed revocations from a log the verifier trusts. |
@@ -207,7 +223,7 @@ Integrity and authority, all `DENY`:
 | `MANDATE_TAMPERED` | The signed bytes and the mandate fields differ. |
 | `MANDATE_NOT_ACTIVE` | The principal has not signed. |
 | `PRINCIPAL_KEY_MISMATCH` | The expected principal key is not the signing key. |
-| `RENDERING_MISMATCH` | The stored words do not match the renderer, or the hash does not match the words. |
+| `RENDERING_MISMATCH` | The stored confirmation is empty, or its hash is not the SHA-256 of that text. The text may be any language. |
 | `AGREEMENT_LOG_TAMPERED` | The event chain, a pinned head, or a revocation marker does not verify. |
 | `AGREEMENT_MALFORMED` | The object is neither a mandate nor an agreement. |
 | `MANDATE_REVOKED` | A valid principal revocation for this agreement and this mandate hash. |
@@ -236,11 +252,14 @@ Scope, `DENY` unless noted:
 | `FEE_NOT_ACCEPTED` | A non-item fee code is outside `allowed_codes`. |
 | `DELEGATION_NOT_ACTIVE`, `DELEGATION_SCOPE_MISMATCH`, `PRINCIPAL_MISMATCH` | Only when the caller passes a delegation. |
 | `AGENT_BINDING_MISMATCH` | The acting agent or key is not the bound one. |
-| `ASSERTED_INTENT_MISMATCH` | A field the agent asserted is not equal to the signed intent. The signed mandate is what gets evaluated. |
+| `ASSERTED_INTENT_MISMATCH` | The agent asserted a wider intent than the one the principal signed: a higher amount, a later expiry, an extra verb, a merchant outside a named allowlist, or a different category, currency, or purpose. A narrower amount, a shorter action list, or an earlier expiry is allowed. |
+| `INTENT_UNKNOWN` | The action names an `intent_id` that is not live. |
+| `LIMIT_INCONSISTENT` | Signed limits disagree, or a live intent allocates more than the parent set. |
 | `MANDATE_SUPERSEDED` | The action names a mandate hash that is not the current version. |
 | `ACTION_REPLAY` | The action id was already seen or is in the ledger, or the idempotency key was already used for a charge whose outcome was not `failed`. |
 | `RETRY_FARMING` | `settlement.prior_attempt_status` is `settled`. A prior status of `failed` is not this code. |
-| `ACTION_MALFORMED`, `LEDGER_MALFORMED`, `LIMIT_INCONSISTENT` | The action, the ledger, or the signed limits cannot be read safely. |
+| `CUMULATIVE_STATE_UNAVAILABLE`, `FREQUENCY_STATE_UNAVAILABLE` | That limit is signed and the agreement has no ledger. An empty ledger is zero spent, not this code. |
+| `ACTION_MALFORMED`, `LEDGER_MALFORMED` | The action or a ledger entry cannot be read safely. |
 | `ACTION_TIME_IN_FUTURE` | The action time is more than the skew (default 120 seconds) ahead of `now`. |
 
 `STEP_UP`:
@@ -249,7 +268,7 @@ Scope, `DENY` unless noted:
 |---|---|
 | `PRINCIPAL_KEY_UNBOUND` | Signature matches the embedded key, and the caller did not pass the principal key it expects. |
 | `OVER_BROAD_INTENT` | A money purpose has no ceiling, or there is no expiry, or there are no allowed actions. `required_action` is `HUMAN_APPROVAL`. A policy may also flag a high ceiling with no category and no merchant; that threshold is off unless the caller sets it. |
-| `CUMULATIVE_STATE_UNAVAILABLE`, `FREQUENCY_STATE_UNAVAILABLE` | The mandate has that limit and the ledger was omitted. |
+| `INTENT_NOT_SELECTED` | More than one intent is live and the action does not name `intent_id`. The library does not pick one. |
 | `COUNTERPARTY_ACK_REQUIRED` | A required acknowledgement for the current hash is missing. |
 | `REVOCATION_ENDPOINT_UNCHECKED` | The mandate names an endpoint and the caller has not set `revocation_checked`. |
 | `AMOUNT_NOT_PROVIDED` | A money action, or an action under a price expectation, has no amount. |
@@ -266,13 +285,13 @@ These sit under the assets already named in [threat-model.md](threat-model.md): 
 
 | Threat | What the agreement does |
 |---|---|
-| **Prompt injection that widens scope** | The evaluator reads the signed mandate, not an intent in the tool output. If the action carries `parameters.asserted_intent` and any stated field differs, the verdict is `DENY` / `ASSERTED_INTENT_MISMATCH`. The agent has no key that can amend the mandate. |
+| **Prompt injection that widens scope** | The evaluator reads the signed mandate, not an intent in the tool output. A narrower asserted intent is allowed. A wider one is `DENY` / `ASSERTED_INTENT_MISMATCH`. The agent has no key that can amend the mandate or raise the parent set. |
 | **Mandate tampering** | Any change to a signed field, including the rendering, fails verification before amount checks run. |
 | **Replay** | A repeated action id, or an idempotency key already used for a non-failed charge, is `ACTION_REPLAY`. A settled attempt that is charged again is `RETRY_FARMING`. A retry after `failed` is not. |
 | **Over-broad intent** | Missing expiry, missing ceiling on a money purpose, or missing verbs is `STEP_UP` / `OVER_BROAD_INTENT`, with `HUMAN_APPROVAL`. The default does not invent a currency-blind amount threshold. Empty merchant constraints remain "no allowlist", which is a real choice the rendering states as "Merchants allowed: any." |
-| **Signing what you did not read** | The words are inside the signature, recomputed by the verifier, and tied to the agent key fingerprint. A swapped agent key changes the sentence. |
+| **Signing what you did not read** | The words the principal was shown are inside the signature, in whatever language was shown, and tied to the agent key fingerprint. The verifier checks the hash of those words. It does not accept a different translation. A swapped agent key changes the default English sentence. |
 | **Approval fatigue** | A quote, list, or undisclosed-fee miss is `DENY` with `required_action` `NONE`. The principal is not asked to rubber-stamp the same charge. Widening the grant is an amendment, which produces a new rendering. |
-| **Revocation stripped from the copy the agent shows** | A revocation inside the record is enough to deny. Absence is not enough to allow. Verifiers pass `extra_revocations` from a log they trust, or pin `expected_log_head`. If the mandate names `revocation_endpoint`, evaluation steps up until the caller says that endpoint was checked. The library does not fetch it. Short expiry bounds the window in which a missed revocation still works. |
+| **Revocation stripped from the copy the agent shows** | A revocation inside the record is enough to deny. Absence is not enough to allow. Verifiers pass `extra_revocations` from a log they trust, or pin `expected_log_head`. If the mandate names `revocation_endpoint`, evaluation steps up until the caller says that endpoint was checked. A mandate that names no endpoint does not step up for that reason. The library does not fetch the endpoint. Short expiry bounds the window in which a missed revocation still works. |
 | **Self-signed principal key** | Verification against the embedded JWK proves the signature matches that key. It does not prove the key is the human. `PRINCIPAL_KEY_UNBOUND` steps up until the verifier supplies the key it already associates with the principal. WebAuthn and verifiable credentials remain the way that association is made. |
 | **Counterparty overcharge** | Quote, list, and fee checks can `DENY` the action. They do not revoke the mandate. |
 | **Honest price movement** | A tolerance band is required before a quote is compared. The band is the one the principal signed for this intent. |
@@ -285,7 +304,7 @@ KATA does not adopt AP2, Verifiable Intent, OAuth, or GNAP as the mandate format
 
 | Source | What it can fill | What it does not decide |
 |---|---|---|
-| **AP2 v0.2** open mandate plus a closed mandate that satisfies it | Principal and agent keys, `maximum_amount` from `payment.amount_range.max` after minor-to-major conversion, merchant and payee lists, `expires_at` from `exp`. Cumulative `payment.budget` maps to `limits.cumulative_maximum`, not to `maximum_amount`. | Behaviour, quote versus charge, the seven decisions. AP2 receipts accept or reject a mandate. |
+| **AP2 v0.2** open mandate plus a closed mandate that satisfies it | Principal and agent keys, `maximum_amount` from `payment.amount_range.max` after minor-to-major conversion, merchant and payee lists, `expires_at` from `exp`. Cumulative `payment.budget` maps to `limits.cumulative_maximum`, not to `maximum_amount`. | Behavior, quote versus charge, the seven decisions. AP2 receipts accept or reject a mandate. |
 | **Verifiable Intent** autonomous chain | Same shape: L2 constraints become the intent, L2 `cnf` is the agent key, L2 `exp` is the window. `mandate.payment.budget` is the cumulative cap. | Same gaps. VI's checker is pass or violation. |
 | **OAuth 2.0** | A token is delegation evidence (Q2), the way [standards.md](../research/standards.md) already says. A scope string is not an intent. | Amount, merchant, price, revocation of a KATA mandate. |
 | **RFC 9396 Rich Authorization Requests** | `authorization_details` can *carry* a KATA intent object as a JSON value. The type URI would be KATA's, and the schema would stay this one. | RAR does not define the check. |
@@ -307,14 +326,14 @@ Worked mappings of the commerce fields remain [interoperability.md](interoperabi
 | Implemented | Stubbed or absent |
 |---|---|
 | Create, render, sign, and verify a mandate | Natural-language parsing into an intent. The caller supplies the structured intent. |
-| Propose, clarify, accept, acknowledge, amend, revoke, expire | An HTTP API, a gateway, or storage |
+| Propose, clarify, accept, acknowledge, amend, add an intent, revoke, expire | An HTTP API, a gateway, or storage shared across processes |
 | `ALLOW` / `STEP_UP` / `DENY` with the reason codes above | Risk scores, behavior profiles, drift across a session |
-| Cumulative and frequency checks against a caller-supplied ledger | The ledger itself, and who is authoritative for it |
+| Spend ledger stored on the agreement, and a deny when that ledger is missing | A ledger head that would catch a shortened copy, and sync across processes |
 | Revocation signatures, an external revocation list, a pinned log head, step-up when a named endpoint was not checked | Fetching the endpoint, pushing revocation, a transparency log |
 | Price band, fees, merchant, category, settlement mismatch, `max_items` | A general constraint language. Other `constraints` keys are stored only. |
-| Optional delegation cross-check when the caller passes the delegation | Walking an agent-to-agent delegation chain |
-| Ed25519 JWS | ES256, SD-JWT, selective disclosure |
-| English rendering, version 1 | Localized rendering |
+| Agreement stored inside the delegation, and a scope cross-check | Walking an agent-to-agent delegation chain |
+| Ed25519 JWS over major units, signed by the principal | ES256, SD-JWT, selective disclosure |
+| Confirmation text in any language, with the English renderer as the default | A component that is responsible for displaying that text |
 
 Demo keys in the example are derived from public seeds.
 
@@ -323,7 +342,7 @@ Demo keys in the example are derived from public seeds.
 The next slices, in the order they unblock each other:
 
 1. **Revocation status.** A signed log a merchant or issuer can query, with a freshness bound. The endpoint field and `extra_revocations` are the hook. Fetching and caching are not done.
-2. **Ledger authority.** Decide who holds the cumulative total — issuer, PSP, merchant, or a KATA log — and the maximum age of that total before the check steps up. The library already steps up when the total is missing.
+2. **Ledger freshness.** KATA holds the total on the agreement, and a missing ledger denies. What remains is detecting a shortened copy, and how stale a replica may be before a verifier stops trusting it.
 3. **Full evaluator.** Identity, delegation freshness, and behavior around this verdict, emitting the seven decisions. Still no calibrated score until there is a measurement.
 4. **Intent capture.** Propose a structured intent from the instruction, then require the rendering as the confirmation. The parser is a separate component so a bad parse cannot sign itself.
 5. **Algorithm agility.** ES256 as a second JWS algorithm so a Verifiable Intent key can countersign without a bridge. Version the signing document rather than overloading `kata_mandate` `1`.
@@ -331,21 +350,13 @@ The next slices, in the order they unblock each other:
 7. **Evaluation against AgentCommerceBench.** Run the reference check on the classes it can see (amount, category, quote, list, fees, replay, payee). Report recall at a stated false-positive budget. Do not cite a coverage number before that run. Silent downgrade still needs delivery evidence this layer does not have.
 8. **Envelope.** Only after the fields settle: VC packaging, or carrying the intent inside RAR `authorization_details`. Not a second schema.
 
-## Open questions
+## Still open
 
-These are the choices the reference implementation made that Kaan should confirm or reverse.
+The thirteen questions above are decided. These are not:
 
-1. **Separate objects.** Mandate and agreement are not folded into the delegation. Is that the split you want, or should a later version make the signed intent a part of the delegation record?
-2. **Per-transaction versus cumulative.** `maximum_amount` remains per transaction. The cumulative cap is `limits.cumulative_maximum`. Confirm, or say the single field was always the total.
-3. **Who holds the ledger,** and how stale it may be before `CUMULATIVE_STATE_UNAVAILABLE` becomes `DENY` instead of `STEP_UP`.
-4. **Activation.** Principal signature alone makes the agreement active. Should the agent have to countersign first? Should a payment require an issuer or PSP acknowledgement before `active`?
-5. **Over-broad defaults.** Missing expiry, missing ceiling, or missing verbs step up for human approval. They do not hard-deny. Is step-up the right default for a payment?
-6. **Unscoped amount.** There is no default maximum for "any merchant, any category". The policy knob exists and is off, because a single number is not meaningful across currencies. Do you want a per-currency table?
-7. **Units and algorithms.** Major units and Ed25519 for version 1. VI and AP2 use integer minor units and ES256. Keep KATA's units and add ES256 later, or sign minor units in the payload now?
-8. **Revocation absence.** A missing revocation in the agent-presented record does not prove the grant is live. Is step-up mandatory for every payment until an endpoint is checked, even when the mandate names no endpoint?
-9. **Who else may revoke.** Only the signing principal key. Should a named policy key be able to revoke without the principal, and which institution holds it?
-10. **Price misses.** They block the action and do not revoke the grant. Confirm that a cheating merchant must not automatically `REVOKE` a good delegation.
-11. **Frequency month.** `P1M` is thirty days. A calendar month is a different rule.
-12. **Rendering.** English, versioned, and signed. Who is responsible for showing it, and what happens if a wallet shows a translation that the signature does not cover?
-13. **One intent per agreement.** An amendment replaces the intent version. A delegation may still list several intent ids. Should one agreement be allowed to hold several live intents?
-14. **Asserted intent.** Any stated field that is not equal to the signed field is a mismatch, including a narrower echo. A subset rule would accept "I will only spend 100" under a 1,500 ceiling. Equality is stricter and easier to explain.
+- Which component shows the confirmation text to the principal.
+- How a verifier detects a shortened copy of the ledger KATA holds, and how stale a replica may be. The in-record list is the reference store. It is not yet shared across processes, and it has no pinned head.
+- Whether `INTENT_NOT_SELECTED` stays the right response when several live intents match and the action names none. The library steps up rather than choosing an intent for the agent.
+- Fetching a revocation endpoint, pushing revocation, and a transparency log. Naming no endpoint does not force a step-up. Distribution is still unbuilt.
+- A currency-blind ceiling for "any merchant, any category". The policy knob exists and is off.
+- How a merchant, PSP, or issuer acknowledgement key is pinned to that institution.

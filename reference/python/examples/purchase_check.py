@@ -101,7 +101,6 @@ def _check(agreement, principal, agent, action, now=NOW):
         principal_public_key=principal.public,
         agent_id="shopper-01",
         agent_public_key=agent.public,
-        ledger=[],
         now=now,
     )
 

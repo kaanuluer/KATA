@@ -79,7 +79,7 @@ When an agent delegates to a sub-agent:
 
 ## Intent agreement
 
-The delegation names the intent ids it covers. The signed intent itself, the human-readable confirmation, countersignatures, and the check of one action against that intent are the intent agreement: [intent-agreement.md](intent-agreement.md). Revoking the agreement is a signed act by the principal. Revoking the delegation remains the Q2 control. A price failure on an action does not, by itself, revoke either record.
+The signed intent agreement is stored inside the delegation (`intent_agreement`). `scope.maximum_amount` stays the per-transaction ceiling. `scope.cumulative_maximum` is the separate total. One delegation may carry several live intents; each must stay inside the parent set's amount. The record, the confirmation text, and the action check are specified in [intent-agreement.md](intent-agreement.md). Revoking the agreement is a signed act by the principal who signed it. Revoking the delegation remains the Q2 control. A price failure on an action does not, by itself, revoke either record.
 
 ## Evidence from payment mandates
 

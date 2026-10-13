@@ -113,7 +113,7 @@ Figures cited from that README and catalogue:
 | S2 `velocity` | Structural | More purchases, or faster, than this agent's norm | 4 — BEHAVING | **Covered.** Action velocity is already a behavior signal. |
 | S3 `out_of_domain` | Structural | Category outside the agent's domain | 3 — WHAT | **Covered.** `category` and `merchant_constraints`. |
 | S4 `payee_substitution` | Structural | Settlement address differs from the registered payee | 3 — WHAT | **Checked when both addresses are present.** The intent-agreement evaluator denies `SETTLEMENT_ADDRESS_MISMATCH`. A rotation that never states the registered address is still unseen. |
-| S5 `idempotency_replay` | Structural | An idempotency key that already settled is reused | 4 — BEHAVING | **Partial.** The intent check denies `ACTION_REPLAY` when the caller supplies the key on the ledger with a non-failed outcome, and `RETRY_FARMING` when `prior_attempt_status` is `settled`. The ledger is caller-supplied. |
+| S5 `idempotency_replay` | Structural | An idempotency key that already settled is reused | 4 — BEHAVING | **Partial.** The intent check denies `ACTION_REPLAY` when the ledger KATA holds on the agreement already has the key with a non-failed outcome, and `RETRY_FARMING` when `prior_attempt_status` is `settled`. A missing ledger is a deny. |
 | S6 `identity_mismatch` | Structural | The action's agent id is not the session's agent | 1 — WHO | **Covered.** Agent identity. |
 | E1 `ratchet` | Evasive | Amounts creep so a learned norm follows them | 4 — BEHAVING | **Partial.** Intent drift is defined. A spend-norm ratchet is not. |
 | E2 `structuring` | Evasive | One over-limit spend, split into in-policy parts | 3 and 4 | **Partial.** Cumulative drift is described. Split payments are not a rule. |

@@ -269,7 +269,7 @@ No purchase constraints, no price fields, no seven-level decision.
 
 ## KATA intent agreement
 
-The objects above are evidence. The signed agreement the principal actually confirms is specified in [intent-agreement.md](intent-agreement.md): an intent mandate (`schemas/intent-mandate.json`) inside an agreement record (`schemas/agreement.json`). That specification is authoritative for KATA. A verified AP2 or Verifiable Intent mandate can populate the intent fields, using the tables in this document, and it does not replace the KATA signature or the `ALLOW` / `STEP_UP` / `DENY` check.
+The objects above are evidence. The signed agreement the principal actually confirms is specified in [intent-agreement.md](intent-agreement.md): one or more intent mandates (`schemas/intent-mandate.json`) inside an agreement record (`schemas/agreement.json`), stored on the delegation. That specification is authoritative for KATA. A verified AP2 or Verifiable Intent mandate can populate the intent fields, using the tables in this document, and it does not replace the KATA signature or the `ALLOW` / `STEP_UP` / `DENY` check. The principal signs the KATA mandate.
 
 The reference library signs with Ed25519. It does not parse an AP2 JWS or an SD-JWT. Amounts in the KATA mandate stay major units.
 

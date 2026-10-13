@@ -6,11 +6,11 @@ Python reference for the signed intent mandate and the agreement lifecycle in [d
 
 The library can:
 
-- render a mandate in the words the principal confirms
+- render a default English confirmation, or sign a confirmation in any language
 - sign that mandate with Ed25519, as a flattened JWS (`alg: EdDSA`)
 - verify the signature
-- walk propose → clarify → accept → acknowledge → amend → revoke or expire
-- evaluate one action as `ALLOW`, `STEP_UP`, or `DENY`, with reason codes
+- walk propose → clarify → accept → acknowledge → amend → add an intent → revoke or expire
+- keep the spend ledger on the agreement and evaluate one action as `ALLOW`, `STEP_UP`, or `DENY`
 
 `DENY` maps to the KATA decision `BLOCK`. This package does not score behavior and does not emit `REVOKE` or `QUARANTINE`.
 

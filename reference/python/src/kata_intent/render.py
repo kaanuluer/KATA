@@ -1,14 +1,15 @@
 # Copyright 2026 Kaan Uluer
 # SPDX-License-Identifier: Apache-2.0
-"""Human-readable rendering of a mandate.
+"""Default English rendering of a mandate.
 
-The text is part of what the principal signs (``kata_mandate`` version 1).
-Verifiers recompute it from the structured fields. A mandate whose stored
-rendering differs from this text does not verify.
+``kata_mandate`` version 1 signs the confirmation text the principal was
+shown. That text may be any language. This renderer is the default when the
+caller does not supply one. The signature covers the supplied text, and the
+verifier checks that the stored hash is the SHA-256 of that text.
 
-The line order below is normative for version 1. Whitespace inside a quoted
-instruction is collapsed, so a newline in the source cannot push the limits
-out of a single-line display.
+The line order below is the default English rendering. Whitespace inside a
+quoted instruction is collapsed, so a newline in the source cannot push the
+limits out of a single-line display.
 """
 
 from __future__ import annotations
@@ -115,6 +116,11 @@ def render_mandate(mandate: dict[str, Any]) -> str:
         undisclosed = "accepted" if fee_policy.get("allow_undisclosed") else "not accepted"
         lines.append(f"Accepted fees: {code_text}. Undisclosed fees are {undisclosed}.")
 
+    parent = mandate.get("parent_limits") or {}
+    parent_bits = _parent_bits(intent, limits, parent, currency)
+    if parent_bits:
+        lines.append(parent_bits)
+
     if mandate.get("delegation_id"):
         lines.append(f"Delegation: {mandate['delegation_id']}.")
     if mandate.get("revocation_endpoint"):
@@ -130,6 +136,26 @@ def render_mandate(mandate: dict[str, Any]) -> str:
 
     lines.append("The agent cannot change these limits. You can revoke this agreement.")
     return "\n".join(lines)
+
+
+def _parent_bits(intent: dict[str, Any], limits: dict[str, Any], parent: dict[str, Any], currency: str) -> str:
+    """A parent line only when the parent set is wider than this intent."""
+
+    own_max = intent.get("maximum_amount")
+    own_total = limits.get("cumulative_maximum")
+    parent_max = parent.get("maximum_amount")
+    parent_total = parent.get("cumulative_maximum")
+    wider_max = parent_max is not None and (own_max is None or money(parent_max) != money(own_max))
+    wider_total = parent_total is not None and (own_total is None or money(parent_total) != money(own_total))
+    if not wider_max and not wider_total:
+        return ""
+    parent_currency = parent.get("currency") or currency
+    bits: list[str] = []
+    if parent_max is not None:
+        bits.append(f"{_amount(parent_max)} {parent_currency} per transaction".rstrip())
+    if parent_total is not None:
+        bits.append(f"{_amount(parent_total)} {parent_currency} in total".rstrip())
+    return "Parent set: up to " + " and ".join(bits) + "."
 
 
 def _window_line(not_before: Any, expires_at: Any) -> str:

@@ -151,7 +151,7 @@ def test_stripped_revocation_needs_a_pinned_head_or_a_log(principal_key, agent_k
 def test_tampered_amount_fails_verification(principal_key, agent_key):
     agreement = activate(principal_key, agent_key)
     record = agreement.to_dict()
-    record["mandate"]["intent"]["maximum_amount"] = 9000
+    record["mandates"][0]["intent"]["maximum_amount"] = 9000
     result = _eval(record, principal_key, agent_key)
     assert result.verdict == "DENY"
     assert result.reasons == ("MANDATE_TAMPERED",)
@@ -179,8 +179,10 @@ def test_unbound_principal_key_steps_up(principal_key, agent_key):
 
 def test_cumulative_and_frequency(principal_key, agent_key):
     agreement = activate(principal_key, agent_key)
-    missing = _eval(agreement, principal_key, agent_key, ledger=None)
-    assert missing.verdict == "STEP_UP"
+    record = agreement.to_dict()
+    del record["ledger"]
+    missing = _eval(record, principal_key, agent_key, ledger=None)
+    assert missing.verdict == "DENY"
     assert "CUMULATIVE_STATE_UNAVAILABLE" in missing.reasons
     assert "FREQUENCY_STATE_UNAVAILABLE" in missing.reasons
 

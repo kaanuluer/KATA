@@ -108,7 +108,7 @@ Detection approach:
 
 ## Signed agreement
 
-The fields above are the intent. The **intent mandate** is that object signed by the principal and bound to one agent key. The **agreement** is the lifecycle around the mandate: propose, clarify, accept, acknowledge, amend, revoke, expire. `maximum_amount` stays the per-transaction ceiling. A cumulative cap and a frequency cap live on the mandate as `limits`, because they need a ledger the intent does not carry.
+The fields above are the intent. The **intent mandate** is that object signed by the principal and bound to one agent key. The **agreement** lives inside the delegation and may hold several live mandates. `maximum_amount` stays the per-transaction ceiling. Each intent's cumulative slice is separate, and the slices together cannot exceed the parent total. KATA holds the spend ledger on the agreement.
 
 Specification, threat notes, and the reference check: [intent-agreement.md](intent-agreement.md).
 

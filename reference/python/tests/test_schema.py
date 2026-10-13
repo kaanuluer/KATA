@@ -49,5 +49,5 @@ def test_unsigned_draft_matches_the_schema(principal_key, agent_key):
 
 def test_mandate_schema_accepts_the_signed_mandate(principal_key, agent_key):
     agreement = activate(principal_key, agent_key)
-    mandate = json.loads(agreement.to_json())["mandate"]
+    mandate = json.loads(agreement.to_json())["mandates"][0]
     _validator("intent-mandate.json").validate(mandate)

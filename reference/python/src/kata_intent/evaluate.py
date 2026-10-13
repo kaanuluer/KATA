@@ -26,7 +26,6 @@ from kata_intent.document import acknowledgement_document, mandate_hash, signing
 from kata_intent.errors import KataError
 from kata_intent.jws import same_bytes, verify_jws
 from kata_intent.keys import PublicKey, public_key_from_jwk
-from kata_intent.render import render_mandate
 from kata_intent.values import MONEY_PURPOSES, as_time, coerce, money, parse_time, text_hash
 
 MONEY_ACTIONS = MONEY_PURPOSES
@@ -63,23 +62,26 @@ class Policy:
 
 @dataclass(frozen=True)
 class LedgerEntry:
-    """One earlier charge under the same agreement. The caller holds this ledger."""
+    """One earlier charge under the same agreement. KATA stores these on the agreement."""
 
     action_id: str
     amount: Decimal
     currency: str
     at: datetime
     idempotency_key: str | None = None
+    intent_id: str | None = None
     outcome: str = "allowed"
 
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any]) -> LedgerEntry:
+        amount = raw.get("amount")
         return cls(
             action_id=str(raw["action_id"]),
-            amount=money(raw["amount"]),
+            amount=money(amount) if amount is not None else Decimal(0),
             currency=str(raw["currency"]),
             at=parse_time(str(raw["at"])),
             idempotency_key=raw.get("idempotency_key"),
+            intent_id=raw.get("intent_id"),
             outcome=str(raw.get("outcome") or "allowed"),
         )
 
@@ -140,29 +142,43 @@ def evaluate(
     expected_log_head: str | None = None,
     revocation_checked: bool = False,
     policy: Policy | None = None,
+    intent_id: str | None = None,
 ) -> Evaluation:
-    """Evaluate ``action`` against a signed mandate or a full agreement record.
+    """Evaluate ``action`` against a signed mandate, an agreement, or a delegation that holds one.
 
-    ``ledger`` is this agreement's prior charges. Pass an empty list when the
-    verifier knows nothing has been spent. Pass ``None`` when the verifier
-    does not know — a cumulative or frequency limit then steps up instead of
-    allowing. ``extra_revocations`` are signed revocations from a log the
-    verifier trusts. Absence of a revocation in the agent-presented record is
-    not treated as proof the grant is live.
+    The spend ledger is the agreement's ``ledger``. Omit ``ledger`` to use
+    that record. An empty list means nothing has been spent. A cumulative or
+    frequency limit with no ledger at all is ``DENY``. Pass a list only to
+    substitute a ledger for this check. ``extra_revocations`` are signed
+    revocations from a log the verifier trusts. Absence of a revocation in
+    the agent-presented record is not treated as proof the grant is live.
     """
 
     policy = policy or Policy()
     raw = subject.to_dict() if isinstance(subject, Agreement) else coerce(dict(subject))
-    if "agreement_id" in raw and "mandate" in raw:
+    if isinstance(raw.get("intent_agreement"), dict):
+        if delegation is None:
+            delegation = raw
+        raw = coerce(dict(raw["intent_agreement"]))
+    if "agreement_id" in raw and "mandates" not in raw and isinstance(raw.get("mandate"), dict):
+        raw = dict(raw)
+        raw["mandates"] = [raw.pop("mandate")]
+
+    action_data = coerce(dict(action))
+    if "agreement_id" in raw and isinstance(raw.get("mandates"), list):
         agreement: dict[str, Any] | None = raw
-        mandate = raw["mandate"]
+        selected = _select_mandate(raw["mandates"], intent_id, action_data)
+        if isinstance(selected, Evaluation):
+            return selected
+        mandate = selected
     elif "mandate_id" in raw and "intent" in raw:
         agreement = None
         mandate = raw
     else:
         return _result("DENY", [("AGREEMENT_MALFORMED", "The object is neither a mandate nor an agreement.")], None)
 
-    action_data = coerce(dict(action))
+    if ledger is None and agreement is not None and "ledger" in agreement:
+        ledger = agreement["ledger"]
     findings = _Findings()
     verified_hash: str | None = None
 
@@ -207,11 +223,12 @@ def evaluate(
         proposed_at = None
 
     if agreement is not None:
-        _check_log(agreement, findings, expected_log_head, now_dt)
+        _check_log(agreement, mandate, findings, expected_log_head, now_dt)
         _check_revocations(agreement, mandate, public_key, extra_revocations, verified_hash, findings)
         _check_acknowledgements(agreement, mandate, verified_hash, findings)
     elif extra_revocations and public_key is not None:
         _check_external_revocations(extra_revocations, public_key, None, verified_hash, findings)
+    _check_family(agreement, mandate, findings)
 
     if mandate.get("revocation_endpoint") and not revocation_checked and "MANDATE_REVOKED" not in findings._deny_codes:
         findings.step(
@@ -269,16 +286,37 @@ def _verify_signature(
     return None, public
 
 
+def _select_mandate(
+    mandates: list[Any], intent_id: str | None, action: Mapping[str, Any]
+) -> dict[str, Any] | Evaluation:
+    live = [item for item in mandates if isinstance(item, dict)]
+    if not live:
+        return _result("DENY", [("AGREEMENT_MALFORMED", "The agreement has no live intent.")], None)
+    chosen = intent_id or (action.get("parameters") or {}).get("intent_id")
+    if chosen is None:
+        if len(live) == 1:
+            return live[0]
+        for mandate in live:
+            failure, _public = _verify_signature(mandate, None)
+            if failure:
+                code = "MANDATE_TAMPERED" if failure == "MANDATE_TAMPERED" else "MANDATE_SIGNATURE_INVALID"
+                return _result("DENY", [(code, "A live mandate does not verify, so an intent cannot be selected.")], None)
+        return _result(
+            "STEP_UP",
+            [("INTENT_NOT_SELECTED", "Several intents are live and the action does not name one.")],
+            None,
+        )
+    for mandate in live:
+        if (mandate.get("intent") or {}).get("intent_id") == chosen:
+            return mandate
+    return _result("DENY", [("INTENT_UNKNOWN", f"No live intent has id {chosen}.")], None)
+
+
 def _check_rendering(mandate: Mapping[str, Any], findings: _Findings) -> None:
     rendering = mandate.get("rendering") or {}
     text = rendering.get("text")
-    try:
-        expected = render_mandate(dict(mandate))
-    except KataError:
-        findings.deny("RENDERING_MISMATCH", "The mandate could not be rendered for confirmation.")
-        return
-    if not isinstance(text, str) or text != expected or rendering.get("hash") != text_hash(text):
-        findings.deny("RENDERING_MISMATCH", "The human-readable text does not match the signed terms.")
+    if not isinstance(text, str) or not text.strip() or rendering.get("hash") != text_hash(text):
+        findings.deny("RENDERING_MISMATCH", "The signed confirmation text does not match its hash.")
 
 
 def _check_agent_document(mandate: Mapping[str, Any], findings: _Findings) -> None:
@@ -298,7 +336,11 @@ def _check_agent_document(mandate: Mapping[str, Any], findings: _Findings) -> No
 
 
 def _check_log(
-    agreement: Mapping[str, Any], findings: _Findings, expected_log_head: str | None, now: datetime
+    agreement: Mapping[str, Any],
+    mandate: Mapping[str, Any],
+    findings: _Findings,
+    expected_log_head: str | None,
+    now: datetime,
 ) -> None:
     events = agreement.get("events")
     if not isinstance(events, list) or not verify_event_chain(list(events)):
@@ -314,7 +356,6 @@ def _check_log(
     status = agreement.get("status")
     if status == "revoked" and "revocation" not in agreement:
         findings.deny("AGREEMENT_LOG_TAMPERED", "The agreement says revoked and carries no signed revocation.")
-    mandate = agreement.get("mandate") or {}
     expires_at = mandate.get("expires_at") or (mandate.get("intent") or {}).get("time_limit")
     if status == "expired" and expires_at:
         try:
@@ -370,6 +411,9 @@ def _revocation_matches(
         return False
     if agreement_id is not None and revocation.get("agreement_id") != agreement_id:
         return False
+    hashes = revocation.get("mandate_hashes")
+    if isinstance(hashes, list) and current_hash in hashes:
+        return True
     return revocation.get("mandate_hash") == current_hash
 
 
@@ -584,6 +628,45 @@ def _check_constraints(mandate: Mapping[str, Any], action: Mapping[str, Any], fi
         findings.deny("ACTION_MALFORMED", "quantity or max_items is not an integer.")
 
 
+def _check_family(agreement: Mapping[str, Any] | None, mandate: Mapping[str, Any], findings: _Findings) -> None:
+    """A live intent may not allocate more than the signed parent set."""
+
+    embedded = mandate.get("parent_limits") or {}
+    parent = (agreement or {}).get("parent_limits") or embedded
+    if agreement is not None and embedded and agreement.get("parent_limits"):
+        if coerce(dict(embedded)) != coerce(dict(agreement["parent_limits"])):
+            findings.deny("LIMIT_INCONSISTENT", "The mandate parent limits do not match the agreement parent limits.")
+    intent = mandate.get("intent") or {}
+    limits = mandate.get("limits") or {}
+    if parent.get("maximum_amount") is not None and intent.get("maximum_amount") is not None:
+        if money(intent["maximum_amount"]) > money(parent["maximum_amount"]):
+            findings.deny("LIMIT_INCONSISTENT", "This intent's per-transaction ceiling exceeds the signed parent set.")
+    if parent.get("cumulative_maximum") is not None and limits.get("cumulative_maximum") is not None:
+        if money(limits["cumulative_maximum"]) > money(parent["cumulative_maximum"]):
+            findings.deny("LIMIT_INCONSISTENT", "This intent's cumulative slice exceeds the signed parent set.")
+    if agreement is None or parent.get("cumulative_maximum") is None:
+        return
+    total = Decimal(0)
+    for item in agreement.get("mandates") or []:
+        if not isinstance(item, dict):
+            findings.deny("LIMIT_INCONSISTENT", "A live intent could not be read.")
+            return
+        slice_value = (item.get("limits") or {}).get("cumulative_maximum")
+        if slice_value is None:
+            findings.deny("LIMIT_INCONSISTENT", "A live intent has no cumulative slice under a parent total.")
+            return
+        total += money(slice_value)
+    if total > money(parent["cumulative_maximum"]):
+        findings.deny("LIMIT_INCONSISTENT", "The live intents allocate more than the parent cumulative limit.")
+
+
+def _exceeds(claimed: Any, signed: Any) -> bool:
+    try:
+        return money(claimed) > money(signed)
+    except KataError:
+        return True
+
+
 def _check_asserted(
     mandate: Mapping[str, Any],
     action: Mapping[str, Any],
@@ -596,9 +679,44 @@ def _check_asserted(
     if not isinstance(asserted, Mapping):
         return
     signed = mandate.get("intent") or {}
+    signed_limits = mandate.get("limits") or {}
     for key, value in asserted.items():
+        if key == "cumulative_maximum":
+            signed_value = signed_limits.get("cumulative_maximum")
+            if signed_value is None or _exceeds(value, signed_value):
+                findings.deny(
+                    "ASSERTED_INTENT_MISMATCH",
+                    "The agent asserted a cumulative total above the signed slice.",
+                )
+            continue
+        if key == "maximum_amount":
+            signed_value = signed.get("maximum_amount")
+            if signed_value is None or _exceeds(value, signed_value):
+                findings.deny(
+                    "ASSERTED_INTENT_MISMATCH",
+                    "The agent asserted a per-transaction amount above the signed ceiling.",
+                )
+            continue
         if key not in signed:
             findings.deny("ASSERTED_INTENT_MISMATCH", f"The agent asserted {key}, which is not in the signed intent.")
+            continue
+        if key == "allowed_actions":
+            signed_actions = signed.get("allowed_actions")
+            if not isinstance(value, list) or not isinstance(signed_actions, list) or not set(value) <= set(signed_actions):
+                findings.deny("ASSERTED_INTENT_MISMATCH", "The agent asserted actions outside the signed intent.")
+            continue
+        if key == "merchant_constraints":
+            signed_merchants = signed.get("merchant_constraints") or []
+            if not isinstance(value, list) or (signed_merchants and (not value or not set(value) <= set(signed_merchants))):
+                findings.deny("ASSERTED_INTENT_MISMATCH", "The agent asserted merchants outside the signed intent.")
+            continue
+        if key == "time_limit":
+            try:
+                later = parse_time(str(value)) > parse_time(str(signed.get("time_limit")))
+            except (KataError, TypeError):
+                later = True
+            if signed.get("time_limit") is None or later:
+                findings.deny("ASSERTED_INTENT_MISMATCH", "The agent asserted an expiry later than the signed intent.")
             continue
         if not _same(value, signed[key]):
             findings.deny(
@@ -649,6 +767,9 @@ def _check_delegation(
         findings.deny("AMOUNT_ABOVE_INTENT_CEILING", "The amount exceeds the delegation ceiling.")
         findings.deny("ACTION_EXCEEDS_INTENT", "The action is outside the signed intent.")
         findings.deny("DELEGATION_SCOPE_MISMATCH", "The amount exceeds the delegation scope.")
+    if amount is not None and scope.get("cumulative_maximum") is not None and money(amount) > money(scope["cumulative_maximum"]):
+        findings.deny("CUMULATIVE_LIMIT_EXCEEDED", "The amount exceeds the delegation's cumulative total.")
+        findings.deny("DELEGATION_SCOPE_MISMATCH", "The amount exceeds the delegation scope.")
     verbs = scope.get("allowed_action_verbs")
     if isinstance(verbs, list) and action.get("action_type") not in verbs:
         findings.deny("ACTION_NOT_ALLOWED", "The action is outside the delegation verbs.")
@@ -673,18 +794,19 @@ def _check_ledger(
     findings: _Findings,
 ) -> None:
     limits = mandate.get("limits") or {}
-    needs_cumulative = limits.get("cumulative_maximum") is not None
+    parent = mandate.get("parent_limits") or {}
+    needs_cumulative = limits.get("cumulative_maximum") is not None or parent.get("cumulative_maximum") is not None
     needs_frequency = bool(limits.get("frequency"))
     if ledger is None:
         if needs_cumulative:
-            findings.step(
+            findings.deny(
                 "CUMULATIVE_STATE_UNAVAILABLE",
-                "A cumulative limit is signed and no spend ledger was provided.",
+                "A cumulative limit is signed and KATA has no spend ledger for this agreement.",
             )
         if needs_frequency:
-            findings.step(
+            findings.deny(
                 "FREQUENCY_STATE_UNAVAILABLE",
-                "A frequency limit is signed and no spend ledger was provided.",
+                "A frequency limit is signed and KATA has no spend ledger for this agreement.",
             )
         entries: list[LedgerEntry] = []
     else:
@@ -714,20 +836,32 @@ def _check_ledger(
         if currency and entry.currency != currency:
             findings.deny("CURRENCY_MISMATCH", "The ledger contains a charge in a different currency.")
 
+    intent_id = (mandate.get("intent") or {}).get("intent_id")
+    scoped = [entry for entry in counting if entry.intent_id is None or entry.intent_id == intent_id]
     same_currency = not currency or not action.get("currency") or action.get("currency") == currency
-    if needs_cumulative and ledger is not None and action.get("amount") is not None and currency and same_currency:
-        spent = sum((entry.amount for entry in counting if entry.currency == currency), Decimal(0))
-        projected = spent + money(action["amount"])
-        if projected > money(limits["cumulative_maximum"]):
-            findings.deny(
-                "CUMULATIVE_LIMIT_EXCEEDED",
-                f"This charge would bring the total to {_plain(projected)}, above the cumulative limit of {_plain(money(limits['cumulative_maximum']))}.",
-            )
+    if ledger is not None and action.get("amount") is not None and currency and same_currency:
+        projected_amount = money(action["amount"])
+        if limits.get("cumulative_maximum") is not None:
+            spent = sum((entry.amount for entry in scoped if entry.currency == currency), Decimal(0))
+            projected = spent + projected_amount
+            if projected > money(limits["cumulative_maximum"]):
+                findings.deny(
+                    "CUMULATIVE_LIMIT_EXCEEDED",
+                    f"This charge would bring the total to {_plain(projected)}, above the cumulative limit of {_plain(money(limits['cumulative_maximum']))}.",
+                )
+        if parent.get("cumulative_maximum") is not None:
+            spent = sum((entry.amount for entry in counting if entry.currency == currency), Decimal(0))
+            projected = spent + projected_amount
+            if projected > money(parent["cumulative_maximum"]):
+                findings.deny(
+                    "CUMULATIVE_LIMIT_EXCEEDED",
+                    f"This charge would bring the parent total to {_plain(projected)}, above {_plain(money(parent['cumulative_maximum']))}.",
+                )
 
     frequency = limits.get("frequency") or {}
     if needs_frequency and ledger is not None and proposed_at is not None:
         window = _window_start(proposed_at, frequency.get("per"))
-        count = sum(1 for entry in counting if window is None or (window < entry.at <= proposed_at))
+        count = sum(1 for entry in scoped if window is None or (window < entry.at <= proposed_at))
         maximum = int(frequency["max_count"])
         if count >= maximum:
             findings.deny(

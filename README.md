@@ -251,6 +251,8 @@ Once a reference implementation exists, evaluate it against the [AgentCommerceBe
 
 ## What's new
 
+**2026-10-13.** The intent agreement now follows Kaan's decisions: it lives inside the delegation, KATA holds the spend ledger, several narrower intents may share one parent total, and the confirmation may be in any language. Details: [CHANGELOG.md](CHANGELOG.md).
+
 **2026-10-12.** Intent agreement: a signed mandate, an auditable lifecycle, and a reference check that returns `ALLOW`, `STEP_UP`, or `DENY`. Design in [docs/intent-agreement.md](docs/intent-agreement.md). Schemas `intent-mandate` and `agreement`. Library in [`reference/python`](reference/python). Details: [CHANGELOG.md](CHANGELOG.md).
 
 **2026-10-12.** README separates core (four questions, intent and delegation schemas, decision outcomes) from optional profiles and related work, including Darwinium. Details: [CHANGELOG.md](CHANGELOG.md).

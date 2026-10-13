@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-13
+
+Kaan's answers on the intent agreement are now the spec.
+
+- The agreement is stored inside the delegation. One delegation may hold several live intents. A child intent may be narrower than the parent set, and the sum of the cumulative slices cannot exceed the parent total.
+- KATA holds the spend ledger on the agreement. A missing ledger is a deny. The per-transaction ceiling stays separate from that total.
+- The principal's signature activates the agreement. The confirmation text may be any language. Only that principal can revoke. A price miss blocks the charge and does not revoke the grant. `P1M` stays thirty days. A missing expiry or ceiling asks for approval. A named revocation endpoint that was not checked steps the verdict down; a mandate with no endpoint does not step up for that reason.
+- Version 1 stays major units and Ed25519, signed by the principal.
+
 ## 2026-10-12
 
 Intent agreement, the machinery for KATA's third question.

@@ -15,6 +15,7 @@ _OPTIONAL = (
     "expires_at",
     "limits",
     "not_before",
+    "parent_limits",
     "required_acknowledgements",
     "revocation_endpoint",
     "supersedes",
@@ -77,13 +78,16 @@ def acknowledgement_document(ack: dict[str, Any]) -> dict[str, Any]:
 
 def revocation_document(revocation: dict[str, Any]) -> dict[str, Any]:
     revocation = coerce(revocation)
-    return {
+    document = {
         "agreement_id": revocation.get("agreement_id"),
         "at": revocation.get("at"),
         "kata_revocation": "1",
         "mandate_hash": revocation.get("mandate_hash"),
         "reason": revocation.get("reason"),
     }
+    if revocation.get("mandate_hashes"):
+        document["mandate_hashes"] = list(revocation["mandate_hashes"])
+    return document
 
 
 def _pick(source: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:

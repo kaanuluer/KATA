@@ -51,7 +51,11 @@
     },
     "delegation_id": {
       "type": "string",
-      "description": "Delegation this mandate is bound to. The delegation itself stays schemas/delegation.json."
+      "description": "Delegation this mandate is stored inside."
+    },
+    "parent_limits": {
+      "$ref": "#/$defs/parentLimits",
+      "description": "Signed copy of the agreement parent set. This intent must not exceed it."
     },
     "intent": {
       "$ref": "intent.json",
@@ -80,7 +84,7 @@
       "properties": {
         "text": {
           "type": "string",
-          "description": "Human-readable confirmation, kata_mandate version 1. The principal signs this text."
+          "description": "Confirmation the principal signed, in any language. The hash is SHA-256 of these exact bytes. The default English rendering is used only when the signer does not supply text."
         },
         "hash": {
           "type": "string",
@@ -115,6 +119,21 @@
       },
       "description": "Flattened JWS (RFC 7515), alg EdDSA. Protected header and payload are KATA canonical JSON."
     },
+    "parentLimits": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The parent set for every live intent. Per-transaction ceilings are not added together. Cumulative slices are.",
+      "properties": {
+        "allowed_actions": { "type": "array", "items": { "type": "string" } },
+        "category": { "type": "string" },
+        "cumulative_maximum": { "type": "number", "minimum": 0 },
+        "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+        "expires_at": { "type": "string", "format": "date-time" },
+        "maximum_amount": { "type": "number", "minimum": 0 },
+        "merchant_constraints": { "type": "array", "items": { "type": "string" } },
+        "purpose": { "type": "string" }
+      }
+    },
     "limits": {
       "type": "object",
       "additionalProperties": false,
@@ -128,7 +147,7 @@
         "cumulative_maximum": {
           "type": "number",
           "minimum": 0,
-          "description": "Total that may be spent under this agreement. Distinct from the per-transaction ceiling. Enforcement needs a ledger the mandate does not carry."
+          "description": "This intent's slice of the parent total. Distinct from the per-transaction ceiling. KATA records spend on the agreement ledger."
         },
         "frequency": {
           "type": "object",
