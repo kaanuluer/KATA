@@ -66,7 +66,8 @@ def test_history_page_uses_repository_facts():
     assert "2026-10-13T04:16:43Z" in body
     assert 'href="https://github.com/kaanuluer/KATA"' in body
     assert "PolyForm Noncommercial" in body
-    assert "Apache License, Version 2.0" in body
+    assert "PolyForm Noncommercial License 1.0.0" in body
+    assert "Apache-2.0" in body
     assert "open source" not in body.lower()
     assert "open-source" not in body.lower()
 

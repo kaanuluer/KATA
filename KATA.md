@@ -4,7 +4,7 @@
 
 ### 1. Purpose of This Document
 
-This document provides the complete conceptual context for **KATA**, an open framework designed to address trust, authorization, intent, behavior, and risk in an agentic AI environment.
+This document provides the complete conceptual context for **KATA**, a source-available framework designed to address trust, authorization, intent, behavior, and risk in an agentic AI environment.
 
 The purpose is to give another AI agent enough context to understand:
 
@@ -16,13 +16,13 @@ The purpose is to give another AI agent enough context to understand:
 * What has already been designed
 * What should be developed next
 
-KATA should be treated as an **open design/framework concept**, not as a finished commercial product.
+KATA should be treated as a **source-available design**, not as a finished commercial product.
 
 ---
 
 # 2. KATA in One Sentence
 
-**KATA is an open framework for verifying whether an AI agent is trusted, properly authorized, acting within the intended scope of that authorization, and behaving consistently with that intent.**
+**KATA is a source-available framework for verifying whether an AI agent is trusted, properly authorized, acting within the intended scope of that authorization, and behaving consistently with that intent.**
 
 The central idea is:
 
@@ -955,7 +955,7 @@ Behavior and risk signals should be evaluated across the entire graph.
 
 # 27. Current Repository Direction
 
-The project should be developed as an open-source conceptual framework.
+The project should be developed as a source-available conceptual framework, under the PolyForm Noncommercial License 1.0.0. Commercial use requires a separate license from the copyright holder.
 
 Suggested repository:
 
@@ -965,7 +965,7 @@ KATA
 
 Suggested description:
 
-> An open framework for verifying AI agent identity, delegated authority, intent, behavior, and actions.
+> A source-available framework for verifying AI agent identity, delegated authority, intent, behavior, and actions.
 
 Suggested structure:
 
@@ -1156,9 +1156,9 @@ This mirrors how fraud assessment itself is shifting: from device trust to deleg
 
 # 31. Guidance for Future AI Agents Working on KATA
 
-When contributing to KATA, maintain the following principles:
+When contributing to KATA, maintain the following principles. Contributions are accepted under the same PolyForm Noncommercial License 1.0.0. The owner may offer commercial licenses.
 
-1. Treat KATA as an open conceptual framework.
+1. Treat KATA as a source-available conceptual framework.
 2. Do not present it as a finished commercial product.
 3. Preserve the central focus on agent verification and intent.
 4. Keep fraud prevention and payment risk as important use cases.

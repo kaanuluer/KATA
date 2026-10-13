@@ -2,6 +2,8 @@
 
 ## 2026-10-13
 
+The repository license changed from Apache-2.0 to the PolyForm Noncommercial License 1.0.0. Commercial use requires a separate license from Kaan Uluer. Versions published before this change were released under Apache-2.0 and remain available under those terms. This change applies from this commit forward. Third-party projects cited in the docs, including AgentCommerceBench, keep their own licenses.
+
 A Vercel service in [`service/`](service/) hosts the revocation pull list, the signed push webhook, the transparency log, `/.well-known/kata-keys.json`, and a Frankfurter daily FX stub. Neon Postgres is the storage integration. Secrets stay in the Vercel project. The FX request sends a `kata-service` user agent and uses `https://api.frankfurter.dev/v1`. The same app serves an English page at `/` with a sample intent check and live views of the list, keys, and log. The page uses the teal seal and KATA wordmark. `/history` repeats the repository timeline. `/docs` renders the design doc, the delegation model, the intent model, the threat model, the JSON schemas, and an API reference. FastAPI's generated OpenAPI page is `/docs/openapi`.
 
 ## 2026-10-13

@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Reference implementation of KATA intent agreements. Concept / open design, not production ready."
 readme = "README.md"
 requires-python = ">=3.11"
-license = "Apache-2.0"
+license = "PolyForm-Noncommercial-1.0.0"
 authors = [{name = "Kaan Uluer"}]
 dependencies = ["cryptography>=42"]
 

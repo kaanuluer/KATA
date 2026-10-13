@@ -3,7 +3,7 @@
 ![KATA — Know And Trust Agents](assets/kata-hero.jpg)
 
 [![Concept · Open Design](https://img.shields.io/badge/Status-Concept%20%C2%B7%20Open%20Design-blue)](KATA.md)
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-green)](LICENSE)
+[![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-blue)](LICENSE)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](https://github.com/kaanuluer/KATA/pulls)
 
 # KATA
@@ -38,7 +38,7 @@ It becomes:
 
 > **"Is this agent authorized to perform this specific action, and does the action match the user's original intent?"**
 
-KATA is an open framework for answering exactly that.
+KATA is a source-available framework for answering exactly that.
 
 ## The four fundamental questions
 
@@ -251,6 +251,8 @@ Once a reference implementation exists, evaluate it against the [AgentCommerceBe
 
 ## What's new
 
+**2026-10-13.** The license is now [PolyForm Noncommercial 1.0.0](LICENSE). Commercial use needs a separate license from Kaan Uluer. Earlier versions stay Apache-2.0. Details: [CHANGELOG.md](CHANGELOG.md).
+
 **2026-10-13.** A Vercel service hosts revocation, the transparency log, institution keys, and a daily FX stub. Project settings are in [service/README.md](service/README.md).
 
 **2026-10-13.** The intent agreement now follows the rest of Kaan's decisions: canonical confirmation text for the wallet to display, a hash-chained ledger with a 60-second freshness bound, auto-selection when one live intent matches, pull plus push revocation and a transparency log, an optional FX ceiling, institution keys at `.well-known` with a 7-day grace, and ES256 beside Ed25519. Details: [CHANGELOG.md](CHANGELOG.md).
@@ -263,13 +265,23 @@ Once a reference implementation exists, evaluate it against the [AgentCommerceBe
 
 ## Contributing
 
-KATA is an open design and benefits from open critique. Issues, discussions, and pull requests are welcome — especially on intent schemas, delegation models, threat scenarios, and agentic fraud signals.
+KATA is source-available. Issues, discussions, and pull requests are welcome — especially on intent schemas, delegation models, threat scenarios, and agentic fraud signals.
+
+Contributions are accepted under the same [PolyForm Noncommercial License 1.0.0](LICENSE). The owner may offer commercial licenses.
 
 **Status: Concept / Open Design — not production ready.**
 
+## Commercial use
+
+Commercial use requires a separate license from Kaan Uluer. Contact kaan@kaanuluer.com.
+
 ## License
 
-Apache License 2.0 — see [LICENSE](LICENSE). Copyright 2026 Kaan Uluer.
+[PolyForm Noncommercial License 1.0.0](LICENSE).
+
+Required Notice: Copyright 2026 Kaan Uluer (https://github.com/kaanuluer/KATA)
+
+Versions published before this change were released under Apache-2.0 and remain available under those terms. This change applies from this commit forward.
 
 ## Disclaimer
 

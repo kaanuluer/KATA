@@ -2,7 +2,7 @@
 
 **Status: Concept / Open Design — not production ready.**
 
-Python reference for the signed intent mandate and the agreement lifecycle in [docs/intent-agreement.md](../../docs/intent-agreement.md). Apache-2.0, copyright 2026 Kaan Uluer.
+Python reference for the signed intent mandate and the agreement lifecycle in [docs/intent-agreement.md](../../docs/intent-agreement.md). PolyForm Noncommercial 1.0.0, copyright 2026 Kaan Uluer.
 
 The library can:
 
