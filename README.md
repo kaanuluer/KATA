@@ -3,7 +3,7 @@
 ![KATA — Know And Trust Agents](assets/kata-hero.jpg)
 
 [![Concept · Open Design](https://img.shields.io/badge/Status-Concept%20%C2%B7%20Open%20Design-blue)](KATA.md)
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-green)](LICENSE)
+[![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-blue)](LICENSE)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](https://github.com/kaanuluer/KATA/pulls)
 
 # KATA
@@ -38,7 +38,7 @@ It becomes:
 
 > **"Is this agent authorized to perform this specific action, and does the action match the user's original intent?"**
 
-KATA is an open framework for answering exactly that.
+KATA is a source-available framework for answering exactly that.
 
 ## The four fundamental questions
 
@@ -248,19 +248,31 @@ Once a reference implementation exists, evaluate it against the [AgentCommerceBe
 
 ## What's new
 
+**2026-10-13.** The license is now [PolyForm Noncommercial 1.0.0](LICENSE). Commercial use needs a separate license from Kaan Uluer. Earlier versions stay Apache-2.0. Details: [CHANGELOG.md](CHANGELOG.md).
+
 **2026-10-12.** README separates core (four questions, intent and delegation schemas, decision outcomes) from optional profiles and related work, including Darwinium. Details: [CHANGELOG.md](CHANGELOG.md).
 
 **2026-10-12.** The docs were updated from a reading of Sardine's public report *[Rethinking Fraud Prevention for Agentic Commerce](https://www.sardine.ai/whitepapers/rethinking-fraud-prevention-for-agentic-commerce)* (2026). KYA is mapped onto Q1–Q4. The threat model adds upstream AI-application account takeover, agent spoofing, undeclared automation, and merchant, first-party, and third-party typologies in agentic flows. Agent identity cites [IETF Web Bot Auth](https://datatracker.ietf.org/wg/webbotauth/about/). The risk model covers segmented agentic scoring, configurable `STEP_UP` thresholds, and degraded device and behavior signals. The liability note is that trust along the chain (user, AI provider, merchant, PSP or acquirer, network, issuer) is transitive, while liability is not. Nothing in the update is a measured result. Details: [CHANGELOG.md](CHANGELOG.md).
 
 ## Contributing
 
-KATA is an open design and benefits from open critique. Issues, discussions, and pull requests are welcome — especially on intent schemas, delegation models, threat scenarios, and agentic fraud signals.
+KATA is source-available. Issues, discussions, and pull requests are welcome — especially on intent schemas, delegation models, threat scenarios, and agentic fraud signals.
+
+Contributions are accepted under the same [PolyForm Noncommercial License 1.0.0](LICENSE). The owner may offer commercial licenses.
 
 **Status: Concept / Open Design — not production ready.**
 
+## Commercial use
+
+Commercial use requires a separate license from Kaan Uluer. Contact kaan@kaanuluer.com.
+
 ## License
 
-Apache License 2.0 — see [LICENSE](LICENSE). Copyright 2026 Kaan Uluer.
+[PolyForm Noncommercial License 1.0.0](LICENSE).
+
+Required Notice: Copyright 2026 Kaan Uluer (https://github.com/kaanuluer/KATA)
+
+Versions published before this change were released under Apache-2.0 and remain available under those terms. This change applies from this commit forward.
 
 ## Disclaimer
 

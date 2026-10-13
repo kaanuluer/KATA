@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-13
+
+The repository license changed from Apache-2.0 to the PolyForm Noncommercial License 1.0.0. Commercial use requires a separate license from Kaan Uluer. Versions published before this change were released under Apache-2.0 and remain available under those terms. This change applies from this commit forward. Third-party projects cited in the docs, including AgentCommerceBench, keep their own licenses.
+
 ## 2026-10-12
 
 README now states what is core and what is optional. An implementation needs the four questions, the intent and delegation schemas, and the decision outcomes. Use-case examples (payments, MCP or tool calls, checkout) are profiles. Sardine, Darwinium, and AgentCommerceBench are related work: they position KATA and do not extend it.
