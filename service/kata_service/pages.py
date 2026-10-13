@@ -276,7 +276,9 @@ def shell(title: str, description: str, body: str, *, current: str, script: bool
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{html.escape(title)}</title>
   <meta name="description" content="{html.escape(description)}">
-  <link rel="icon" href="/assets/gab-logo.svg" type="image/svg+xml">
+  <link rel="icon" href="/assets/gab-icon.svg" type="image/svg+xml">
+  <link rel="icon" href="/assets/favicon-32.png" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="/assets/gab-icon-180.png">
   <link rel="stylesheet" href="/assets/app.css">
 </head>
 <body>
@@ -284,7 +286,7 @@ def shell(title: str, description: str, body: str, *, current: str, script: bool
   <div class="wrap">
     <header class="site">
       <a class="brand" href="/">
-        <img class="logo" src="/assets/gab-logo.svg" alt="Global Agent Bureau" width="520" height="64">
+        <img class="logo" src="/assets/gab-logo.svg" alt="GAB_ global.agent.bureau" width="120" height="64">
         <span>Powered by KATA · Know And Trust Agents</span>
       </a>
       {_nav(current)}
