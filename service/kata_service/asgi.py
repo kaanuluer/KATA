@@ -49,9 +49,14 @@ def create_app(
 
     @app.get("/assets/{name}")
     def asset(name: str):
-        if name not in {"app.css", "app.js"}:
+        media = {
+            "app.css": "text/css",
+            "app.js": "text/javascript",
+            "kata-icon.svg": "image/svg+xml",
+            "kata-logo.svg": "image/svg+xml",
+        }.get(name)
+        if media is None:
             return _error(404, "asset was not found")
-        media = "text/css" if name.endswith(".css") else "text/javascript"
         return FileResponse(pages / name, media_type=media)
 
     @app.post("/demo/check")

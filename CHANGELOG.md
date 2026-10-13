@@ -2,7 +2,7 @@
 
 ## 2026-10-13
 
-A Vercel service in [`service/`](service/) hosts the revocation pull list, the signed push webhook, the transparency log, `/.well-known/kata-keys.json`, and a Frankfurter daily FX stub. Neon Postgres is the storage integration. Secrets stay in the Vercel project. The FX request sends a `kata-service` user agent and uses `https://api.frankfurter.dev/v1`. The same app serves an English page at `/` with a sample intent check and live views of the list, keys, and log.
+A Vercel service in [`service/`](service/) hosts the revocation pull list, the signed push webhook, the transparency log, `/.well-known/kata-keys.json`, and a Frankfurter daily FX stub. Neon Postgres is the storage integration. Secrets stay in the Vercel project. The FX request sends a `kata-service` user agent and uses `https://api.frankfurter.dev/v1`. The same app serves an English page at `/` with a sample intent check and live views of the list, keys, and log. The page uses the teal seal and KATA wordmark.
 
 ## 2026-10-13
 

@@ -1,19 +1,20 @@
 :root {
-  --ink: #f4efe6;
-  --muted: #b7c0ce;
-  --quiet: #8d98a8;
-  --navy: #070d18;
-  --navy-2: #10192b;
-  --line: rgba(212, 180, 131, 0.28);
-  --gold: #d4b483;
-  --gold-2: #f0d7ae;
-  --allow: #b6f3d4;
-  --allow-bg: #123d2e;
-  --deny: #ffc9ce;
-  --deny-bg: #3d1520;
-  --step: #ffe1a8;
-  --step-bg: #3d2e12;
-  --shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  --ink: #12343a;
+  --muted: #3e5c63;
+  --quiet: #5d767c;
+  --paper: #f3f7f7;
+  --card: #ffffff;
+  --line: rgba(15, 101, 112, 0.18);
+  --teal: #0f6570;
+  --teal-deep: #0c4e57;
+  --mint: #4fe0c2;
+  --allow: #0c5c4a;
+  --allow-bg: #d8f7ee;
+  --deny: #8d2430;
+  --deny-bg: #fde2e4;
+  --step: #8a5a10;
+  --step-bg: #fff1d6;
+  --shadow: 0 18px 40px rgba(15, 70, 78, 0.08);
   --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
   --sans: "Avenir Next", "Segoe UI", sans-serif;
   --mono: "IBM Plex Mono", "ui-monospace", "SFMono-Regular", Menlo, monospace;
@@ -25,26 +26,26 @@ html { scroll-behavior: smooth; }
 
 body {
   margin: 0;
-  color-scheme: dark;
+  color-scheme: light;
   min-height: 100vh;
   color: var(--ink);
   background:
-    radial-gradient(1200px 500px at 10% -10%, rgba(212, 180, 131, 0.16), transparent 55%),
-    radial-gradient(900px 420px at 100% 0%, rgba(36, 74, 130, 0.35), transparent 50%),
-    var(--navy);
+    radial-gradient(900px 420px at 0% -10%, rgba(79, 224, 194, 0.22), transparent 55%),
+    radial-gradient(800px 380px at 100% 0%, rgba(15, 101, 112, 0.08), transparent 50%),
+    var(--paper);
   font-family: var(--sans);
   font-size: 16px;
   line-height: 1.5;
 }
 
-a { color: var(--gold-2); }
+a { color: var(--teal-deep); }
 
 a:focus-visible,
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid var(--gold-2);
+  outline: 2px solid var(--teal);
   outline-offset: 2px;
 }
 
@@ -52,8 +53,8 @@ textarea:focus-visible {
   position: absolute;
   left: 12px;
   top: -40px;
-  background: var(--gold);
-  color: #1a140c;
+  background: var(--teal);
+  color: #ffffff;
   padding: 8px 12px;
   z-index: 5;
 }
@@ -81,11 +82,10 @@ header.site {
   text-decoration: none;
 }
 
-.brand strong {
+.logo {
   display: block;
-  font-family: var(--serif);
-  font-size: 22px;
-  letter-spacing: 0.14em;
+  height: 56px;
+  width: auto;
 }
 
 .brand span {
@@ -94,8 +94,6 @@ header.site {
   font-size: 13px;
   letter-spacing: 0.02em;
 }
-
-.shield { flex: none; }
 
 nav.site {
   display: flex;
@@ -110,7 +108,7 @@ nav.site a:hover { color: var(--ink); }
 
 .kicker {
   margin: 0 0 12px;
-  color: var(--gold);
+  color: var(--teal);
   font-size: 12px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -144,7 +142,7 @@ h1 {
 .questions li {
   margin: 0;
   padding: 16px;
-  background: rgba(16, 25, 43, 0.86);
+  background: var(--card);
   border: 1px solid var(--line);
   border-radius: 16px;
   min-height: 148px;
@@ -153,7 +151,7 @@ h1 {
 .questions em {
   display: block;
   margin-bottom: 8px;
-  color: var(--gold);
+  color: var(--teal);
   font-family: var(--mono);
   font-style: normal;
   font-size: 12px;
@@ -173,7 +171,7 @@ h2 {
 }
 
 .panel {
-  background: rgba(16, 25, 43, 0.9);
+  background: var(--card);
   border: 1px solid var(--line);
   border-radius: 20px;
   box-shadow: var(--shadow);
@@ -195,7 +193,7 @@ fieldset {
 
 legend {
   padding: 0;
-  color: var(--gold-2);
+  color: var(--teal);
   font-family: var(--serif);
   font-size: 20px;
 }
@@ -218,9 +216,9 @@ label {
 
 input, select, textarea {
   width: 100%;
-  border: 1px solid rgba(183, 192, 206, 0.28);
+  border: 1px solid rgba(15, 101, 112, 0.28);
   border-radius: 12px;
-  background: #0b1220;
+  background: #ffffff;
   color: var(--ink);
   font: inherit;
   padding: 12px 14px;
@@ -252,8 +250,8 @@ textarea { min-height: 84px; resize: vertical; }
 button {
   border: 0;
   border-radius: 999px;
-  background: var(--gold);
-  color: #1a140c;
+  background: var(--teal);
+  color: #ffffff;
   font: inherit;
   font-weight: 600;
   padding: 12px 16px;
@@ -273,8 +271,8 @@ button:hover { filter: brightness(1.06); }
   margin-top: 16px;
   padding: 16px;
   border-radius: 16px;
-  background: #0b1220;
-  border: 1px solid rgba(183, 192, 206, 0.16);
+  background: #f7fbfb;
+  border: 1px solid rgba(15, 101, 112, 0.16);
 }
 
 .result[data-verdict="ALLOW"] { border-color: #1f8a62; }
@@ -311,7 +309,7 @@ pre.confirm {
 }
 
 .ops article {
-  background: rgba(16, 25, 43, 0.9);
+  background: var(--card);
   border: 1px solid var(--line);
   border-radius: 16px;
   padding: 16px;

@@ -32,6 +32,8 @@ def test_home_page_explains_kata_in_english():
     assert "Transparency log" in body
     assert "PolyForm Noncommercial" in body
     assert "open source" not in body.lower()
+    assert '/assets/kata-logo.svg' in body
+    assert '/assets/kata-icon.svg' in body
 
 
 def test_static_assets_are_served():
@@ -40,9 +42,17 @@ def test_static_assets_are_served():
     script = client.get("/assets/app.js")
     assert css.status_code == 200
     assert "text/css" in css.headers["content-type"]
-    assert "--gold" in css.text
+    assert "--teal" in css.text
     assert script.status_code == 200
     assert "/demo/check" in script.text
+    icon = client.get("/assets/kata-icon.svg")
+    logo = client.get("/assets/kata-logo.svg")
+    assert icon.status_code == 200
+    assert "image/svg+xml" in icon.headers["content-type"]
+    assert 'fill="#0F6570"' in icon.text
+    assert 'stroke="#4FE0C2"' in icon.text
+    assert logo.status_code == 200
+    assert "KATA" in logo.text
     assert client.get("/assets/secret.txt").status_code == 404
 
 
