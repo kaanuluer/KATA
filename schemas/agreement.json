@@ -5,7 +5,7 @@
   "description": "Lifecycle record for the live intents inside a delegation: proposal, clarification, acceptance, acknowledgement, amendment, added intents, revocation, and expiry. KATA holds the spend ledger on this record. The event log is an audit trail. It is not, by itself, a revocation status service. Status: Concept / Open Design — not production ready.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["agreement_id", "status", "mandates", "events", "ledger"],
+  "required": ["agreement_id", "status", "mandates", "events", "ledger", "ledger_sequence", "ledger_as_of"],
   "properties": {
     "agreement_id": { "type": "string" },
     "status": {
@@ -27,8 +27,23 @@
     },
     "ledger": {
       "type": "array",
-      "description": "Charges KATA has recorded. An empty array means nothing has been spent. Omitting the field means the total is unknown.",
+      "description": "Hash-chained charges KATA has recorded. An empty array means nothing has been spent. Omitting the field means the total is unknown.",
       "items": { "$ref": "#/$defs/ledgerEntry" }
+    },
+    "ledger_sequence": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of ledger entries. An authorization check carries this sequence. A lower sequence is a truncated ledger."
+    },
+    "ledger_head": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "Hash of the last ledger entry. Absent when the ledger is empty."
+    },
+    "ledger_as_of": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When this replica of the ledger was last synced. Older than the configured staleness window steps up. Default window is 60 seconds."
     },
     "mandate_history": {
       "type": "array",
@@ -56,7 +71,7 @@
         "properties": {
           "mandates": {
             "items": {
-              "required": ["signature", "rendering"],
+              "required": ["signature", "rendering", "algorithm"],
               "properties": {
                 "principal": { "required": ["public_key"] }
               }
@@ -124,16 +139,10 @@
         "role": { "type": "string", "enum": ["agent", "merchant", "psp", "issuer"] },
         "id": { "type": "string" },
         "at": { "type": "string", "format": "date-time" },
-        "public_key": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["kty", "crv", "x"],
-          "properties": {
-            "kty": { "const": "OKP" },
-            "crv": { "const": "Ed25519" },
-            "x": { "type": "string" },
-            "kid": { "type": "string" }
-          }
+        "public_key": { "$ref": "intent-mandate.json#/$defs/publicJwk" },
+        "domain": {
+          "type": "string",
+          "description": "Domain that publishes this institution key at /.well-known/kata-keys.json."
         },
         "signature": { "$ref": "#/$defs/jws" }
       }
@@ -141,15 +150,18 @@
     "ledgerEntry": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["action_id", "at", "currency", "outcome"],
+      "required": ["action_id", "at", "currency", "outcome", "sequence", "entry_hash"],
       "properties": {
         "action_id": { "type": "string" },
         "amount": { "type": "number", "minimum": 0 },
         "at": { "type": "string", "format": "date-time" },
         "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+        "entry_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
         "idempotency_key": { "type": "string" },
         "intent_id": { "type": "string" },
-        "outcome": { "type": "string", "enum": ["allowed", "authorized", "settled", "failed"] }
+        "outcome": { "type": "string", "enum": ["allowed", "authorized", "settled", "failed"] },
+        "prev_entry_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "sequence": { "type": "integer", "minimum": 1 }
       }
     },
     "revocation": {

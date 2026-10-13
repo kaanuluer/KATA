@@ -91,3 +91,46 @@ def purchase(**overrides):
     }
     action.update(overrides)
     return action
+
+
+def bound_eval(agreement, principal_key, agent_key, action=None, **kwargs):
+    """Evaluate with the ledger head, sequence, and a fresh replica time.
+
+    A cumulative or frequency limit denies when the check omits the head.
+    ``NOW`` is several minutes after the agreement was created, so the
+    replica time has to be passed explicitly or the check steps up as stale.
+    """
+
+    from kata_intent import evaluate
+
+    explicit = set(kwargs)
+    params = {
+        "principal_public_key": principal_key.public,
+        "agent_id": "shopper-01",
+        "agent_public_key": agent_key.public,
+        "now": NOW,
+        "ledger_as_of": NOW,
+    }
+    params.update(kwargs)
+    if "now" in explicit and "ledger_as_of" not in explicit:
+        params["ledger_as_of"] = params["now"]
+    holder = agreement
+    if isinstance(agreement, dict) and isinstance(agreement.get("intent_agreement"), dict):
+        holder = agreement["intent_agreement"]
+    if "ledger_sequence" not in explicit:
+        if "ledger" in explicit:
+            ledger = params["ledger"]
+            if ledger is not None:
+                params["ledger_sequence"] = len(ledger)
+                if "ledger_head" not in explicit:
+                    last = ledger[-1] if ledger else None
+                    params["ledger_head"] = last.get("entry_hash") if isinstance(last, dict) else None
+        elif hasattr(holder, "ledger_sequence"):
+            params["ledger_sequence"] = holder.ledger_sequence
+            if "ledger_head" not in explicit:
+                params["ledger_head"] = holder.ledger_head
+        elif isinstance(holder, dict) and "ledger" in holder:
+            params["ledger_sequence"] = int(holder.get("ledger_sequence") or len(holder.get("ledger") or []))
+            if "ledger_head" not in explicit:
+                params["ledger_head"] = holder.get("ledger_head")
+    return evaluate(agreement, purchase() if action is None else action, **params)

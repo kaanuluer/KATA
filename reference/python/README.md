@@ -6,11 +6,14 @@ Python reference for the signed intent mandate and the agreement lifecycle in [d
 
 The library can:
 
-- render a default English confirmation, or sign a confirmation in any language
-- sign that mandate with Ed25519, as a flattened JWS (`alg: EdDSA`)
-- verify the signature
+- produce the canonical confirmation text and its hash (English is built in; another language needs the same registered renderer on both sides)
+- sign that mandate with Ed25519 (`alg: EdDSA`) or P-256 (`alg: ES256`), as a flattened JWS
+- verify either signature
 - walk propose → clarify → accept → acknowledge → amend → add an intent → revoke or expire
-- keep the spend ledger on the agreement and evaluate one action as `ALLOW`, `STEP_UP`, or `DENY`
+- keep a hash-chained spend ledger on the agreement and evaluate one action as `ALLOW`, `STEP_UP`, or `DENY`
+- check a pull revocation cache, a signed push, a Merkle transparency log, a daily FX ceiling, and an institution key directory when the caller supplies them
+
+KATA does not render a user interface and does not open a socket. The wallet displays the confirmation. A deployment supplies the fetcher, the webhook, and the rate source.
 
 `DENY` maps to the KATA decision `BLOCK`. This package does not score behavior and does not emit `REVOKE` or `QUARANTINE`.
 

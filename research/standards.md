@@ -83,7 +83,7 @@ Industry efforts to give agents signed, credentialed identity and safe payment r
 
 ## What KATA deliberately does not standardize (yet)
 
-- The cryptographic format of delegation tokens. A reference signature for the **intent mandate** (Ed25519 JWS, canonical JSON) is drafted in [docs/intent-agreement.md](../docs/intent-agreement.md). It is a reference, not a claim that the wire format is finished.
+- The cryptographic format of delegation tokens. A reference signature for the **intent mandate** (Ed25519 or ES256 JWS, canonical JSON) is drafted in [docs/intent-agreement.md](../docs/intent-agreement.md). It is a reference, not a claim that the wire format is finished.
 - The exact intent schema (a draft exists in [`schemas/`](../schemas/); the signed mandate embeds it).
 - The wire protocol for exchanging trust decisions between institutions.
 - Reputation exchange formats and privacy-preserving reputation protocols.

@@ -1,10 +1,10 @@
 # Copyright 2026 Kaan Uluer
 # SPDX-License-Identifier: Apache-2.0
-"""Flattened JSON Web Signature (RFC 7515) with EdDSA (RFC 8037).
+"""Flattened JSON Web Signature (RFC 7515).
 
-The protected header and the payload are both KATA canonical JSON.
-Verification checks the signature over the exact payload bytes, then
-requires those bytes to be canonical.
+``alg`` is ``EdDSA`` or ``ES256``, taken from the signing key. The protected
+header and the payload are both KATA canonical JSON. Verification checks the
+signature over the exact payload bytes, then requires those bytes to be canonical.
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ class JwsCheck:
 def sign_jws(payload: dict[str, Any], private_key: PrivateKey, *, typ: str) -> dict[str, str]:
     """Sign ``payload`` and return a flattened JWS."""
 
-    header = {"alg": "EdDSA", "kid": private_key.public.fingerprint, "typ": typ}
+    header = {"alg": private_key.algorithm, "kid": private_key.public.fingerprint, "typ": typ}
     header_b64 = _b64url(canonical_bytes(header))
     payload_bytes = canonical_bytes(payload)
     payload_b64 = _b64url(payload_bytes)
@@ -79,7 +79,9 @@ def verify_jws(jws: dict[str, Any], public_key: PublicKey, *, typ: str) -> JwsCh
     except Exception:  # noqa: BLE001
         return JwsCheck(False, None, None, "malformed")
 
-    if not isinstance(header, dict) or header.get("alg") != "EdDSA" or header.get("typ") != typ:
+    if not isinstance(header, dict) or header.get("alg") not in {"EdDSA", "ES256"} or header.get("typ") != typ:
+        return JwsCheck(False, None, None, "header")
+    if header.get("alg") != public_key.algorithm:
         return JwsCheck(False, None, None, "header")
     if canonical_bytes(header) != header_bytes:
         return JwsCheck(False, None, None, "header")

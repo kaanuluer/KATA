@@ -2,11 +2,23 @@
 
 ## 2026-10-13
 
+Kaan decided the remaining open points on the intent agreement.
+
+- KATA produces the canonical confirmation text and its hash. The wallet or bank app displays that text and collects the signature. The verifier checks the signed hash against the text KATA produced. Another language is canonical only through a renderer registered on both sides.
+- The spend ledger is hash-chained. Every authorization check carries the head hash and the sequence. A lower sequence is a deny. A replica older than 60 seconds, unless that window is changed, steps up. That age is the replica's sync time.
+- When several intents are live and the action names none, one matching intent is selected. More than one match steps up. None match is a deny.
+- Revocation in this version is a pull list cached for 5 minutes, a signed push webhook, and an append-only transparency log with a signed Merkle head. The library does not open a socket.
+- A ceiling for any merchant and any category is off by default. When it is on, amounts convert into one reference currency (USD unless changed) with a pluggable daily FX rate.
+- Institution keys are published at `/.well-known/kata-keys.json` and on a KATA allowlist. Rotated keys stay trusted for a grace period. The default grace is 7 days, because no duration was set.
+- ES256 verifies beside Ed25519. The mandate names the algorithm.
+
+## 2026-10-13
+
 Kaan's answers on the intent agreement are now the spec.
 
 - The agreement is stored inside the delegation. One delegation may hold several live intents. A child intent may be narrower than the parent set, and the sum of the cumulative slices cannot exceed the parent total.
 - KATA holds the spend ledger on the agreement. A missing ledger is a deny. The per-transaction ceiling stays separate from that total.
-- The principal's signature activates the agreement. The confirmation text may be any language. Only that principal can revoke. A price miss blocks the charge and does not revoke the grant. `P1M` stays thirty days. A missing expiry or ceiling asks for approval. A named revocation endpoint that was not checked steps the verdict down; a mandate with no endpoint does not step up for that reason.
+- The principal's signature activates the agreement. The confirmation may use any language. A later entry the same day limits that to a registered canonical renderer. Only that principal can revoke. A price miss blocks the charge and does not revoke the grant. `P1M` stays thirty days. A missing expiry or ceiling asks for approval. A named revocation endpoint that was not checked steps the verdict down; a mandate with no endpoint does not step up for that reason.
 - Version 1 stays major units and Ed25519, signed by the principal.
 
 ## 2026-10-12

@@ -5,23 +5,15 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from kata_intent import Actor, Evaluation, LedgerEntry, Policy, evaluate
+from kata_intent import Policy, evaluate
+from kata_intent.agreement import seal_ledger
+from kata_intent.fx import DailyTableRates
 
-from conftest import AT, EXPIRY, NOW, activate, propose, purchase
-
-import pytest
+from conftest import AT, EXPIRY, NOW, activate, bound_eval, propose, purchase
 
 
-def _eval(agreement, principal_key, agent_key, action=None, **kwargs) -> Evaluation:
-    params = {
-        "principal_public_key": principal_key.public,
-        "agent_id": "shopper-01",
-        "agent_public_key": agent_key.public,
-        "ledger": [],
-        "now": NOW,
-    }
-    params.update(kwargs)
-    return evaluate(agreement, action or purchase(), **params)
+def _eval(agreement, principal_key, agent_key, action=None, **kwargs):
+    return bound_eval(agreement, principal_key, agent_key, action, **kwargs)
 
 
 def test_in_scope_purchase_is_allowed(principal_key, agent_key):
@@ -171,6 +163,9 @@ def test_unbound_principal_key_steps_up(principal_key, agent_key):
         purchase(),
         agent_id="shopper-01",
         ledger=[],
+        ledger_sequence=0,
+        ledger_head=None,
+        ledger_as_of=NOW,
         now=NOW,
     )
     assert result.verdict == "STEP_UP"
@@ -186,14 +181,18 @@ def test_cumulative_and_frequency(principal_key, agent_key):
     assert "CUMULATIVE_STATE_UNAVAILABLE" in missing.reasons
     assert "FREQUENCY_STATE_UNAVAILABLE" in missing.reasons
 
-    prior = LedgerEntry(
-        action_id="act_old",
-        amount=1300,
-        currency="CAD",
-        at=datetime(2026, 10, 4, 14, 0, tzinfo=timezone.utc),
-        outcome="settled",
+    prior = seal_ledger(
+        [
+            {
+                "action_id": "act_old",
+                "amount": 1300,
+                "at": "2026-10-04T14:00:00Z",
+                "currency": "CAD",
+                "outcome": "settled",
+            }
+        ]
     )
-    over = _eval(agreement, principal_key, agent_key, ledger=[prior])
+    over = _eval(agreement, principal_key, agent_key, ledger=prior)
     assert over.verdict == "DENY"
     assert "CUMULATIVE_LIMIT_EXCEEDED" in over.reasons
 
@@ -203,16 +202,20 @@ def test_cumulative_and_frequency(principal_key, agent_key):
         agreement_id="agr_freq",
         limits={"frequency": {"max_count": 1, "per": "P1D"}},
     )
-    blocked = _eval(frequent, principal_key, agent_key, ledger=[prior])
+    blocked = _eval(frequent, principal_key, agent_key, ledger=prior)
     assert "FREQUENCY_LIMIT_EXCEEDED" in blocked.reasons
 
-    failed = LedgerEntry(
-        action_id="act_fail",
-        amount=1300,
-        currency="CAD",
-        at=datetime(2026, 10, 4, 14, 0, tzinfo=timezone.utc),
-        idempotency_key="idem_failed",
-        outcome="failed",
+    failed = seal_ledger(
+        [
+            {
+                "action_id": "act_fail",
+                "amount": 1300,
+                "at": "2026-10-04T14:00:00Z",
+                "currency": "CAD",
+                "idempotency_key": "idem_failed",
+                "outcome": "failed",
+            }
+        ]
     )
     honest = _eval(
         agreement,
@@ -222,7 +225,7 @@ def test_cumulative_and_frequency(principal_key, agent_key):
             action_id="act_retry",
             settlement={"attempt": 2, "idempotency_key": "idem_new", "prior_attempt_status": "failed"},
         ),
-        ledger=[failed],
+        ledger=failed,
     )
     assert honest.verdict == "ALLOW"
 
@@ -443,6 +446,10 @@ def test_policy_can_flag_an_unscoped_ceiling(principal_key, agent_key):
         agreement,
         principal_key,
         agent_key,
-        policy=Policy(unscoped_amount_ceiling=10000),
+        policy=Policy(
+            unscoped_amount_ceiling=10000,
+            fx_rates=DailyTableRates({("CAD", "USD", "2026-10-04"): "0.75"}),
+        ),
     )
+    assert result.verdict == "STEP_UP"
     assert "OVER_BROAD_INTENT" in result.reasons

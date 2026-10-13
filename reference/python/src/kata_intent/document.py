@@ -14,6 +14,7 @@ _OPTIONAL = (
     "delegation_id",
     "expires_at",
     "limits",
+    "confirmation_language",
     "not_before",
     "parent_limits",
     "required_acknowledgements",
@@ -33,6 +34,8 @@ def core_document(mandate: dict[str, Any]) -> dict[str, Any]:
         "principal": _pick(mandate.get("principal") or {}, _PRINCIPAL_KEYS),
         "version": mandate.get("version"),
     }
+    if mandate.get("algorithm"):
+        document["algorithm"] = mandate["algorithm"]
     for key in _OPTIONAL:
         if key in mandate:
             document[key] = mandate[key]

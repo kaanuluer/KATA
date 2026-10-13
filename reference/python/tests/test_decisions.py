@@ -11,25 +11,44 @@ import pytest
 from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
 
-from kata_intent import KataError, evaluate
+from kata_intent import KataError, register_confirmation_renderer
+from kata_intent.document import signing_document
+from kata_intent.jws import sign_jws
+from kata_intent.values import text_hash
 
-from conftest import AT, NOW, activate, laptop_intent, propose, purchase
+from conftest import AT, activate, bound_eval, laptop_intent, propose, purchase
+
+MANDATE_TYP = "kata-mandate+jws"
 
 
-def test_confirmation_may_be_any_language(principal_key, agent_key):
-    agreement = propose(principal_key, agent_key)
-    text = "K. Uluer, shopper-01 ajanına CAD 1500 tavana kadar elektronik alışverişi için yetki verir."
-    agreement.accept(principal_key, AT, rendering_text=text, confirmed_text=text)
-    result = evaluate(
-        agreement,
-        purchase(),
-        principal_public_key=principal_key.public,
-        agent_id="shopper-01",
-        agent_public_key=agent_key.public,
-        now=NOW,
+def _turkish(mandate):
+    intent = mandate["intent"]
+    agent = mandate["agent"]["agent_id"]
+    return (
+        f"K. Uluer, {agent} ajanına {intent['maximum_amount']} {intent['currency']} "
+        "tavana kadar elektronik alışverişi için yetki verir."
     )
+
+
+def test_confirmation_is_the_text_kata_produced(principal_key, agent_key):
+    register_confirmation_renderer("tr", _turkish)
+    agreement = propose(principal_key, agent_key, confirmation_language="tr")
+    invented = "The wallet wrote a different Turkish sentence."
+    with pytest.raises(KataError, match="confirmation text must be the text KATA produced"):
+        agreement.accept(principal_key, AT, rendering_text=invented, confirmed_text=invented)
+    text = agreement.rendering_preview()
+    agreement.accept(principal_key, AT, rendering_text=text, confirmed_text=text)
+    result = bound_eval(agreement, principal_key, agent_key)
     assert result.verdict == "ALLOW"
     assert agreement.mandate["rendering"]["text"] == text
+    assert text.startswith("K. Uluer, shopper-01 ajanına 1500 CAD")
+
+    forged = agreement.to_dict()
+    mandate = forged["mandates"][0]
+    mandate["rendering"] = {"hash": text_hash(invented), "text": invented}
+    mandate["signature"] = sign_jws(signing_document(mandate), principal_key, typ=MANDATE_TYP)
+    rejected = bound_eval(forged, principal_key, agent_key)
+    assert "RENDERING_MISMATCH" in rejected.reasons
 
 
 def test_several_intents_stay_inside_the_parent_set(principal_key, agent_key):
@@ -65,34 +84,30 @@ def test_several_intents_stay_inside_the_parent_set(principal_key, agent_key):
             limits={"cumulative_maximum": 900},
         )
 
-    unselected = evaluate(
-        agreement,
-        purchase(),
-        principal_public_key=principal_key.public,
-        agent_id="shopper-01",
-        agent_public_key=agent_key.public,
-        now=NOW,
-    )
+    selected = bound_eval(agreement, principal_key, agent_key, purchase(action_id="act_laptop", amount=1100))
+    assert selected.verdict == "ALLOW"
+
+    unselected = bound_eval(agreement, principal_key, agent_key, purchase(action_id="act_either", amount=200))
     assert unselected.verdict == "STEP_UP"
     assert unselected.reasons == ("INTENT_NOT_SELECTED",)
 
-    allowed = evaluate(
+    none = bound_eval(agreement, principal_key, agent_key, purchase(action_id="act_none", amount=5000))
+    assert none.verdict == "DENY"
+    assert none.reasons == ("NO_MATCHING_INTENT",)
+
+    allowed = bound_eval(
         agreement,
+        principal_key,
+        agent_key,
         purchase(action_id="act_case", amount=300, parameters={"intent_id": "int_case", "quantity": 1}),
-        principal_public_key=principal_key.public,
-        agent_id="shopper-01",
-        agent_public_key=agent_key.public,
-        now=NOW,
     )
     assert allowed.verdict == "ALLOW"
 
-    denied = evaluate(
+    denied = bound_eval(
         agreement,
+        principal_key,
+        agent_key,
         purchase(action_id="act_over_case", amount=500, parameters={"intent_id": "int_case", "quantity": 1}),
-        principal_public_key=principal_key.public,
-        agent_id="shopper-01",
-        agent_public_key=agent_key.public,
-        now=NOW,
     )
     assert "AMOUNT_ABOVE_INTENT_CEILING" in denied.reasons
     _validator().validate(json.loads(agreement.to_json()))
@@ -100,40 +115,29 @@ def test_several_intents_stay_inside_the_parent_set(principal_key, agent_key):
 
 def test_a_narrower_asserted_intent_is_allowed(principal_key, agent_key):
     agreement = activate(principal_key, agent_key)
-    narrower = evaluate(
+    narrower = bound_eval(
         agreement,
+        principal_key,
+        agent_key,
         purchase(parameters={"asserted_intent": {"allowed_actions": ["purchase"], "maximum_amount": 100}, "quantity": 1}),
-        principal_public_key=principal_key.public,
-        agent_id="shopper-01",
-        agent_public_key=agent_key.public,
-        now=NOW,
     )
     assert narrower.verdict == "ALLOW"
 
-    wider = evaluate(
+    wider = bound_eval(
         agreement,
+        principal_key,
+        agent_key,
         purchase(
             action_id="act_wide",
             parameters={"asserted_intent": {"allowed_actions": ["purchase", "transfer"]}, "quantity": 1},
         ),
-        principal_public_key=principal_key.public,
-        agent_id="shopper-01",
-        agent_public_key=agent_key.public,
-        now=NOW,
     )
     assert "ASSERTED_INTENT_MISMATCH" in wider.reasons
 
 
 def test_the_agreement_lives_inside_the_delegation(principal_key, agent_key):
     agreement = activate(principal_key, agent_key)
-    result = evaluate(
-        agreement.to_delegation(),
-        purchase(),
-        principal_public_key=principal_key.public,
-        agent_id="shopper-01",
-        agent_public_key=agent_key.public,
-        now=NOW,
-    )
+    result = bound_eval(agreement.to_delegation(), principal_key, agent_key)
     assert result.verdict == "ALLOW"
     assert "intent_agreement" in agreement.to_delegation()
 
@@ -141,14 +145,7 @@ def test_the_agreement_lives_inside_the_delegation(principal_key, agent_key):
 def test_kata_ledger_rejects_a_charge_past_the_total(principal_key, agent_key):
     agreement = activate(principal_key, agent_key)
     agreement.record_allowed(purchase(action_id="act_old", amount=1300))
-    result = evaluate(
-        agreement,
-        purchase(action_id="act_next", amount=300),
-        principal_public_key=principal_key.public,
-        agent_id="shopper-01",
-        agent_public_key=agent_key.public,
-        now=NOW,
-    )
+    result = bound_eval(agreement, principal_key, agent_key, purchase(action_id="act_next", amount=300))
     assert result.verdict == "DENY"
     assert "CUMULATIVE_LIMIT_EXCEEDED" in result.reasons
 

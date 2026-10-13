@@ -242,7 +242,7 @@ Once a reference implementation exists, evaluate it against the [AgentCommerceBe
 | Intent agreement | [docs/intent-agreement.md](docs/intent-agreement.md) — signed mandate, lifecycle, action check |
 | Delegation model | [docs/delegation-model.md](docs/delegation-model.md) |
 | Agent identity | [docs/agent-identity.md](docs/agent-identity.md) |
-| Schemas | [schemas/](schemas/) — `agent`, `delegation`, `intent`, `intent-mandate`, `agreement`, `action`, `decision` |
+| Schemas | [schemas/](schemas/) — `agent`, `delegation`, `intent`, `intent-mandate`, `agreement`, `action`, `decision`, `institution-keys`, `transparency-log` |
 | Reference library | [`reference/python`](reference/python) — sign a mandate, verify it, evaluate an action |
 | Interoperability | [docs/interoperability.md](docs/interoperability.md) — Verifiable Intent, AP2 v0.2 (and the v0.1 Intent/Cart/Payment names), Visa TAP, AGNTCY |
 | Examples | [examples/](examples/) — `shopping-agent`, `price-integrity`, `payment-agent`, `banking-agent`, `ucp-checkout` (UCP sketch), `verifiable-intent`, `ap2-checkout` |
@@ -251,7 +251,7 @@ Once a reference implementation exists, evaluate it against the [AgentCommerceBe
 
 ## What's new
 
-**2026-10-13.** The intent agreement now follows Kaan's decisions: it lives inside the delegation, KATA holds the spend ledger, several narrower intents may share one parent total, and the confirmation may be in any language. Details: [CHANGELOG.md](CHANGELOG.md).
+**2026-10-13.** The intent agreement now follows the rest of Kaan's decisions: canonical confirmation text for the wallet to display, a hash-chained ledger with a 60-second freshness bound, auto-selection when one live intent matches, pull plus push revocation and a transparency log, an optional FX ceiling, institution keys at `.well-known` with a 7-day grace, and ES256 beside Ed25519. Details: [CHANGELOG.md](CHANGELOG.md).
 
 **2026-10-12.** Intent agreement: a signed mandate, an auditable lifecycle, and a reference check that returns `ALLOW`, `STEP_UP`, or `DENY`. Design in [docs/intent-agreement.md](docs/intent-agreement.md). Schemas `intent-mandate` and `agreement`. Library in [`reference/python`](reference/python). Details: [CHANGELOG.md](CHANGELOG.md).
 

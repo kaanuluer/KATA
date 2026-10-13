@@ -95,6 +95,7 @@ def _purchase(action_id: str, amount: int, item: str) -> dict:
 
 
 def _check(agreement, principal, agent, action, now=NOW):
+    # This process holds the ledger, so the check carries its head and a fresh replica time.
     return evaluate(
         agreement,
         action,
@@ -102,6 +103,9 @@ def _check(agreement, principal, agent, action, now=NOW):
         agent_id="shopper-01",
         agent_public_key=agent.public,
         now=now,
+        ledger_sequence=agreement.ledger_sequence,
+        ledger_head=agreement.ledger_head,
+        ledger_as_of=now,
     )
 
 

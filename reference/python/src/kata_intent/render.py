@@ -1,15 +1,19 @@
 # Copyright 2026 Kaan Uluer
 # SPDX-License-Identifier: Apache-2.0
-"""Default English rendering of a mandate.
+"""Canonical confirmation text.
 
-``kata_mandate`` version 1 signs the confirmation text the principal was
-shown. That text may be any language. This renderer is the default when the
-caller does not supply one. The signature covers the supplied text, and the
-verifier checks that the stored hash is the SHA-256 of that text.
+KATA does not render a user interface. It produces the confirmation text and
+its hash. A wallet or bank app displays that text and collects the signature.
+The verifier produces the text again and requires the signed hash to equal
+that hash.
 
-The line order below is the default English rendering. Whitespace inside a
-quoted instruction is collapsed, so a newline in the source cannot push the
-limits out of a single-line display.
+Language ``en`` is built in. Another language is canonical only when the same
+producer is registered on the signer and the verifier. A translation the
+wallet invents does not verify.
+
+The English line order is fixed. Whitespace inside a quoted instruction is
+collapsed, so a newline in the source cannot push the limits out of a
+single-line display.
 """
 
 from __future__ import annotations
@@ -17,9 +21,12 @@ from __future__ import annotations
 from typing import Any
 
 from kata_intent.canonical import encode_decimal
+from kata_intent.errors import KataError
 from kata_intent.values import money
 
 MONEY_PURPOSES = frozenset({"purchase", "payment", "transfer", "booking", "investment"})
+
+_RENDERERS: dict[str, Any] = {}
 
 _FREQUENCY = {
     "agreement": "over the life of this agreement",
@@ -29,8 +36,31 @@ _FREQUENCY = {
 }
 
 
+def register_confirmation_renderer(language: str, renderer: Any) -> None:
+    """Register the canonical producer for ``language``. The verifier uses the same function."""
+
+    if not isinstance(language, str) or not language.strip():
+        raise KataError("language must be a non-empty string")
+    _RENDERERS[language] = renderer
+
+
 def render_mandate(mandate: dict[str, Any]) -> str:
-    """Return the confirmation text for ``mandate``."""
+    """Return the canonical confirmation text for ``mandate``.
+
+    KATA does not render a user interface. The wallet or bank app displays
+    this text and collects the signature. The verifier hashes this same text
+    and requires the signed hash to match.
+    """
+
+    language = mandate.get("confirmation_language") or "en"
+    renderer = _RENDERERS.get(language)
+    if renderer is None:
+        raise KataError(f"no canonical confirmation renderer for {language}")
+    return renderer(mandate)
+
+
+def _render_english(mandate: dict[str, Any]) -> str:
+    """Default English confirmation. Line order is fixed for language ``en``."""
 
     intent = mandate.get("intent") or {}
     limits = mandate.get("limits") or {}
@@ -174,3 +204,6 @@ def _amount(value: Any) -> str:
 
 def _one_line(value: str) -> str:
     return " ".join(value.split())
+
+
+_RENDERERS["en"] = _render_english

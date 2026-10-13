@@ -35,6 +35,15 @@
         "public_key": { "$ref": "#/$defs/publicJwk" }
       }
     },
+    "algorithm": {
+      "type": "string",
+      "enum": ["EdDSA", "ES256"],
+      "description": "Signature algorithm. EdDSA is Ed25519. ES256 is ECDSA P-256 with SHA-256. The JWS header alg is this value."
+    },
+    "confirmation_language": {
+      "type": "string",
+      "description": "Language of the canonical confirmation text KATA produces. en is built in. The wallet displays this text and does not replace it."
+    },
     "agent": {
       "type": "object",
       "additionalProperties": false,
@@ -44,7 +53,7 @@
         "public_key_fingerprint": {
           "type": "string",
           "pattern": "^sha256:[0-9a-f]{64}$",
-          "description": "SHA-256 of the raw 32-byte Ed25519 public key."
+          "description": "SHA-256 of the raw public key. Ed25519 uses the 32-byte key. P-256 uses the 64-byte x||y."
         },
         "public_key": { "$ref": "#/$defs/publicJwk" }
       }
@@ -97,16 +106,32 @@
   },
   "$defs": {
     "publicJwk": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["kty", "crv", "x"],
-      "properties": {
-        "kty": { "const": "OKP" },
-        "crv": { "const": "Ed25519" },
-        "x": { "type": "string" },
-        "kid": { "type": "string" }
-      },
-      "description": "Public OKP JWK (RFC 8037). The private parameter d is not a member of this object."
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kty", "crv", "x"],
+          "properties": {
+            "kty": { "const": "OKP" },
+            "crv": { "const": "Ed25519" },
+            "x": { "type": "string" },
+            "kid": { "type": "string" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kty", "crv", "x", "y"],
+          "properties": {
+            "kty": { "const": "EC" },
+            "crv": { "const": "P-256" },
+            "x": { "type": "string" },
+            "y": { "type": "string" },
+            "kid": { "type": "string" }
+          }
+        }
+      ],
+      "description": "Public JWK for Ed25519 (OKP) or P-256 (EC). The private parameter d is not a member of this object."
     },
     "jws": {
       "type": "object",
@@ -117,7 +142,7 @@
         "payload": { "type": "string" },
         "signature": { "type": "string" }
       },
-      "description": "Flattened JWS (RFC 7515), alg EdDSA. Protected header and payload are KATA canonical JSON."
+      "description": "Flattened JWS (RFC 7515), alg EdDSA or ES256. Protected header and payload are KATA canonical JSON."
     },
     "parentLimits": {
       "type": "object",

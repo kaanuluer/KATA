@@ -88,6 +88,7 @@ class Agreement:
         required_acknowledgements: list[str] | None = None,
         revocation_endpoint: str | None = None,
         parent_limits: dict[str, Any] | None = None,
+        confirmation_language: str = "en",
         note: str | None = None,
     ) -> Agreement:
         """Open an unsigned agreement. The principal has not signed yet."""
@@ -126,6 +127,7 @@ class Agreement:
             mandate["required_acknowledgements"] = acks
         if revocation_endpoint:
             mandate["revocation_endpoint"] = require_text(revocation_endpoint, "revocation_endpoint")
+        mandate["confirmation_language"] = require_text(confirmation_language, "confirmation_language")
         parent = _initial_parent(intent, limits, parent_limits, mandate.get("expires_at"))
         mandate["parent_limits"] = parent
         _check_window_consistency(mandate)
@@ -136,6 +138,8 @@ class Agreement:
                 "created_at": stamped,
                 "events": [],
                 "ledger": [],
+                "ledger_as_of": stamped,
+                "ledger_sequence": 0,
                 "mandate_history": [],
                 "mandates": [mandate],
                 "parent_limits": parent,
@@ -197,6 +201,18 @@ class Agreement:
         if "ledger" not in self._record:
             raise KataError("agreement has no spend ledger")
         return self._record["ledger"]
+
+    @property
+    def ledger_sequence(self) -> int:
+        return int(self._record.get("ledger_sequence") or 0)
+
+    @property
+    def ledger_head(self) -> str | None:
+        return self._record.get("ledger_head")
+
+    @property
+    def ledger_as_of(self) -> str | None:
+        return self._record.get("ledger_as_of")
 
     @property
     def parent_limits(self) -> dict[str, Any]:
@@ -303,18 +319,21 @@ class Agreement:
     ) -> None:
         """Principal signs the current draft.
 
-        ``rendering_text`` is the confirmation in any language. When it is
-        omitted, the default English rendering is signed. ``confirmed_text``,
-        when passed, must be that same text.
+        The confirmation is the text ``render_mandate`` produces for
+        ``confirmation_language``. ``rendering_text`` and ``confirmed_text``,
+        when passed, must be that text. A wallet displays it; it does not
+        replace it.
         """
 
         self._require_status("proposed", "clarifying")
         mandate = self._select(None)
         mandate["principal"]["public_key"] = principal_key.public.to_jwk()
+        mandate["algorithm"] = principal_key.algorithm
         try:
             _apply_rendering(mandate, rendering_text=rendering_text, confirmed_text=confirmed_text)
         except KataError:
             mandate["principal"].pop("public_key", None)
+            mandate.pop("algorithm", None)
             raise
         signed = signing_document(mandate)
         mandate["signature"] = sign_jws(signed, principal_key, typ=MANDATE_TYP)
@@ -454,6 +473,7 @@ class Agreement:
         _check_window_consistency(updated)
         updated["parent_limits"] = parent
         updated["principal"]["public_key"] = principal_key.public.to_jwk()
+        updated["algorithm"] = principal_key.algorithm
         _apply_rendering(updated, rendering_text=rendering_text, confirmed_text=confirmed_text)
         signed = signing_document(updated)
         updated["signature"] = sign_jws(signed, principal_key, typ=MANDATE_TYP)
@@ -515,6 +535,7 @@ class Agreement:
         base = self.mandates[0]
         mandate: dict[str, Any] = {
             "agent": copy.deepcopy(base["agent"]),
+            "confirmation_language": base.get("confirmation_language") or "en",
             "intent": intent,
             "mandate_id": f"{self.agreement_id}.{intent['intent_id']}.v1",
             "parent_limits": parent,
@@ -535,6 +556,7 @@ class Agreement:
             mandate["revocation_endpoint"] = base["revocation_endpoint"]
         _check_window_consistency(mandate)
         mandate["principal"]["public_key"] = principal_key.public.to_jwk()
+        mandate["algorithm"] = principal_key.algorithm
         _apply_rendering(mandate, rendering_text=rendering_text, confirmed_text=confirmed_text)
         signed = signing_document(mandate)
         mandate["signature"] = sign_jws(signed, principal_key, typ=MANDATE_TYP)
@@ -575,7 +597,15 @@ class Agreement:
         idempotency = (action.get("settlement") or {}).get("idempotency_key")
         if idempotency:
             entry["idempotency_key"] = idempotency
-        self.ledger.append(entry)
+        sequence = len(self.ledger) + 1
+        entry["sequence"] = sequence
+        if sequence > 1:
+            entry["prev_entry_hash"] = self.ledger[-1]["entry_hash"]
+        sealed = seal_ledger_entry(entry)
+        self.ledger.append(sealed)
+        self._record["ledger_sequence"] = sequence
+        self._record["ledger_head"] = sealed["entry_hash"]
+        self._record["ledger_as_of"] = entry["at"]
 
     def revoke(self, principal_key: PrivateKey, at: str | Any, *, reason: str = "principal_request") -> dict[str, Any]:
         """Sign a revocation of every live intent. Only the signing principal's key is accepted."""
@@ -746,10 +776,54 @@ def _ack_key(ack: dict[str, Any]) -> PublicKey:
     return public_key_from_jwk(ack["public_key"])
 
 
+def seal_ledger_entry(entry: dict[str, Any]) -> dict[str, Any]:
+    """Hash-chain one ledger entry. ``entry_hash`` covers every other field."""
+
+    body = {key: value for key, value in entry.items() if key != "entry_hash"}
+    sealed = dict(body)
+    sealed["entry_hash"] = hash_document(body)
+    return sealed
+
+
+def seal_ledger(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Number and hash-chain a list of charge bodies. Sequence starts at 1."""
+
+    sealed: list[dict[str, Any]] = []
+    for index, raw in enumerate(entries, start=1):
+        body = {key: value for key, value in raw.items() if key not in {"entry_hash", "sequence", "prev_entry_hash"}}
+        body["sequence"] = index
+        if index > 1:
+            body["prev_entry_hash"] = sealed[-1]["entry_hash"]
+        sealed.append(seal_ledger_entry(body))
+    return sealed
+
+
+def verify_ledger_chain(entries: list[dict[str, Any]]) -> bool:
+    """True when each entry hash matches and names the previous entry."""
+
+    previous: str | None = None
+    for index, entry in enumerate(entries, start=1):
+        if not isinstance(entry, dict) or entry.get("sequence") != index:
+            return False
+        if index == 1 and "prev_entry_hash" in entry:
+            return False
+        if index > 1 and entry.get("prev_entry_hash") != previous:
+            return False
+        body = {key: value for key, value in entry.items() if key != "entry_hash"}
+        if entry.get("entry_hash") != hash_document(body):
+            return False
+        previous = entry["entry_hash"]
+    return True
+
+
 def _apply_rendering(mandate: dict[str, Any], *, rendering_text: str | None, confirmed_text: str | None) -> None:
-    text = rendering_text if rendering_text is not None else render_mandate(mandate)
+    """Bind the canonical KATA confirmation. A wallet displays this text; it does not replace it."""
+
+    text = render_mandate(mandate)
     if not isinstance(text, str) or not text.strip():
         raise KataError("rendering text is empty")
+    if rendering_text is not None and rendering_text != text:
+        raise KataError("confirmation text must be the text KATA produced")
     if confirmed_text is not None and confirmed_text != text:
         raise KataError("confirmed text does not match the mandate rendering")
     mandate["rendering"] = {"hash": text_hash(text), "text": text}

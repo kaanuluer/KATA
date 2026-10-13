@@ -19,13 +19,23 @@ from kata_intent.agreement import (
     MANDATE_TYP,
     Agreement,
     verify_event_chain,
+    verify_ledger_chain,
     verify_revocation,
 )
 from kata_intent.canonical import canonical_bytes
 from kata_intent.document import acknowledgement_document, mandate_hash, signing_document
 from kata_intent.errors import KataError
 from kata_intent.jws import same_bytes, verify_jws
+from kata_intent.fx import FxRateSource, convert_amount
+from kata_intent.institutions import InstitutionDirectory
 from kata_intent.keys import PublicKey, public_key_from_jwk
+from kata_intent.render import render_mandate
+from kata_intent.revocation import (
+    RevocationCache,
+    TransparencyLog,
+    verify_revocation_push,
+    verify_tree_head,
+)
 from kata_intent.values import MONEY_PURPOSES, as_time, coerce, money, parse_time, text_hash
 
 MONEY_ACTIONS = MONEY_PURPOSES
@@ -44,6 +54,7 @@ _APPEALABLE = frozenset(
         "DELEGATION_SCOPE_MISMATCH",
         "FREQUENCY_LIMIT_EXCEEDED",
         "MERCHANT_NOT_ALLOWED",
+        "NO_MATCHING_INTENT",
     }
 )
 
@@ -56,8 +67,11 @@ class Policy:
     require_amount_for_money: bool = True
     require_allowed_actions: bool = True
     clock_skew_seconds: int = 120
-    # Off by default. A currency-blind ceiling is a policy choice, not a fraud finding.
+    # Off by default. When set, it is a ceiling in reference_currency for an intent with no merchant and no category.
     unscoped_amount_ceiling: Decimal | None = None
+    reference_currency: str = "USD"
+    fx_rates: FxRateSource | None = None
+    max_ledger_staleness_seconds: int = 60
 
 
 @dataclass(frozen=True)
@@ -143,6 +157,16 @@ def evaluate(
     revocation_checked: bool = False,
     policy: Policy | None = None,
     intent_id: str | None = None,
+    ledger_head: str | None = None,
+    ledger_sequence: int | None = None,
+    ledger_as_of: str | datetime | None = None,
+    revocation_cache: RevocationCache | None = None,
+    revocation_pushes: Sequence[Mapping[str, Any]] | None = None,
+    push_notifier_key: PublicKey | None = None,
+    transparency_log: TransparencyLog | None = None,
+    tree_head: Mapping[str, Any] | None = None,
+    tree_head_key: PublicKey | None = None,
+    institution_directory: InstitutionDirectory | None = None,
 ) -> Evaluation:
     """Evaluate ``action`` against a signed mandate, an agreement, or a delegation that holds one.
 
@@ -165,6 +189,11 @@ def evaluate(
         raw["mandates"] = [raw.pop("mandate")]
 
     action_data = coerce(dict(action))
+    parameters = action_data.get("parameters") or {}
+    if ledger_sequence is None and parameters.get("ledger_sequence") is not None:
+        ledger_sequence = int(parameters["ledger_sequence"])
+    if ledger_head is None and "ledger_head" in parameters:
+        ledger_head = parameters.get("ledger_head")
     if "agreement_id" in raw and isinstance(raw.get("mandates"), list):
         agreement: dict[str, Any] | None = raw
         selected = _select_mandate(raw["mandates"], intent_id, action_data)
@@ -213,6 +242,7 @@ def evaluate(
         return _result("DENY", [("MANDATE_TAMPERED", "The mandate could not be hashed.")], None)
 
     _check_rendering(mandate, findings)
+    _check_algorithm(mandate, public_key, findings)
     _check_agent_document(mandate, findings)
     try:
         now_dt = _now(now)
@@ -222,12 +252,28 @@ def evaluate(
         now_dt = datetime.now(timezone.utc)
         proposed_at = None
 
+    gathered, push_failed, head_failed = _gather_revocations(
+        extra_revocations,
+        revocation_cache,
+        revocation_pushes,
+        push_notifier_key,
+        transparency_log,
+        tree_head,
+        tree_head_key,
+        now_dt,
+        findings,
+    )
+    if revocation_cache is not None or (transparency_log is not None and tree_head is not None and not head_failed):
+        revocation_checked = True
+
     if agreement is not None:
         _check_log(agreement, mandate, findings, expected_log_head, now_dt)
-        _check_revocations(agreement, mandate, public_key, extra_revocations, verified_hash, findings)
-        _check_acknowledgements(agreement, mandate, verified_hash, findings)
-    elif extra_revocations and public_key is not None:
-        _check_external_revocations(extra_revocations, public_key, None, verified_hash, findings)
+        _check_revocations(agreement, mandate, public_key, gathered, verified_hash, findings)
+        _check_acknowledgements(agreement, mandate, verified_hash, findings, institution_directory, now_dt)
+    elif gathered and public_key is not None:
+        _check_external_revocations(gathered, public_key, None, verified_hash, findings)
+    if push_failed:
+        findings.deny("REVOCATION_PUSH_INVALID", "A revocation webhook did not verify.")
     _check_family(agreement, mandate, findings)
 
     if mandate.get("revocation_endpoint") and not revocation_checked and "MANDATE_REVOKED" not in findings._deny_codes:
@@ -254,9 +300,22 @@ def evaluate(
         )
     _check_binding(mandate, agent_id, agent_public_key, findings)
     _check_delegation(mandate, action_data, delegation, proposed_at, now_dt, findings)
-    _check_ledger(mandate, action_data, ledger, proposed_at, seen_action_ids, findings)
+    _check_ledger(
+        mandate,
+        action_data,
+        ledger,
+        proposed_at,
+        seen_action_ids,
+        findings,
+        agreement,
+        ledger_head,
+        ledger_sequence,
+        ledger_as_of,
+        now_dt,
+        policy,
+    )
     _check_replay_flags(action_data, findings)
-    _check_over_broad(mandate, policy, findings)
+    _check_over_broad(mandate, policy, findings, now_dt)
 
     return _finish(findings, verified_hash)
 
@@ -283,6 +342,8 @@ def _verify_signature(
         return "MANDATE_TAMPERED", public
     if not same_bytes(rebuilt, check.payload_bytes):
         return "MANDATE_TAMPERED", public
+    if mandate.get("algorithm") != public.algorithm:
+        return "MANDATE_SIGNATURE_INVALID", public
     return None, public
 
 
@@ -293,30 +354,88 @@ def _select_mandate(
     if not live:
         return _result("DENY", [("AGREEMENT_MALFORMED", "The agreement has no live intent.")], None)
     chosen = intent_id or (action.get("parameters") or {}).get("intent_id")
-    if chosen is None:
-        if len(live) == 1:
-            return live[0]
+    if chosen is not None:
         for mandate in live:
-            failure, _public = _verify_signature(mandate, None)
-            if failure:
-                code = "MANDATE_TAMPERED" if failure == "MANDATE_TAMPERED" else "MANDATE_SIGNATURE_INVALID"
-                return _result("DENY", [(code, "A live mandate does not verify, so an intent cannot be selected.")], None)
+            if (mandate.get("intent") or {}).get("intent_id") == chosen:
+                return mandate
+        return _result("DENY", [("INTENT_UNKNOWN", f"No live intent has id {chosen}.")], None)
+    if len(live) == 1:
+        return live[0]
+    matches = [mandate for mandate in live if _intent_matches(mandate, action)]
+    if len(matches) == 1:
+        return matches[0]
+    if not matches:
         return _result(
-            "STEP_UP",
-            [("INTENT_NOT_SELECTED", "Several intents are live and the action does not name one.")],
+            "DENY",
+            [("NO_MATCHING_INTENT", "No live intent matches this action.")],
             None,
         )
-    for mandate in live:
-        if (mandate.get("intent") or {}).get("intent_id") == chosen:
-            return mandate
-    return _result("DENY", [("INTENT_UNKNOWN", f"No live intent has id {chosen}.")], None)
+    for mandate in matches:
+        failure, _public = _verify_signature(mandate, None)
+        if failure:
+            code = "MANDATE_TAMPERED" if failure == "MANDATE_TAMPERED" else "MANDATE_SIGNATURE_INVALID"
+            return _result("DENY", [(code, "A matching mandate does not verify, so an intent cannot be selected.")], None)
+    return _result(
+        "STEP_UP",
+        [("INTENT_NOT_SELECTED", "More than one live intent matches this action.")],
+        None,
+    )
+
+
+def _intent_matches(mandate: Mapping[str, Any], action: Mapping[str, Any]) -> bool:
+    """True when this intent could authorize the action's verb, amount, currency, merchant, and category."""
+
+    intent = mandate.get("intent") or {}
+    limits = mandate.get("limits") or {}
+    action_type = action.get("action_type")
+    allowed = intent.get("allowed_actions")
+    if isinstance(allowed, list) and action_type not in allowed:
+        return False
+    if action.get("amount") is not None and intent.get("maximum_amount") is not None:
+        try:
+            if money(action["amount"]) > money(intent["maximum_amount"]):
+                return False
+        except KataError:
+            return False
+    if intent.get("currency") and action.get("currency") and intent["currency"] != action["currency"]:
+        return False
+    identifiers = _merchant_identifiers(action)
+    allow = intent.get("merchant_constraints") or []
+    deny = limits.get("merchant_denylist") or []
+    if isinstance(deny, list) and deny and any(identifier in deny for identifier in identifiers):
+        return False
+    if isinstance(allow, list) and allow and not any(identifier in allow for identifier in identifiers):
+        return False
+    category = intent.get("category")
+    observed = (action.get("context") or {}).get("category") or (action.get("parameters") or {}).get("category")
+    if category and observed and observed != category:
+        return False
+    return True
 
 
 def _check_rendering(mandate: Mapping[str, Any], findings: _Findings) -> None:
     rendering = mandate.get("rendering") or {}
+    try:
+        produced = render_mandate(dict(mandate))
+    except KataError:
+        findings.deny("RENDERING_MISMATCH", "KATA could not produce the confirmation text.")
+        return
+    produced_hash = text_hash(produced)
     text = rendering.get("text")
-    if not isinstance(text, str) or not text.strip() or rendering.get("hash") != text_hash(text):
-        findings.deny("RENDERING_MISMATCH", "The signed confirmation text does not match its hash.")
+    if text != produced or rendering.get("hash") != produced_hash:
+        findings.deny(
+            "RENDERING_MISMATCH",
+            "The signed confirmation hash does not equal the hash of the text KATA produced.",
+        )
+
+
+def _check_algorithm(mandate: Mapping[str, Any], public_key: PublicKey | None, findings: _Findings) -> None:
+    algorithm = mandate.get("algorithm")
+    if algorithm not in {"EdDSA", "ES256"}:
+        findings.deny("MANDATE_SIGNATURE_INVALID", "The mandate does not name EdDSA or ES256.")
+        return
+    if public_key is not None and public_key.algorithm != algorithm:
+        findings.deny("MANDATE_SIGNATURE_INVALID", "The mandate algorithm does not match the signing key.")
 
 
 def _check_agent_document(mandate: Mapping[str, Any], findings: _Findings) -> None:
@@ -329,7 +448,7 @@ def _check_agent_document(mandate: Mapping[str, Any], findings: _Findings) -> No
     try:
         key = public_key_from_jwk(dict(embedded))
     except KataError:
-        findings.deny("AGENT_BINDING_MISMATCH", "The embedded agent key is not an Ed25519 public key.")
+        findings.deny("AGENT_BINDING_MISMATCH", "The embedded agent key is not an Ed25519 or P-256 public key.")
         return
     if key.fingerprint != fingerprint:
         findings.deny("AGENT_BINDING_MISMATCH", "The agent key fingerprint does not match the embedded key.")
@@ -417,11 +536,53 @@ def _revocation_matches(
     return revocation.get("mandate_hash") == current_hash
 
 
+def _gather_revocations(
+    extra: Sequence[Mapping[str, Any]] | None,
+    cache: RevocationCache | None,
+    pushes: Sequence[Mapping[str, Any]] | None,
+    notifier: PublicKey | None,
+    log: TransparencyLog | None,
+    tree_head: Mapping[str, Any] | None,
+    tree_head_key: PublicKey | None,
+    now: datetime,
+    findings: _Findings,
+) -> tuple[list[dict[str, Any]], bool, bool]:
+    gathered = [dict(item) for item in extra or [] if isinstance(item, Mapping)]
+    push_failed = False
+    head_failed = False
+    if cache is not None:
+        try:
+            gathered.extend(cache.get(now))
+        except KataError:
+            findings.deny("REVOCATION_LIST_UNAVAILABLE", "The revocation list could not be pulled.")
+    if pushes:
+        if notifier is None:
+            push_failed = True
+        else:
+            for notice in pushes:
+                inner = verify_revocation_push(notice, notifier)
+                if inner is None:
+                    push_failed = True
+                else:
+                    gathered.append(inner)
+    if log is not None or tree_head is not None:
+        if log is None or tree_head is None or tree_head_key is None or not verify_tree_head(tree_head, tree_head_key, log):
+            head_failed = True
+            findings.deny("TREE_HEAD_INVALID", "The transparency log tree head does not verify.")
+        elif not log.verify_chain():
+            findings.deny("TRANSPARENCY_LOG_TAMPERED", "The transparency log hash chain does not verify.")
+        else:
+            gathered.extend(log.revocations())
+    return gathered, push_failed, head_failed
+
+
 def _check_acknowledgements(
     agreement: Mapping[str, Any],
     mandate: Mapping[str, Any],
     current_hash: str | None,
     findings: _Findings,
+    directory: InstitutionDirectory | None = None,
+    now: datetime | None = None,
 ) -> None:
     required = set(mandate.get("required_acknowledgements") or [])
     satisfied: set[str] = set()
@@ -446,6 +607,15 @@ def _check_acknowledgements(
         if ack.get("role") == "agent" and (key is None or key.fingerprint != agent_fingerprint):
             findings.deny("ACK_KEY_MISMATCH", "The agent acknowledgement was signed by a different key.")
             continue
+        role = ack.get("role")
+        if role in {"merchant", "psp", "issuer"} and directory is not None and key is not None and now is not None:
+            domain = ack.get("domain") if isinstance(ack.get("domain"), str) else None
+            if not directory.trusts(str(ack.get("id") or ""), key, now, domain):
+                findings.deny(
+                    "INSTITUTION_KEY_UNTRUSTED",
+                    "The institution key is not in the KATA allowlist or the domain's published keys.",
+                )
+                continue
         role = ack.get("role")
         if isinstance(role, str):
             satisfied.add(role)
@@ -792,6 +962,12 @@ def _check_ledger(
     proposed_at: datetime | None,
     seen_action_ids: set[str] | None,
     findings: _Findings,
+    agreement: Mapping[str, Any] | None,
+    ledger_head: str | None,
+    ledger_sequence: int | None,
+    ledger_as_of: str | datetime | None,
+    now: datetime,
+    policy: Policy,
 ) -> None:
     limits = mandate.get("limits") or {}
     parent = mandate.get("parent_limits") or {}
@@ -810,10 +986,52 @@ def _check_ledger(
             )
         entries: list[LedgerEntry] = []
     else:
+        raw_entries = [dict(item) for item in ledger if isinstance(item, Mapping)]
+        if len(raw_entries) != len(list(ledger)) or not verify_ledger_chain(raw_entries):
+            findings.deny("LEDGER_TAMPERED", "The spend ledger hash chain does not verify.")
+            return
+        held_sequence = len(raw_entries)
+        held_head = raw_entries[-1]["entry_hash"] if raw_entries else None
+        if agreement is not None and ledger is agreement.get("ledger") and agreement.get("ledger_sequence") not in (None, held_sequence):
+            findings.deny("LEDGER_TAMPERED", "The ledger sequence does not match the entries KATA holds.")
+        if needs_cumulative or needs_frequency:
+            if ledger_sequence is None:
+                findings.deny(
+                    "LEDGER_HEAD_MISSING",
+                    "This authorization check does not carry the ledger head sequence.",
+                )
+            elif ledger_sequence < held_sequence:
+                findings.deny(
+                    "LEDGER_TRUNCATED",
+                    f"The authorization check names sequence {ledger_sequence}, and the ledger holds {held_sequence}.",
+                )
+            elif ledger_sequence > held_sequence or ledger_head != held_head:
+                findings.deny(
+                    "LEDGER_HEAD_MISMATCH",
+                    "The authorization check names a ledger head this ledger does not have.",
+                )
+            as_of_text = ledger_as_of if ledger_as_of is not None else (agreement or {}).get("ledger_as_of")
+            if as_of_text is not None:
+                try:
+                    if isinstance(as_of_text, datetime):
+                        if as_of_text.tzinfo is None:
+                            raise KataError("timestamps must include a timezone")
+                        as_of_dt = as_of_text.astimezone(timezone.utc)
+                    else:
+                        as_of_dt = parse_time(str(as_of_text))
+                    age = now - as_of_dt
+                except KataError:
+                    findings.deny("LEDGER_MALFORMED", "The ledger replica time could not be read.")
+                    age = None
+                if age is not None and age > timedelta(seconds=policy.max_ledger_staleness_seconds):
+                    findings.step(
+                        "LEDGER_STALE",
+                        f"The ledger replica is older than {policy.max_ledger_staleness_seconds} seconds.",
+                    )
         entries = []
-        for raw in ledger:
+        for raw in raw_entries:
             try:
-                entries.append(raw if isinstance(raw, LedgerEntry) else LedgerEntry.from_dict(raw))
+                entries.append(LedgerEntry.from_dict(raw))
             except (KataError, KeyError, TypeError):
                 findings.deny("LEDGER_MALFORMED", "A ledger entry could not be read.")
                 return
@@ -879,7 +1097,7 @@ def _check_replay_flags(action: Mapping[str, Any], findings: _Findings) -> None:
         )
 
 
-def _check_over_broad(mandate: Mapping[str, Any], policy: Policy, findings: _Findings) -> None:
+def _check_over_broad(mandate: Mapping[str, Any], policy: Policy, findings: _Findings, now: datetime) -> None:
     intent = mandate.get("intent") or {}
     missing: list[str] = []
     expiry = mandate.get("expires_at") or intent.get("time_limit")
@@ -896,9 +1114,29 @@ def _check_over_broad(mandate: Mapping[str, Any], policy: Policy, findings: _Fin
         and ceiling is not None
         and not intent.get("category")
         and not (intent.get("merchant_constraints") or [])
-        and money(ceiling) > money(policy.unscoped_amount_ceiling)
     ):
-        missing.append("amount is high with no category and no merchant")
+        currency = intent.get("currency") or policy.reference_currency
+        day = now.astimezone(timezone.utc).date().isoformat()
+        if currency == policy.reference_currency:
+            converted = money(ceiling)
+        elif policy.fx_rates is None:
+            converted = None
+            findings.step("FX_RATE_UNAVAILABLE", "The unscoped ceiling is on and no FX rate source was provided.")
+        else:
+            try:
+                converted = convert_amount(money(ceiling), str(currency), day, policy.reference_currency, policy.fx_rates)
+            except KataError:
+                converted = None
+                findings.step("FX_RATE_UNAVAILABLE", "The FX rate source rejected this currency.")
+            if converted is None:
+                findings.step(
+                    "FX_RATE_UNAVAILABLE",
+                    f"No {policy.reference_currency} rate for {currency} on {day}.",
+                )
+        if converted is not None and converted > money(policy.unscoped_amount_ceiling):
+            missing.append(
+                f"amount converts to more than {policy.unscoped_amount_ceiling} {policy.reference_currency} with no category and no merchant"
+            )
     if missing:
         findings.step("OVER_BROAD_INTENT", "Intent is over-broad: " + ", ".join(missing) + ".")
 
