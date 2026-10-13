@@ -66,6 +66,8 @@ Put the three lines into Vercel environment variables. The notifier JWK is publi
 
 | Method | Path | Auth | Behavior |
 |---|---|---|---|
+| `GET` | `/` | none | Web page. Explains the four questions, runs a sample intent check, and shows the revocation list, published keys, and transparency-log head. |
+| `POST` | `/demo/check` | none | Signs a sample intent with the public demo keys and returns `ALLOW`, `DENY`, or `STEP_UP`. |
 | `GET` | `/v1/revocations` | none | Pull list. `Cache-Control: public, max-age=300`. Body is `{"revocations": [...]}`. |
 | `POST` | `/v1/revocations/push` | notifier JWS | Stores a principal revocation and appends it to the log. A second delivery of the same revocation does not append again. |
 | `POST` | `/v1/log/entries` | `Authorization: Bearer $KATA_APPEND_TOKEN` | Append `{ "kind": "agreement" or "revocation", "body": { ... } }` and sign a new tree head. |

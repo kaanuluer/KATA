@@ -10,7 +10,9 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+
+from kata_service.demo import run_demo
 
 from kata_intent.canonical import canonical_bytes
 from kata_intent.errors import KataError
@@ -39,21 +41,29 @@ def create_app(
     app.state.store = store
     app.state.fx = fx_fetcher if fx_fetcher is not None else FrankfurterFx(resolved.fx_source_url)
 
+    pages = _static_dir()
+
     @app.get("/")
-    def index() -> dict[str, Any]:
-        return {
-            "service": "kata-deployment",
-            "routes": [
-                "GET /v1/revocations",
-                "POST /v1/revocations/push",
-                "POST /v1/log/entries",
-                "GET /v1/log/entries/{sequence}",
-                "GET /v1/log/entries/{sequence}/proof",
-                "GET /v1/log/head",
-                "GET /.well-known/kata-keys.json",
-                "GET /v1/fx",
-            ],
-        }
+    def home():
+        return HTMLResponse((pages / "index.html").read_text(encoding="utf-8"))
+
+    @app.get("/assets/{name}")
+    def asset(name: str):
+        if name not in {"app.css", "app.js"}:
+            return _error(404, "asset was not found")
+        media = "text/css" if name.endswith(".css") else "text/javascript"
+        return FileResponse(pages / name, media_type=media)
+
+    @app.post("/demo/check")
+    async def demo_check(request: Request):
+        try:
+            payload = await request.json()
+        except Exception:  # noqa: BLE001
+            return _error(400, "demo body must be JSON")
+        try:
+            return run_demo(payload)
+        except ValueError as exc:
+            return _error(400, str(exc))
 
     @app.get("/v1/revocations")
     def revocation_list():
@@ -247,6 +257,12 @@ def _bearer_matches(request: Request, expected: str) -> bool:
     if not header.startswith(prefix):
         return False
     return hmac.compare_digest(header[len(prefix) :], expected)
+
+
+def _static_dir():
+    from pathlib import Path
+
+    return Path(__file__).resolve().parent / "static"
 
 
 def _error(status: int, message: str) -> JSONResponse:
