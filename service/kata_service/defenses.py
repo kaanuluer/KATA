@@ -24,6 +24,14 @@ class ScorePolicy:
     positive_cap: bool = True
     settled_cap_total: int = 25
     settled_cap_per_reporter: int = 16
+    settled_cap_scales: bool = True
+    settled_cap_scale_volume: int = 500
+    settled_cap_scale_counterparties: int = 3
+    settled_cap_scale_step: int = 5
+    settled_cap_scale_max_steps: int = 8
+    settled_external_min: int = 100
+    operator_history: bool = True
+    operator_history_days: int = 90
     new_reporter_days: int = 30
     new_reporter_weight: float = 0.3
     ring_detection: bool = True
@@ -65,6 +73,7 @@ class ScorePolicy:
             require_transaction_link=False,
             reporter_reputation=False,
             positive_cap=False,
+            settled_cap_scales=False,
             ring_detection=False,
             velocity=False,
             rereg_link=False,
@@ -84,9 +93,17 @@ class ScoreContext:
     open_dispute_ids: set[str] = field(default_factory=set)
     identity_penalty: int = 0
     inherited_reports: list[dict[str, Any]] = field(default_factory=list)
+    external_counterparties: int = 0
+    external_volume: float = 0
 
 
-def effective_assurance(claimed: str, methods: set[str], *, require_proofing: bool) -> str:
+def effective_assurance(
+    claimed: str,
+    methods: set[str],
+    *,
+    require_proofing: bool,
+    operator_established: bool = False,
+) -> str:
     """Cap a claimed verification level at the proofs on file.
 
     key_binding supports key_bound. operator_review supports operator_verified.
@@ -100,6 +117,8 @@ def effective_assurance(claimed: str, methods: set[str], *, require_proofing: bo
         return "institution_attested"
     if claimed in {"institution_attested", "operator_verified"} and "operator_review" in methods:
         return "operator_verified"
+    if operator_established and claimed in {"institution_attested", "operator_verified"} and "key_binding" in methods:
+        return "operator_established"
     if "key_binding" in methods or claimed == "key_bound":
         return "key_bound" if claimed != "unverified" else "unverified"
     if claimed == "unverified":
@@ -138,6 +157,19 @@ def reporter_is_young(org_id: str, policy: ScorePolicy, context: ScoreContext) -
         return True
     age = age_days(created, context.now)
     return age is None or age < policy.new_reporter_days
+
+
+def scaled_settled_caps(policy: ScorePolicy, *, counterparties: int, volume: float) -> tuple[int, int]:
+    """Keep the base cap unless real external volume and diversity are both present."""
+
+    per_reporter = policy.settled_cap_per_reporter
+    total = policy.settled_cap_total
+    if not policy.settled_cap_scales:
+        return per_reporter, total
+    if counterparties < policy.settled_cap_scale_counterparties or volume < policy.settled_cap_scale_volume:
+        return per_reporter, total
+    steps = min(policy.settled_cap_scale_max_steps, int(volume // policy.settled_cap_scale_volume))
+    return per_reporter + steps * 2, total + steps * policy.settled_cap_scale_step
 
 
 def cap_settled_points(grants: list[tuple[int, str]], *, per_reporter: int, total: int) -> int:

@@ -2,6 +2,8 @@
 
 ## 2026-10-15
 
+An operator with 90 days of clean history can reach `operator_established` from a key binding alone, which sits between key-bound and operator-verified. The settled-credit cap stays 25 until an agent has three external counterparties and real external volume, and then it scales with that volume.
+
 Velocity limits now follow the action's segment and the agent's own history. Shopping, travel, treasury, and assistant use tighter daily windows, a day that jumps past three times the agent's median steps up, and so does a cash-out after a quiet week or a recent settled-credit rise.
 
 Ring detection now discounts settled credit inside a strongly connected component of any length, when organizations share a signal, and when a cluster of at least three organizations keeps 80% of its transaction volume inside the cluster.

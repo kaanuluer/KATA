@@ -44,6 +44,7 @@ from kata_service.defenses import (
     report_is_linked,
     reporter_is_young,
     reputation_multiplier,
+    scaled_settled_caps,
     velocity_reason,
     window_totals,
     within_days,
@@ -240,10 +241,15 @@ def trust_score(
         if points:
             parts.append((code, points, report["kind"]))
     if settled_grants:
+        per_reporter, total_cap = scaled_settled_caps(
+            policy,
+            counterparties=context.external_counterparties,
+            volume=context.external_volume,
+        )
         granted = cap_settled_points(
             settled_grants,
-            per_reporter=policy.settled_cap_per_reporter,
-            total=policy.settled_cap_total,
+            per_reporter=per_reporter,
+            total=total_cap,
         )
         if granted:
             parts.append(("SETTLED_ACTIVITY", granted, "capped settled credit"))
@@ -1509,6 +1515,16 @@ class BureauService:
         for item in interactions:
             linked.add(item["counterparty_org_id"])
             actions.setdefault(item["counterparty_org_id"], set()).add(item["action_id"])
+        external: dict[str, float] = {}
+        for item in interactions:
+            party = item["counterparty_org_id"]
+            if party == agent["operator_org_id"]:
+                continue
+            raw = item.get("amount")
+            amount = 0.0 if raw in (None, "") else float(raw)
+            if amount < self.policy.settled_external_min:
+                continue
+            external[party] = external.get(party, 0.0) + amount
         edges = self._report_edges(all_reports)
         penalty = 0
         inherited: list[dict[str, Any]] = []
@@ -1537,6 +1553,8 @@ class BureauService:
             open_dispute_ids=open_ids,
             identity_penalty=penalty,
             inherited_reports=inherited,
+            external_counterparties=len(external),
+            external_volume=sum(external.values()),
         )
 
     def _report_edges(self, all_reports: list[dict[str, Any]] | None = None) -> set[tuple[str, str]]:
@@ -1840,7 +1858,24 @@ class BureauService:
             agent["verification_level"],
             methods,
             require_proofing=self.policy.require_proofing,
+            operator_established=self._operator_established(agent),
         )
+
+    def _operator_established(self, agent: dict[str, Any]) -> bool:
+        if not self.policy.operator_history:
+            return False
+        org = self.repo.get_org(agent["operator_org_id"])
+        if org is None or org.get("status") != "active":
+            return False
+        age = age_days(str(org.get("created_at") or ""), self.stamp())
+        if age is None or age < self.policy.operator_history_days:
+            return False
+        reporters = {item["report_id"]: item["reporter_org_id"] for item in self.repo.all_reports()}
+        for item in self.repo.list_disputes():
+            if item.get("status") == "resolved" and item.get("outcome") == "upheld":
+                if reporters.get(item["report_id"]) == org["org_id"]:
+                    return False
+        return True
 
     def _record_proof(self, agent_id: str, org_id: str, method: str, evidence: str, at: str) -> dict[str, Any]:
         if method not in PROOFING_METHODS:

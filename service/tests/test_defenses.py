@@ -164,15 +164,14 @@ def test_reciprocal_settled_reports_do_not_raise_the_score():
     right = _org(client, "Right Operators", "agent_operator")
     left_key = _key(client, left["org_id"])
     right_key = _key(client, right["org_id"])
+    client.app.state.bureau.repo.set_org_created_at(left["org_id"], "2020-01-01T00:00:00Z")
+    client.app.state.bureau.repo.set_org_created_at(right["org_id"], "2020-01-01T00:00:00Z")
     _register_named(client, left_key, "agent-left", "prn_left", b"left-agent")
     _register_named(client, right_key, "agent-right", "prn_right", b"right-agent")
     _store(client, left_key, "agent-left", "prn_left", "agr_left", b"left-agent")
     _store(client, right_key, "agent-right", "prn_right", "agr_right", b"right-agent")
     assert client.post("/v1/verify", headers=_auth(left_key), json={"agent_id": "agent-right", "action": _action(10, "act_lr")}).json()["verdict"] == "ALLOW"
     assert client.post("/v1/verify", headers=_auth(right_key), json={"agent_id": "agent-left", "action": _action(10, "act_rl")}).json()["verdict"] == "ALLOW"
-    service = client.app.state.bureau
-    service.repo.set_org_created_at(left["org_id"], "2020-01-01T00:00:00Z")
-    service.repo.set_org_created_at(right["org_id"], "2020-01-01T00:00:00Z")
     baseline = client.get("/v1/agents/agent-right", headers=_auth(right_key)).json()["score"]
     one_way = client.post(
         "/v1/reports",

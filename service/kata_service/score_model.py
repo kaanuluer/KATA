@@ -23,6 +23,7 @@ class ScoreWeights:
     baseline: int = 500
     unverified: int = 0
     key_bound: int = 40
+    operator_established: int = 80
     operator_verified: int = 120
     institution_attested: int = 200
     operator_active: int = 80
@@ -44,6 +45,7 @@ class ScoreWeights:
         return {
             "unverified": self.unverified,
             "key_bound": self.key_bound,
+            "operator_established": self.operator_established,
             "operator_verified": self.operator_verified,
             "institution_attested": self.institution_attested,
         }.get(level, 0)
@@ -81,10 +83,11 @@ class ScoreWeights:
             "risk": "1000 - score",
             "baseline": self.baseline,
             "identity": {
-                "unverified": self.unverified,
-                "key_bound": self.key_bound,
-                "operator_verified": self.operator_verified,
-                "institution_attested": self.institution_attested,
+            "unverified": self.unverified,
+            "key_bound": self.key_bound,
+            "operator_established": self.operator_established,
+            "operator_verified": self.operator_verified,
+            "institution_attested": self.institution_attested,
             },
             "operator_active": self.operator_active,
             "operator_inactive": self.operator_inactive,
@@ -123,7 +126,7 @@ def weights_from_json(raw: str | None) -> ScoreWeights:
     if identity is not None:
         if not isinstance(identity, dict):
             raise ValueError("GAB_SCORE_WEIGHTS identity must be an object")
-        for level in ("unverified", "key_bound", "operator_verified", "institution_attested"):
+        for level in ("unverified", "key_bound", "operator_established", "operator_verified", "institution_attested"):
             if level in identity:
                 updates[level] = _bounded_int(identity[level], level, -500, 500)
     reporters = payload.get("reporter_weights")
