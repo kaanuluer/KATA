@@ -113,7 +113,7 @@ These rules are on unless `GAB_DEFENSES=0` or the matching flag is `0`.
 - Reporter reputation (`GAB_REPORTER_REPUTATION`): an organization younger than `GAB_NEW_REPORTER_DAYS` (30), or with no creation time, is multiplied by `GAB_NEW_REPORTER_WEIGHT` (0.3). Each upheld dispute against that reporter halves the weight again, up to eight times.
 - Positive cap (`GAB_POSITIVE_CAP`): settled points diminish for repeat reports from the same reporter, then stop at `GAB_SETTLED_CAP_PER_REPORTER` (16) and `GAB_SETTLED_CAP_TOTAL` (25).
 - Ring detection (`GAB_RING_DETECTION`): settled credit is dropped when the reporter and the agent's operator sit on a reciprocal pair or a closed loop of up to four organizations. Filing the report that closes the loop rescores the other agents in that loop. Reason code `RING_DISCOUNTED`.
-- Re-registration (`GAB_REREG_LINK`): a new agent inherits `IDENTITY_LINK` when the same operator, or the same optional `device_signal` or `key_signal`, matches an agent that was revoked, suspended, or scored under 500 within `GAB_REREG_LOOKBACK_DAYS` (14). The penalty is `GAB_REREG_PENALTY` (80), or the linked agent's deficit below 500 when that is larger, and it is capped at 200.
+- Re-registration (`GAB_REREG_LINK`): a new agent is linked to a denied agent in three ways. The same operator matches for `GAB_REREG_LOOKBACK_DAYS` (14). A shared `device_signal`, `key_signal`, `payment_instrument`, `timing_signal`, or `proofing_evidence` matches across operator organizations for `GAB_REREG_SIGNAL_LOOKBACK_DAYS` (90). A revoked, suspended, or fraud-reported agent matches for `GAB_REREG_MALICIOUS_LOOKBACK_DAYS` (180), including the same operator after the 14-day window. The flat `IDENTITY_LINK` penalty is still `GAB_REREG_PENALTY` (80), or the deficit below 500, capped at 200, and it still expires after 14 days. `GAB_INHERIT_HISTORY` also copies that agent's negative reports onto the new score as `INHERITED_HISTORY`, decaying by half every `GAB_INHERIT_HALF_LIFE_DAYS` (30). Positive reports are not copied. The service does not collect a government identifier. Callers should pass a hash for a payment instrument or a timing pattern.
 - Dispute hold (`GAB_DISPUTE_HOLD`): while a dispute is open or under review, a negative report from a young reporter does not reduce the score. Reason code `DISPUTE_HOLD`. Resolving the dispute removes the hold.
 
 The synthetic stress test on `/simulation` is a separate model. Its "proposed defenses" column is not a measurement of these rules.
@@ -294,6 +294,10 @@ Set secrets in the host. Do not commit values.
 | `GAB_VELOCITY_DAILY_COUNT` | No | no | Default 25 allowed verifies per UTC day per agent and per operator. |
 | `GAB_VELOCITY_DAILY_AMOUNT` | No | no | Default 15,000 in the action currency per UTC day. |
 | `GAB_REREG_LINK` | No | no | Default follows `GAB_DEFENSES`. |
+| `GAB_REREG_SIGNAL_LOOKBACK_DAYS` | No | no | Default 90. Shared device, key, payment, timing, or evidence signals. |
+| `GAB_REREG_MALICIOUS_LOOKBACK_DAYS` | No | no | Default 180. Revoked, suspended, or fraud-reported agents. |
+| `GAB_INHERIT_HISTORY` | No | no | Default follows `GAB_DEFENSES`. Copies negative reports from a linked agent with decay. |
+| `GAB_INHERIT_HALF_LIFE_DAYS` | No | no | Default 30. Inherited negative points halve once per this many days. |
 | `GAB_DISPUTE_HOLD` | No | no | Default follows `GAB_DEFENSES`. |
 | `GAB_REQUIRE_PROOFING` | No | no | Default on, including when `GAB_DEFENSES=0`. `0` scores the claimed verification level without the evidence gate. |
 | `GAB_SCORE_WEIGHTS` | No | no | Optional JSON override of the `gab-score-1` weights published at `GET /v1/score-model`. Invalid JSON or an out-of-range value is a configuration error. |

@@ -35,8 +35,10 @@ from kata_service.defenses import (
     ScorePolicy,
     agent_is_denied,
     cap_settled_points,
+    decay_factor,
     effective_assurance,
     inheritance_penalty,
+    lookback_days,
     report_is_linked,
     reporter_is_young,
     reputation_multiplier,
@@ -244,6 +246,21 @@ def trust_score(
         )
         if granted:
             parts.append(("SETTLED_ACTIVITY", granted, "capped settled credit"))
+    if policy.inherit_history:
+        inherited_total = 0
+        for report in context.inherited_reports:
+            if report.get("excluded"):
+                continue
+            inherited_weight = weights.reporter_weight(reporter_types.get(report.get("reporter_org_id", ""), ""))
+            if report.get("reporter_org_id") == operator_org_id:
+                inherited_weight *= weights.self_operator
+            inherited_weight *= reputation_multiplier(str(report.get("reporter_org_id") or ""), policy, context)
+            inherited_weight *= float(report.get("decay") or 0)
+            points, _code = _report_points(report, inherited_weight, weights)
+            if points < 0:
+                inherited_total += points
+        if inherited_total:
+            parts.append(("INHERITED_HISTORY", inherited_total, "linked denied agent"))
 
     raw = weights.baseline + sum(points for _code, points, _detail in parts)
     score = max(0, min(1000, int(raw)))
@@ -1469,12 +1486,21 @@ class BureauService:
             and item["agent_id"] in operators
         }
         penalty = 0
+        inherited: list[dict[str, Any]] = []
         if self.policy.rereg_link:
             linked_agents = []
             for link in self.repo.links_for_agent(agent["agent_id"]):
                 other = self.repo.get_agent(link["linked_agent_id"])
-                if other is not None:
-                    linked_agents.append(other)
+                if other is None:
+                    continue
+                linked_agents.append(other)
+                if not self.policy.inherit_history:
+                    continue
+                decay = decay_factor(str(link.get("created_at") or ""), self.stamp(), self.policy.inherit_half_life_days)
+                for report in self.repo.reports_for_agent(other["agent_id"]):
+                    copied = dict(report)
+                    copied["decay"] = decay
+                    inherited.append(copied)
             penalty = inheritance_penalty(linked_agents, now=self.stamp(), policy=self.policy)
         return ScoreContext(
             now=self.stamp(),
@@ -1487,6 +1513,7 @@ class BureauService:
             else set(),
             open_dispute_ids=open_ids,
             identity_penalty=penalty,
+            inherited_reports=inherited,
         )
 
     def _report_counts(self, agent: dict[str, Any], report: dict[str, Any]) -> bool:
@@ -1505,28 +1532,30 @@ class BureauService:
         return view
 
     def _link_denied_identity(self, record: dict[str, Any], body: dict[str, Any], at: str) -> list[str]:
-        signals: list[tuple[str, str]] = []
-        for kind in ("device", "key"):
-            raw = body.get(f"{kind}_signal")
-            if raw:
-                signals.append((kind, _short(str(raw), f"{kind}_signal", 128)))
+        signals = _registration_signals(body)
         for kind, value in signals:
             self.repo.add_signal({"agent_id": record["agent_id"], "kind": kind, "value": value, "created_at": at})
         if not self.policy.rereg_link:
             return []
         denied: dict[str, dict[str, Any]] = {}
-        for other in self.repo.list_agents(operator_org_id=record["operator_org_id"]):
-            if other["agent_id"] == record["agent_id"]:
-                continue
-            if agent_is_denied(other, self.policy) and within_days(str(other.get("updated_at") or ""), at, self.policy.rereg_lookback_days):
+
+        def consider(other: dict[str, Any], *, signal: bool) -> None:
+            if other["agent_id"] == record["agent_id"] or other["agent_id"] in denied:
+                return
+            if not agent_is_denied(other, self.policy):
+                return
+            reports = self.repo.reports_for_agent(other["agent_id"])
+            window = lookback_days(other, self.policy, reports, signal=signal)
+            if within_days(str(other.get("updated_at") or ""), at, window):
                 denied[other["agent_id"]] = other
+
+        for other in self.repo.list_agents(operator_org_id=record["operator_org_id"]):
+            consider(other, signal=False)
         for kind, value in signals:
             for agent_id in self.repo.agent_ids_for_signal(kind, value):
-                if agent_id == record["agent_id"] or agent_id in denied:
-                    continue
                 other = self.repo.get_agent(agent_id)
-                if other and agent_is_denied(other, self.policy) and within_days(str(other.get("updated_at") or ""), at, self.policy.rereg_lookback_days):
-                    denied[agent_id] = other
+                if other is not None:
+                    consider(other, signal=True)
         linked_ids = []
         for agent_id in denied:
             self.repo.add_identity_link(
@@ -1785,6 +1814,23 @@ def _agreement_summary(record: dict[str, Any]) -> dict[str, Any]:
         "parent_cumulative_maximum": parent.get("cumulative_maximum"),
         "intents": intents,
     }
+
+
+def _registration_signals(body: dict[str, Any]) -> list[tuple[str, str]]:
+    signals: list[tuple[str, str]] = []
+    for kind, field in (
+        ("device", "device_signal"),
+        ("key", "key_signal"),
+        ("payment", "payment_instrument"),
+        ("timing", "timing_signal"),
+    ):
+        raw = body.get(field)
+        if raw:
+            signals.append((kind, _short(str(raw), field, 128)))
+    evidence = str(body.get("proofing_evidence") or "").strip()
+    if _EVIDENCE.match(evidence):
+        signals.append(("evidence", evidence))
+    return signals
 
 
 def _fingerprint(value: str) -> str:

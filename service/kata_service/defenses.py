@@ -35,8 +35,12 @@ class ScorePolicy:
     velocity_probation_multiplier: float = 0.5
     rereg_link: bool = True
     rereg_lookback_days: int = 14
+    rereg_signal_lookback_days: int = 90
+    rereg_malicious_lookback_days: int = 180
     rereg_penalty: int = 80
     rereg_penalty_cap: int = 200
+    inherit_history: bool = True
+    inherit_half_life_days: int = 30
     deny_score: int = 500
     dispute_hold: bool = True
     probation_days: int = 14
@@ -56,6 +60,7 @@ class ScorePolicy:
             ring_detection=False,
             velocity=False,
             rereg_link=False,
+            inherit_history=False,
             dispute_hold=False,
         )
 
@@ -70,6 +75,7 @@ class ScoreContext:
     ring_edges: set[tuple[str, str]] = field(default_factory=set)
     open_dispute_ids: set[str] = field(default_factory=set)
     identity_penalty: int = 0
+    inherited_reports: list[dict[str, Any]] = field(default_factory=list)
 
 
 def effective_assurance(claimed: str, methods: set[str], *, require_proofing: bool) -> str:
@@ -221,6 +227,42 @@ def window_totals(rows: list[dict[str, Any]], *, day: str, currency: str) -> tup
         if row.get("currency") == currency and row.get("amount") not in (None, ""):
             total += Decimal(str(row["amount"]))
     return count, total
+
+
+def confirmed_malicious(agent: dict[str, Any], reports: list[dict[str, Any]] | None = None) -> bool:
+    """Revoked, suspended, or a fraud report still on the agent."""
+
+    if agent.get("status") in {"suspended", "revoked"}:
+        return True
+    for report in reports or []:
+        if report.get("kind") == "fraud_incident" and not report.get("excluded"):
+            return True
+    return False
+
+
+def lookback_days(agent: dict[str, Any], policy: ScorePolicy, reports: list[dict[str, Any]] | None = None, *, signal: bool) -> int:
+    """How far back a denied agent can still be linked.
+
+    A shared signal outlives the same-operator window. A confirmed-malicious
+    agent uses the longest window, with or without a signal.
+    """
+
+    if confirmed_malicious(agent, reports):
+        return policy.rereg_malicious_lookback_days
+    if signal:
+        return policy.rereg_signal_lookback_days
+    return policy.rereg_lookback_days
+
+
+def decay_factor(start: str, now: str, half_life_days: int) -> float:
+    """1 at the link, half after one half-life, and so on."""
+
+    if half_life_days <= 0:
+        return 1.0
+    age = age_days(start, now)
+    if age is None or age <= 0:
+        return 1.0
+    return float(0.5 ** (age / half_life_days))
 
 
 def agent_is_denied(agent: dict[str, Any], policy: ScorePolicy) -> bool:

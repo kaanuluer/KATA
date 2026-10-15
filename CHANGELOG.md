@@ -2,6 +2,8 @@
 
 ## 2026-10-15
 
+Re-registration links a denied agent across a new operator organization when a device, key, payment-instrument, timing, or evidence-hash signal matches, and a revoked, suspended, or fraud-reported agent stays linkable for 180 days. The new agent inherits that negative history with a 30-day half-life (`INHERITED_HISTORY`), in addition to the flat penalty while the 14-day window is still open.
+
 The individual portal lists the disputes a principal has filed, and each agent card shows the assurance level, the score, and the risk complement. Revoke and dispute were already on the portal API.
 
 Consortium members can record a key fingerprint and ask whether enough other members have seen it. The sighting stores the fingerprint only. `POST /v1/consortium/match` returns `matched: true` and the other-member count when that count reaches `GAB_CONSORTIUM_MATCH_THRESHOLD` (default 2). Below the threshold the count is omitted. The response does not name the other members. `004_consortium.sql` adds the tables. This match is exact. It is not a private set intersection, and it does not share reports.
