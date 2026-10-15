@@ -452,6 +452,31 @@ class PostgresRepo:
         rows = self._all("SELECT agent_id FROM gab_agent_signals WHERE kind = %s AND value = %s", (kind, value))
         return [row[0] for row in rows]
 
+    def all_interactions(self) -> list[dict[str, Any]]:
+        rows = self._all(
+            """
+            SELECT interaction_id, agent_id, operator_org_id, counterparty_org_id, action_id, amount, currency, agreement_id, at
+            FROM gab_interactions
+            """
+        )
+        return [_interaction_row(row) for row in rows]
+
+    def add_org_signal(self, record: dict[str, Any]) -> None:
+        self._execute(
+            """
+            INSERT INTO gab_org_signals (org_id, kind, value, created_at) VALUES (%s, %s, %s, %s)
+            ON CONFLICT (org_id, kind, value) DO NOTHING
+            """,
+            (record["org_id"], record["kind"], record["value"], record["created_at"]),
+        )
+
+    def org_signal_groups(self) -> list[set[str]]:
+        rows = self._all("SELECT org_id, value FROM gab_org_signals")
+        grouped: dict[str, set[str]] = {}
+        for org_id, value in rows:
+            grouped.setdefault(value, set()).add(org_id)
+        return [members for members in grouped.values() if len(members) >= 2]
+
     def add_identity_link(self, record: dict[str, Any]) -> None:
         self._execute(
             """

@@ -110,6 +110,8 @@ def _score_policy(env: dict[str, str], weights: ScoreWeights | None = None) -> S
         new_reporter_days=_positive_int(env.get("GAB_NEW_REPORTER_DAYS"), 30),
         new_reporter_weight=new_weight,
         ring_detection=flag("GAB_RING_DETECTION"),
+        ring_min_cluster=_positive_int(env.get("GAB_RING_MIN_CLUSTER"), 3),
+        ring_internal_ratio=_unit_float(env.get("GAB_RING_INTERNAL_RATIO"), 0.8),
         velocity=flag("GAB_VELOCITY"),
         velocity_daily_count=_positive_int(env.get("GAB_VELOCITY_DAILY_COUNT"), 25),
         velocity_daily_amount=_positive_int(env.get("GAB_VELOCITY_DAILY_AMOUNT"), 15000),
@@ -132,6 +134,19 @@ def _optional_flag(env: dict[str, str], name: str, default: bool) -> bool:
     if raw is None:
         return default
     return raw.lower() in {"1", "true", "yes"}
+
+
+def _unit_float(value: str | None, default: float) -> float:
+    text = _blank(value)
+    if text is None:
+        return default
+    try:
+        number = float(text)
+    except ValueError:
+        return default
+    if number < 0 or number > 1:
+        return default
+    return number
 
 
 def _flag(value: str | None) -> bool:

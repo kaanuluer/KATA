@@ -2,6 +2,8 @@
 
 ## 2026-10-15
 
+Ring detection now discounts settled credit inside a strongly connected component of any length, when organizations share a signal, and when a cluster of at least three organizations keeps 80% of its transaction volume inside the cluster.
+
 Re-registration links a denied agent across a new operator organization when a device, key, payment-instrument, timing, or evidence-hash signal matches, and a revoked, suspended, or fraud-reported agent stays linkable for 180 days. The new agent inherits that negative history with a 30-day half-life (`INHERITED_HISTORY`), in addition to the flat penalty while the 14-day window is still open.
 
 The individual portal lists the disputes a principal has filed, and each agent card shows the assurance level, the score, and the risk complement. Revoke and dispute were already on the portal API.

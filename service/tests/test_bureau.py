@@ -411,7 +411,7 @@ def test_rate_limit_validation_and_migration_sql():
     assert second.status_code == 200
     assert third.status_code == 429
     statements = "\n".join(migration_statements())
-    for table in ("gab_organizations", "gab_api_keys", "gab_agents", "gab_reports", "gab_inquiries", "gab_disputes", "gab_audit", "gab_interactions", "gab_identity_links", "gab_proofings", "gab_consortium_members", "gab_consortium_sightings"):
+    for table in ("gab_organizations", "gab_api_keys", "gab_agents", "gab_reports", "gab_inquiries", "gab_disputes", "gab_audit", "gab_interactions", "gab_identity_links", "gab_proofings", "gab_consortium_members", "gab_consortium_sightings", "gab_org_signals"):
         assert table in statements
     assert "credit bureau" not in statements.lower()
 

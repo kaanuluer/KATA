@@ -47,6 +47,8 @@ class ScorePolicy:
     require_proofing: bool = True
     weights: ScoreWeights = field(default_factory=ScoreWeights)
     ring_max_cycle: int = 4
+    ring_min_cluster: int = 3
+    ring_internal_ratio: float = 0.8
     ring_search_limit: int = 20000
 
     @classmethod
@@ -190,6 +192,164 @@ def ring_edges(edges: set[tuple[str, str]], *, max_cycle: int = 4, search_limit:
                 elif nxt not in path and len(path) < max_cycle:
                     stack.append((nxt, path + [nxt]))
     return discounted
+
+
+def cluster_edges(
+    report_edges: set[tuple[str, str]],
+    *,
+    shared_groups: list[set[str]] | None = None,
+    volumes: list[tuple[str, str, float]] | None = None,
+    min_cluster: int = 3,
+    internal_ratio: float = 0.8,
+    search_limit: int = 20000,
+) -> set[tuple[str, str]]:
+    """Settled edges to drop.
+
+    A strongly connected component catches a closed loop of any length.
+    Organizations that share a signal are treated as one node, so a one-way
+    reporter in that group does not get settled credit. A component of at
+    least min_cluster organizations whose internal transaction volume is at
+    least internal_ratio of its total volume is discounted the same way.
+    """
+
+    nodes: set[str] = set()
+    for source, target in report_edges:
+        if source and target:
+            nodes.add(source)
+            nodes.add(target)
+    for group in shared_groups or []:
+        nodes.update(item for item in group if item)
+    for left, right, _amount in volumes or []:
+        if left and right:
+            nodes.add(left)
+            nodes.add(right)
+    parent = {node: node for node in nodes}
+
+    def find(node: str) -> str:
+        root = node
+        while parent[root] != root:
+            root = parent[root]
+        while parent[node] != root:
+            parent[node], node = root, parent[node]
+        return root
+
+    def union(left: str, right: str) -> None:
+        if left not in parent or right not in parent:
+            return
+        root_left, root_right = find(left), find(right)
+        if root_left != root_right:
+            parent[root_right] = root_left
+
+    for group in shared_groups or []:
+        members = [item for item in group if item in parent]
+        for item in members[1:]:
+            union(members[0], item)
+
+    directed: dict[str, set[str]] = {}
+    for source, target in report_edges:
+        if not source or not target or source == target:
+            continue
+        directed.setdefault(find(source), set()).add(find(target))
+    for targets in list(directed.values()):
+        for target in targets:
+            directed.setdefault(target, set())
+    component_of: dict[str, frozenset[str]] = {}
+    for component in _strongly_connected(directed):
+        if len(component) < 2:
+            continue
+        frozen = frozenset(component)
+        for node in component:
+            component_of[node] = frozen
+
+    discounted: set[tuple[str, str]] = set()
+    for source, target in report_edges:
+        if not source or not target or source == target:
+            continue
+        left, right = find(source), find(target)
+        if left == right or (left in component_of and component_of.get(left) == component_of.get(right)):
+            discounted.add((source, target))
+
+    if volumes:
+        weight: dict[tuple[str, str], float] = {}
+        for left, right, amount in volumes:
+            if not left or not right or left == right or amount <= 0:
+                continue
+            key = (left, right) if left < right else (right, left)
+            weight[key] = weight.get(key, 0.0) + float(amount)
+        undirected: dict[str, set[str]] = {}
+        for source, target in report_edges:
+            if not source or not target or source == target:
+                continue
+            undirected.setdefault(source, set()).add(target)
+            undirected.setdefault(target, set()).add(source)
+        seen_reports: set[str] = set()
+        for start in undirected:
+            if start in seen_reports:
+                continue
+            stack = [start]
+            component: set[str] = set()
+            while stack:
+                node = stack.pop()
+                if node in seen_reports:
+                    continue
+                seen_reports.add(node)
+                component.add(node)
+                stack.extend(undirected.get(node, ()))
+            if len(component) < min_cluster:
+                continue
+            internal = 0.0
+            external = 0.0
+            for (left, right), amount in weight.items():
+                if left in component and right in component:
+                    internal += amount
+                elif (left in component) ^ (right in component):
+                    external += amount
+            total = internal + external
+            if total <= 0 or internal / total < internal_ratio:
+                continue
+            for source, target in report_edges:
+                if source in component and target in component:
+                    discounted.add((source, target))
+    if len(discounted) > search_limit:
+        return set(list(discounted)[:search_limit])
+    return discounted
+
+
+def _strongly_connected(directed: dict[str, set[str]]) -> list[set[str]]:
+    index = 0
+    stack: list[str] = []
+    on_stack: set[str] = set()
+    indices: dict[str, int] = {}
+    low: dict[str, int] = {}
+    components: list[set[str]] = []
+
+    def visit(node: str) -> None:
+        nonlocal index
+        indices[node] = index
+        low[node] = index
+        index += 1
+        stack.append(node)
+        on_stack.add(node)
+        for nxt in directed.get(node, ()):
+            if nxt not in indices:
+                visit(nxt)
+                low[node] = min(low[node], low[nxt])
+            elif nxt in on_stack:
+                low[node] = min(low[node], indices[nxt])
+        if low[node] == indices[node]:
+            component: set[str] = set()
+            while stack:
+                nxt = stack.pop()
+                on_stack.discard(nxt)
+                component.add(nxt)
+                if nxt == node:
+                    break
+            components.append(component)
+
+    for node in list(directed):
+        if node not in indices:
+            visit(node)
+    return components
 
 
 def velocity_reason(

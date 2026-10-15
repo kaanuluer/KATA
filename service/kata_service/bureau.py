@@ -35,6 +35,7 @@ from kata_service.defenses import (
     ScorePolicy,
     agent_is_denied,
     cap_settled_points,
+    cluster_edges,
     decay_factor,
     effective_assurance,
     inheritance_penalty,
@@ -42,7 +43,6 @@ from kata_service.defenses import (
     report_is_linked,
     reporter_is_young,
     reputation_multiplier,
-    ring_edges,
     velocity_reason,
     window_totals,
     within_days,
@@ -318,6 +318,7 @@ class MemoryRepo:
         self.interactions: list[dict[str, Any]] = []
         self.identity_links: list[dict[str, Any]] = []
         self.agent_signals: list[dict[str, Any]] = []
+        self.org_signals: list[dict[str, Any]] = []
         self.proofings: list[dict[str, Any]] = []
         self.consortium_members: dict[str, dict[str, Any]] = {}
         self.consortium_sightings: list[dict[str, Any]] = []
@@ -328,7 +329,7 @@ class MemoryRepo:
         self._lock = threading.Lock()
 
     def migration_versions(self) -> list[str]:
-        return ["001_bureau.sql", "002_defenses.sql", "003_proofing.sql", "004_consortium.sql"]
+        return ["001_bureau.sql", "002_defenses.sql", "003_proofing.sql", "004_consortium.sql", "005_org_signals.sql"]
 
     def create_org(self, record: dict[str, Any]) -> None:
         with self._lock:
@@ -548,6 +549,24 @@ class MemoryRepo:
     def agent_ids_for_signal(self, kind: str, value: str) -> list[str]:
         with self._lock:
             return [item["agent_id"] for item in self.agent_signals if item["kind"] == kind and item["value"] == value]
+
+    def all_interactions(self) -> list[dict[str, Any]]:
+        with self._lock:
+            return [dict(item) for item in self.interactions]
+
+    def add_org_signal(self, record: dict[str, Any]) -> None:
+        with self._lock:
+            for item in self.org_signals:
+                if item["org_id"] == record["org_id"] and item["kind"] == record["kind"] and item["value"] == record["value"]:
+                    return
+            self.org_signals.append(dict(record))
+
+    def org_signal_groups(self) -> list[set[str]]:
+        with self._lock:
+            grouped: dict[str, set[str]] = {}
+            for item in self.org_signals:
+                grouped.setdefault(item["value"], set()).add(item["org_id"])
+            return [members for members in grouped.values() if len(members) >= 2]
 
     def add_identity_link(self, record: dict[str, Any]) -> None:
         with self._lock:
@@ -1127,6 +1146,16 @@ class BureauService:
             "excluded": False,
         }
         record["counts"] = self._report_counts(agent, record)
+        shared = str(body.get("shared_signal") or "").strip()
+        if shared:
+            self.repo.add_org_signal(
+                {
+                    "org_id": org["org_id"],
+                    "kind": "shared",
+                    "value": _short(shared, "shared_signal", 128),
+                    "created_at": self.stamp(),
+                }
+            )
         self.repo.add_report(record)
         self._log(
             "incident",
@@ -1421,20 +1450,23 @@ class BureauService:
 
     def _rescore_ring_peers(self, agent: dict[str, Any], reporter_org_id: str) -> None:
         involved = {reporter_org_id, agent["operator_org_id"]}
+        for source, target in self._discounted_edges():
+            involved.add(source)
+            involved.add(target)
         seen = {agent["agent_id"]}
-        for report in self.repo.all_reports():
-            if report.get("kind") != "transaction_outcome" or report.get("outcome") != "settled":
+        rescored = 0
+        for other in self.repo.list_agents():
+            if other["agent_id"] in seen or other["operator_org_id"] not in involved:
                 continue
-            other = self.repo.get_agent(report["agent_id"])
-            if other is None or other["agent_id"] in seen:
-                continue
-            if report["reporter_org_id"] in involved or other["operator_org_id"] in involved:
-                seen.add(other["agent_id"])
-                previous = other.get("score", 0)
-                self._rescore(other)
-                self.repo.save_agent(other)
-                if previous - other["score"] >= 50:
-                    self._alert(other, "score_drop", {"previous_score": previous, "score": other["score"]})
+            seen.add(other["agent_id"])
+            previous = other.get("score", 0)
+            self._rescore(other)
+            self.repo.save_agent(other)
+            rescored += 1
+            if previous - other["score"] >= 50:
+                self._alert(other, "score_drop", {"previous_score": previous, "score": other["score"]})
+            if rescored >= 200:
+                break
 
     def _rescore(self, agent: dict[str, Any]) -> None:
         operator = self.repo.get_org(agent["operator_org_id"])
@@ -1476,15 +1508,7 @@ class BureauService:
         for item in interactions:
             linked.add(item["counterparty_org_id"])
             actions.setdefault(item["counterparty_org_id"], set()).add(item["action_id"])
-        operators = {item["agent_id"]: item["operator_org_id"] for item in self.repo.list_agents()}
-        edges = {
-            (item["reporter_org_id"], operators[item["agent_id"]])
-            for item in all_reports
-            if item.get("kind") == "transaction_outcome"
-            and item.get("outcome") == "settled"
-            and not item.get("excluded")
-            and item["agent_id"] in operators
-        }
+        edges = self._report_edges(all_reports)
         penalty = 0
         inherited: list[dict[str, Any]] = []
         if self.policy.rereg_link:
@@ -1508,12 +1532,38 @@ class BureauService:
             upheld_by_reporter=upheld,
             linked_reporters=linked,
             linked_actions=actions,
-            ring_edges=ring_edges(edges, max_cycle=self.policy.ring_max_cycle, search_limit=self.policy.ring_search_limit)
-            if self.policy.ring_detection
-            else set(),
+            ring_edges=self._discounted_edges(edges) if self.policy.ring_detection else set(),
             open_dispute_ids=open_ids,
             identity_penalty=penalty,
             inherited_reports=inherited,
+        )
+
+    def _report_edges(self, all_reports: list[dict[str, Any]] | None = None) -> set[tuple[str, str]]:
+        reports = self.repo.all_reports() if all_reports is None else all_reports
+        operators = {item["agent_id"]: item["operator_org_id"] for item in self.repo.list_agents()}
+        return {
+            (item["reporter_org_id"], operators[item["agent_id"]])
+            for item in reports
+            if item.get("kind") == "transaction_outcome"
+            and item.get("outcome") == "settled"
+            and not item.get("excluded")
+            and item["agent_id"] in operators
+        }
+
+    def _discounted_edges(self, edges: set[tuple[str, str]] | None = None) -> set[tuple[str, str]]:
+        if not self.policy.ring_detection:
+            return set()
+        volumes = []
+        for item in self.repo.all_interactions():
+            amount = item.get("amount")
+            volumes.append((item["operator_org_id"], item["counterparty_org_id"], 0.0 if amount in (None, "") else float(amount)))
+        return cluster_edges(
+            self._report_edges() if edges is None else edges,
+            shared_groups=self.repo.org_signal_groups(),
+            volumes=volumes,
+            min_cluster=self.policy.ring_min_cluster,
+            internal_ratio=self.policy.ring_internal_ratio,
+            search_limit=self.policy.ring_search_limit,
         )
 
     def _report_counts(self, agent: dict[str, Any], report: dict[str, Any]) -> bool:
@@ -1535,6 +1585,9 @@ class BureauService:
         signals = _registration_signals(body)
         for kind, value in signals:
             self.repo.add_signal({"agent_id": record["agent_id"], "kind": kind, "value": value, "created_at": at})
+            self.repo.add_org_signal(
+                {"org_id": record["operator_org_id"], "kind": kind, "value": value, "created_at": at}
+            )
         if not self.policy.rereg_link:
             return []
         denied: dict[str, dict[str, Any]] = {}
