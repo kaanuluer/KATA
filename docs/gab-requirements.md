@@ -187,7 +187,7 @@ Acceptance: an upheld policy-violation dispute leaves the score greater than or 
 ### 2.11 Web UI
 
 - `/` is the Global Agent Bureau home. It keeps the four KATA questions, the sample sign-and-check, the live revocation list, published keys, and the tree head, and it links to the dashboard, portal, history, simulation, docs, and GitHub.
-- `/simulation` publishes the October 15, 2026 synthetic stress test. Every table and chart on that page is labeled simulated test data. The numbers are read from `service/kata_service/static/simulation-results.json`. The charts are the PNGs shipped beside that file.
+- `/simulation` publishes the October 15, 2026 synthetic stress test, including v1, v2, and a v3 column measured against the scoring rules at commit 4281ffc. Every table and chart on that page is labeled simulated test data. The numbers are read from `service/kata_service/static/simulation-results.json`. The v1 and v2 charts are the PNGs shipped beside that file. v3 has no separate chart files. The v3 column is not a measurement of the rules added after 4281ffc.
 - The header mark is the single file `service/kata_service/static/gab-logo.svg`. Replacing that file replaces the mark.
 - `/dashboard` signs in with an API key or an organization email and can register an agent, run an inquiry, file an incident, list alerts, manage keys, and, with the admin token, review disputes.
 - `/portal` signs in with a magic link and shows agents, assurance level, score, risk, authorizations, inquiries, incidents, and the disputes the principal has filed.

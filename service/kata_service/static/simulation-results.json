@@ -533,5 +533,34 @@
       "risky": 621.009958506224,
       "malicious": 534.611071682044
     }
+  },
+  "v3": {
+    "label": "SIMULATED",
+    "measured_at": "4281ffc",
+    "note": "These figures are the v3 synthetic run against the scoring rules at commit 4281ffc. They are not a measurement of the rules added after that commit.",
+    "unaware": {
+      "fraud_attempted": "$2.71M",
+      "fraud_stopped": "72%",
+      "fraud_executed": "$0.76M",
+      "malicious_denied": "30%",
+      "legit_denied": "0.11%",
+      "legit_step_up": "40%",
+      "ring_theft": "$104k",
+      "fake_below_500": "0.0%",
+      "fake_ever_below_500": "0.0%",
+      "sybils": "152"
+    },
+    "adaptive": {
+      "fraud_attempted": "$2.68M",
+      "fraud_stopped": "74%",
+      "fraud_executed": "$0.71M",
+      "malicious_denied": "31%",
+      "legit_denied": "0.15%",
+      "legit_step_up": "39%",
+      "ring_theft": "$111k",
+      "fake_below_500": "0.0%",
+      "fake_ever_below_500": "2.5%",
+      "sybils": "111"
+    }
   }
 }

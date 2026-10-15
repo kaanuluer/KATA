@@ -55,12 +55,15 @@ def _body(data: dict) -> str:
     naive = data["naive"]
     realistic = data["realistic"]
     defended = data["defended"]
+    v3 = data["v3"]
+    unaware = v3["unaware"]
+    adaptive = v3["adaptive"]
     return f"""
 <section class="hero">
   <p class="kicker">Global Agent Bureau</p>
   <h1>Simulation</h1>
   <p class="sim-banner">{LABEL}</p>
-  <p class="lede">This page publishes a synthetic stress test of the trust score. Global Agent Bureau is an agent bureau and technology company. KATA is the framework underneath it, under the PolyForm Noncommercial License 1.0.0. The population is 10,000 synthetic agents and 100,000 synthetic transactions over 90 days, seed 20261015, scored from the service at commit 2b280ce. Nothing here is a customer, a transaction, or a performance claim.</p>
+  <p class="lede">This page publishes a synthetic stress test of the trust score. Global Agent Bureau is an agent bureau and technology company. KATA is the framework underneath it, under the PolyForm Noncommercial License 1.0.0. The population is 10,000 synthetic agents and 100,000 synthetic transactions over 90 days, seed 20261015. The v1 and v2 columns were scored from the service at commit 2b280ce. The v3 column calls the scoring rules at commit 4281ffc. Nothing here is a customer, a transaction, or a performance claim.</p>
 </section>
 <section>
   <h2>Side by side</h2>
@@ -84,6 +87,27 @@ def _body(data: dict) -> str:
     </tbody>
   </table></div>
   {_figure(_CHARTS[0][0], _CHARTS[0][1])}
+</section>
+<section>
+  <h2>v3, the scoring rules at commit 4281ffc</h2>
+  {_caption()}
+  <p>{v3["note"]} The same synthetic population is run twice: attackers who do not know the rules, and attackers who adapt to them. v3 has no separate chart files. The v1 and v2 charts above are from the earlier runs.</p>
+  <div class="table-scroll"><table class="sim">
+    <thead><tr><th>Measure</th><th>Unaware attackers</th><th>Adaptive attackers</th></tr></thead>
+    <tbody>
+      {_row("Fraud dollars attempted", unaware["fraud_attempted"], adaptive["fraud_attempted"])}
+      {_row("Fraud dollars stopped", unaware["fraud_stopped"], adaptive["fraud_stopped"])}
+      {_row("Fraud dollars executed", unaware["fraud_executed"], adaptive["fraud_executed"])}
+      {_row("Malicious actors denied at end", unaware["malicious_denied"], adaptive["malicious_denied"])}
+      {_row("Legitimate agents denied at end", unaware["legit_denied"], adaptive["legit_denied"])}
+      {_row("Legitimate agents in step-up at end", unaware["legit_step_up"], adaptive["legit_step_up"])}
+      {_row("Ring theft", unaware["ring_theft"], adaptive["ring_theft"])}
+      {_row("Fake-report victims below 500 at day 90", unaware["fake_below_500"], adaptive["fake_below_500"])}
+      {_row("Fake-report victims ever below 500", unaware["fake_ever_below_500"], adaptive["fake_ever_below_500"])}
+      {_row("Fresh identities after denial", unaware["sybils"], adaptive["sybils"])}
+    </tbody>
+  </table></div>
+  <p class="sim-banner">{LABEL}</p>
 </section>
 <section>
   <h2>What we learned</h2>
@@ -131,15 +155,15 @@ def _body(data: dict) -> str:
     <li><strong>Transaction-linked reports.</strong> A report changes the score only when the reporter has an allowed verify recorded with that agent. The report is still stored. <code>counts</code> is false when it does not affect the score.</li>
     <li><strong>Reporter reputation.</strong> An organization younger than 30 days, or with no recorded creation time, weighs 0.3. Each upheld dispute against that reporter halves the weight again.</li>
     <li><strong>Settled-activity cap.</strong> Settled-activity points diminish per reporter and stop at 16 points from one reporter and 25 points in total.</li>
-    <li><strong>Velocity windows.</strong> More than 25 allowed verifies in a UTC day, or more than 15,000 in one currency, steps up. At a score of 750 or more the windows triple. A linked re-registration halves them for 14 days. Windows are not split by shopping, travel, treasury, or assistant.</li>
-    <li><strong>Re-registration friction.</strong> A new agent run by the same operator, or carrying the same optional device or key signal, inherits a penalty from a recently denied agent. The default penalty is 80 points, capped at 200. The service does not collect a government identifier.</li>
-    <li><strong>Ring detection.</strong> Settled reports on a reciprocal pair or a closed loop of up to four organizations do not add settled credit.</li>
+    <li><strong>Velocity windows.</strong> More than 25 allowed verifies in a UTC day, or more than 15,000 in one currency, steps up. At a score of 750 or more the windows triple. A linked re-registration halves them for 14 days. Shopping, travel, treasury, and assistant use a tighter window. A burst above the agent's own median, or a cash-out after a quiet week or a recent settled-credit rise, also steps up.</li>
+    <li><strong>Re-registration friction.</strong> A new agent can be linked by the same operator, or by a device, key, payment-instrument, timing, or evidence-hash signal, including a new operator organization. A revoked or fraud-reported agent stays linkable for 180 days. The new agent inherits that negative history with a 30-day half-life, plus the flat penalty while the 14-day window is open. The service does not collect a government identifier.</li>
+    <li><strong>Ring detection.</strong> Settled credit is dropped inside a strongly connected component of any length, when organizations share a signal, and when a cluster of at least three organizations keeps 80 percent of its transaction volume inside the cluster.</li>
     <li><strong>Faster dispute path.</strong> An open dispute against a young reporter holds that report's negative points until an admin resolves it. Uphold still removes the report. This is a score hold, not a staffed review clock.</li>
     <li><strong>Identity proofing.</strong> Registration records a key binding. operator_verified counts only with an operator evidence hash, and institution_attested counts only with a wallet or bank evidence hash. The service checks the hash format. It does not collect a government identifier.</li>
   </ol>
   <h3>Still open</h3>
   <ul>
-    <li>Merchant-segment velocity caps, and a delay before a cluster is flagged, are not in the product. The synthetic column assumed both.</li>
+    <li>The v3 column measures commit 4281ffc. It does not measure the signal lookback, inherited history, longer-cycle rings, segment velocity, established-operator path, cheap-link weight, or report-consistency checks added after that commit.</li>
     <li>An outside issuer check for those evidence hashes is not in this version.</li>
     <li>Cross-currency velocity is not converted. Only the action's own currency adds toward the amount window.</li>
     <li>The synthetic run's false-positive cluster rate is not what this ring rule measures.</li>
