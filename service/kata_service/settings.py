@@ -110,6 +110,7 @@ def _score_policy(env: dict[str, str], weights: ScoreWeights | None = None) -> S
         link_min_age_days=_positive_int(env.get("GAB_LINK_MIN_AGE_DAYS"), 1),
         link_min_counterparties=_positive_int(env.get("GAB_LINK_MIN_COUNTERPARTIES"), 2),
         reporter_reputation=flag("GAB_REPORTER_REPUTATION"),
+        report_consistency=flag("GAB_REPORT_CONSISTENCY"),
         positive_cap=flag("GAB_POSITIVE_CAP"),
         settled_cap_total=_positive_int(env.get("GAB_SETTLED_CAP_TOTAL"), 25),
         settled_cap_per_reporter=_positive_int(env.get("GAB_SETTLED_CAP_PER_REPORTER"), 16),

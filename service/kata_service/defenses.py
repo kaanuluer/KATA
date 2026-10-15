@@ -27,6 +27,12 @@ class ScorePolicy:
     link_min_age_days: int = 1
     link_min_counterparties: int = 2
     reporter_reputation: bool = True
+    report_consistency: bool = True
+    consistency_weight: float = 0.5
+    cluster_min_reports: int = 3
+    cluster_max_operators: int = 2
+    cluster_weight: float = 0.4
+    evidence_min_reporters: int = 3
     positive_cap: bool = True
     settled_cap_total: int = 25
     settled_cap_per_reporter: int = 16
@@ -79,6 +85,7 @@ class ScorePolicy:
             require_transaction_link=False,
             link_quality=False,
             reporter_reputation=False,
+            report_consistency=False,
             positive_cap=False,
             settled_cap_scales=False,
             ring_detection=False,
@@ -103,6 +110,9 @@ class ScoreContext:
     inherited_reports: list[dict[str, Any]] = field(default_factory=list)
     external_counterparties: int = 0
     external_volume: float = 0
+    positive_pairs: set[tuple[str, str]] = field(default_factory=set)
+    reporter_clusters: dict[str, dict[str, int]] = field(default_factory=dict)
+    evidence_reporters: dict[str, int] = field(default_factory=dict)
 
 
 def effective_assurance(
@@ -132,6 +142,36 @@ def effective_assurance(
     if claimed == "unverified":
         return "unverified"
     return "unverified"
+
+
+def report_is_negative(report: dict[str, Any]) -> bool:
+    kind = report.get("kind")
+    if kind in {"fraud_incident", "chargeback", "policy_violation"}:
+        return True
+    return kind == "transaction_outcome" and report.get("outcome") == "loss"
+
+
+def consistency_multiplier(report: dict[str, Any], policy: ScorePolicy, context: ScoreContext) -> float:
+    """Down-weight a negative report that disagrees with other reports or sits in a cluster.
+
+    Reputation still applies. This is an extra check: the same reporter has
+    also filed settled activity for this agent, the reporter's negatives land
+    on only one or two operators, or several reporters reused one evidence hash.
+    """
+
+    if not policy.report_consistency or not report_is_negative(report):
+        return 1.0
+    multiplier = 1.0
+    reporter = str(report.get("reporter_org_id") or "")
+    if (reporter, str(report.get("agent_id") or "")) in context.positive_pairs:
+        multiplier *= policy.consistency_weight
+    stats = context.reporter_clusters.get(reporter) or {}
+    if int(stats.get("negatives") or 0) >= policy.cluster_min_reports and int(stats.get("operators") or 0) <= policy.cluster_max_operators:
+        multiplier *= policy.cluster_weight
+    reused = context.evidence_reporters.get(str(report.get("evidence_hash") or ""), 0)
+    if reused >= policy.evidence_min_reporters:
+        multiplier *= policy.consistency_weight
+    return multiplier
 
 
 def reputation_multiplier(org_id: str, policy: ScorePolicy, context: ScoreContext) -> float:

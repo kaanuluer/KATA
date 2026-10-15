@@ -36,6 +36,8 @@ from kata_service.defenses import (
     agent_is_denied,
     cap_settled_points,
     cluster_edges,
+    consistency_multiplier,
+    report_is_negative,
     age_days,
     decay_factor,
     effective_assurance,
@@ -207,6 +209,7 @@ def trust_score(
         if report["reporter_org_id"] == operator_org_id:
             weight *= weights.self_operator
         weight *= reputation_multiplier(report["reporter_org_id"], policy, context)
+        weight *= consistency_multiplier(report, policy, context)
         dispute = resolved.get(report["report_id"])
         if dispute and dispute["outcome"] == "upheld":
             parts.append(("DISPUTE_UPHELD", 0, report["report_id"]))
@@ -267,6 +270,7 @@ def trust_score(
             if report.get("reporter_org_id") == operator_org_id:
                 inherited_weight *= weights.self_operator
             inherited_weight *= reputation_multiplier(str(report.get("reporter_org_id") or ""), policy, context)
+            inherited_weight *= consistency_multiplier(report, policy, context)
             inherited_weight *= float(report.get("decay") or 0)
             points, _code = _report_points(report, inherited_weight, weights)
             if points < 0:
@@ -1530,6 +1534,26 @@ class BureauService:
             if amount < self.policy.settled_external_min:
                 continue
             external[party] = external.get(party, 0.0) + amount
+        operators = {item["agent_id"]: item["operator_org_id"] for item in self.repo.list_agents()}
+        positive_pairs: set[tuple[str, str]] = set()
+        cluster_count: dict[str, int] = {}
+        cluster_ops: dict[str, set[str]] = {}
+        evidence_sets: dict[str, set[str]] = {}
+        for item in all_reports:
+            if item.get("excluded"):
+                continue
+            reporter = str(item.get("reporter_org_id") or "")
+            if item.get("kind") == "transaction_outcome" and item.get("outcome") == "settled":
+                positive_pairs.add((reporter, str(item.get("agent_id") or "")))
+            if report_is_negative(item):
+                cluster_count[reporter] = cluster_count.get(reporter, 0) + 1
+                cluster_ops.setdefault(reporter, set()).add(operators.get(item["agent_id"], ""))
+                evidence_sets.setdefault(str(item.get("evidence_hash") or ""), set()).add(reporter)
+        reporter_clusters = {
+            reporter: {"negatives": cluster_count[reporter], "operators": len({org_id for org_id in cluster_ops[reporter] if org_id})}
+            for reporter in cluster_count
+        }
+        evidence_reporters = {evidence: len(reporters) for evidence, reporters in evidence_sets.items()}
         edges = self._report_edges(all_reports)
         penalty = 0
         inherited: list[dict[str, Any]] = []
@@ -1561,6 +1585,9 @@ class BureauService:
             inherited_reports=inherited,
             external_counterparties=len(external),
             external_volume=sum(external.values()),
+            positive_pairs=positive_pairs,
+            reporter_clusters=reporter_clusters,
+            evidence_reporters=evidence_reporters,
         )
 
     def _report_edges(self, all_reports: list[dict[str, Any]] | None = None) -> set[tuple[str, str]]:

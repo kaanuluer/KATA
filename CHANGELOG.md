@@ -2,6 +2,8 @@
 
 ## 2026-10-15
 
+Negative reports now lose weight when they contradict a settled report from the same reporter, when one reporter concentrates negatives on one or two operators, or when several reporters reuse one evidence hash. Reporter reputation still applies.
+
 A verify under 5 does not let a report affect the score. A verify under 100 weighs a quarter unless the agent has two counterparties and the link is at least a day old. A verify of 100 or more still weighs in full.
 
 An operator with 90 days of clean history can reach `operator_established` from a key binding alone, which sits between key-bound and operator-verified. The settled-credit cap stays 25 until an agent has three external counterparties and real external volume, and then it scales with that volume.
