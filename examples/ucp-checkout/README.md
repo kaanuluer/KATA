@@ -1,6 +1,6 @@
 # UCP Checkout — Worked KATA Evaluation
 
-**Status: Concept / Open Design — not production ready.**
+**Status: framework note. Source-available, noncommercial.**
 
 This example shows KATA evaluating a shopping agent on the **Universal Commerce Protocol (UCP)** against a **simplified** AP2-style grant. The JSON below is a sketch. `mandate_type`, `shopping_intent.budget_limit`, and `categories` are not fields in AP2 v0.1 `IntentMandate` and not fields in AP2 v0.2. The field-accurate v0.2 mapping is [docs/interoperability.md](../../docs/interoperability.md) and [examples/ap2-checkout/](../ap2-checkout/). The sketch still shows where KATA sits: the protocols supply the action and the grant; KATA makes the trust decision.
 

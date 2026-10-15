@@ -1,6 +1,6 @@
 # KATA intent agreement — reference library
 
-**Status: Concept / Open Design — not production ready.**
+**Status: framework note. Source-available, noncommercial.**
 
 Python reference for the signed intent mandate and the agreement lifecycle in [docs/intent-agreement.md](../../docs/intent-agreement.md). PolyForm Noncommercial 1.0.0, copyright 2026 Kaan Uluer.
 

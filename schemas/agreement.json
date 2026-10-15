@@ -2,7 +2,7 @@
   "$id": "https://KATA.org/schemas/agreement.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "KATA Intent Agreement",
-  "description": "Lifecycle record for the live intents inside a delegation: proposal, clarification, acceptance, acknowledgement, amendment, added intents, revocation, and expiry. KATA holds the spend ledger on this record. The event log is an audit trail. It is not, by itself, a revocation status service. Status: Concept / Open Design — not production ready.",
+  "description": "Lifecycle record for the live intents inside a delegation: proposal, clarification, acceptance, acknowledgement, amendment, added intents, revocation, and expiry. KATA holds the spend ledger on this record. The event log is an audit trail. It is not, by itself, a revocation status service. Status: framework note.",
   "type": "object",
   "additionalProperties": false,
   "required": ["agreement_id", "status", "mandates", "events", "ledger", "ledger_sequence", "ledger_as_of"],

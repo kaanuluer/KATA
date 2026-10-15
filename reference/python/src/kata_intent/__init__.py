@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Reference library for KATA intent agreements.
 
-Concept / open design. Not production ready. The authoritative description
+Source-available, noncommercial. The authoritative description
 is ``docs/intent-agreement.md`` in the KATA repository.
 """
 

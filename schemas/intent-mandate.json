@@ -2,7 +2,7 @@
   "$id": "https://KATA.org/schemas/intent-mandate.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "KATA Intent Mandate",
-  "description": "Immutable signed intent bound to one agent key. The principal's signature covers the intent, the limits, the human-readable rendering, and the agent key. Status: Concept / Open Design — not production ready. The agreement record that carries this mandate is schemas/agreement.json. amounts stay major units, as in schemas/intent.json.",
+  "description": "Immutable signed intent bound to one agent key. The principal's signature covers the intent, the limits, the human-readable rendering, and the agent key. Status: framework note. The agreement record that carries this mandate is schemas/agreement.json. amounts stay major units, as in schemas/intent.json.",
   "type": "object",
   "additionalProperties": false,
   "required": ["mandate_id", "version", "principal", "agent", "intent"],
