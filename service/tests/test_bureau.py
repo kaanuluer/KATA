@@ -357,6 +357,8 @@ def test_portal_revoke_and_admin_dispute_review():
     agents = client.get("/v1/portal/agents", headers=_auth(portal))
     assert agents.status_code == 200
     assert agents.json()[0]["agent_id"] == "shopper-01"
+    assert agents.json()[0]["assurance_level"] == "key_bound"
+    assert agents.json()[0]["risk"] == 1000 - agents.json()[0]["score"]
     reports = client.get("/v1/portal/agents/shopper-01/reports", headers=_auth(portal))
     assert reports.status_code == 200
     assert reports.json()[0]["report_id"] == filed.json()["report_id"]
@@ -376,6 +378,10 @@ def test_portal_revoke_and_admin_dispute_review():
         json={"report_id": filed.json()["report_id"], "statement": "This charge was in policy."},
     )
     assert dispute.status_code == 200, dispute.text
+    queued = client.get("/v1/portal/disputes", headers=_auth(portal))
+    assert queued.status_code == 200
+    assert queued.json()[0]["dispute_id"] == dispute.json()["dispute_id"]
+    assert queued.json()[0]["status"] == "open"
     reviewed = client.post(
         f"/v1/admin/disputes/{dispute.json()['dispute_id']}",
         headers=_auth("admin-test-token"),

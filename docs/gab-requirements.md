@@ -165,7 +165,7 @@ Acceptance: revoking an agent after a localhost subscription stores a signed `ka
 - The token is stored as a hash. The link lifetime is 15 minutes. The session lifetime is 12 hours.
 - The development mailbox (`GAB_DEV_MAILBOX=1` or `GAB_DEMO=1`) keeps the latest link in memory. `GET /v1/dev/mailbox` is 404 when that flag is off.
 - Organization magic links also always return `{"sent": true}` and send only when the email was registered in advance, so the response does not reveal whether the address exists.
-- The portal lists the principal's agents, authorizations, inquiries, and incident reports, and accepts revoke and dispute.
+- The portal lists the principal's agents with assurance level, score, and risk, plus authorizations, inquiries, incident reports, and disputes, and accepts revoke and dispute.
 
 Acceptance: after the login row is bound to the registered principal, the portal lists the agent, the inquiry, and the report, and a principal revoke makes verify return `AGENT_NOT_ACTIVE`.
 
@@ -189,7 +189,7 @@ Acceptance: an upheld policy-violation dispute leaves the score greater than or 
 - `/simulation` publishes the October 15, 2026 synthetic stress test. Every table and chart on that page is labeled simulated test data. The numbers are read from `service/kata_service/static/simulation-results.json`. The charts are the PNGs shipped beside that file.
 - The header mark is the single file `service/kata_service/static/gab-logo.svg`. Replacing that file replaces the mark.
 - `/dashboard` signs in with an API key or an organization email and can register an agent, run an inquiry, file an incident, list alerts, manage keys, and, with the admin token, review disputes.
-- `/portal` signs in with a magic link and shows agents, authorizations, inquiries, and incidents.
+- `/portal` signs in with a magic link and shows agents, assurance level, score, risk, authorizations, inquiries, incidents, and the disputes the principal has filed.
 - `/docs` renders this document. `/docs/api` and `/docs/openapi` describe the routes.
 - The license line on each page is the PolyForm Noncommercial License.
 

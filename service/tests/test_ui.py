@@ -225,6 +225,8 @@ def test_dashboard_and_portal_pages():
     assert portal.status_code == 200
     assert 'id="portal-login"' in portal.text
     assert "Dispute an incident" in portal.text
+    assert "Your disputes" in portal.text
+    assert 'id="portal-disputes"' in portal.text
     assert "/assets/portal.js" in portal.text
     requirements = client.get("/docs/gab-requirements")
     assert requirements.status_code == 200

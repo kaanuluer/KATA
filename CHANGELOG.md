@@ -2,6 +2,8 @@
 
 ## 2026-10-15
 
+The individual portal lists the disputes a principal has filed, and each agent card shows the assurance level, the score, and the risk complement. Revoke and dispute were already on the portal API.
+
 Consortium members can record a key fingerprint and ask whether enough other members have seen it. The sighting stores the fingerprint only. `POST /v1/consortium/match` returns `matched: true` and the other-member count when that count reaches `GAB_CONSORTIUM_MATCH_THRESHOLD` (default 2). Below the threshold the count is omitted. The response does not name the other members. `004_consortium.sql` adds the tables. This match is exact. It is not a private set intersection, and it does not share reports.
 
 `GET /v1/score-model` publishes the agent score weights as `gab-score-1`. `risk` on an agent is `1000 - score`. Individuals are not scored. `GAB_SCORE_WEIGHTS` can replace a weight for calibration. Invalid JSON or an out-of-range value is a configuration error. This version does not fit the weights from outcomes.

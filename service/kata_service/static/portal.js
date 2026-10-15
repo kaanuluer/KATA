@@ -51,13 +51,23 @@
     for (const agent of agents) {
       const card = document.createElement("article");
       card.className = "agent-card";
-      card.append(line(agent.agent_id + " · " + agent.status + " · " + agent.verification_level));
+      card.append(
+        line(
+          agent.agent_id +
+            " · " +
+            agent.status +
+            " · claim " +
+            agent.verification_level +
+            " · assurance " +
+            (agent.assurance_level || "")
+        )
+      );
       const score = document.createElement("p");
       score.className = "score";
       const figure = document.createElement("strong");
       figure.id = "portal-score";
       figure.textContent = String(agent.score);
-      score.append(figure, document.createTextNode(" / 1000"));
+      score.append(figure, document.createTextNode(" / 1000 · risk " + String(agent.risk)));
       card.append(score);
       const reasons = document.createElement("ol");
       reasons.id = "portal-reasons";
@@ -124,6 +134,16 @@
     inquiries.forEach((item) => {
       inquiryBox.append(line(item.at + " · " + item.organization + " · " + item.purpose_code + " · " + item.agent_id));
     });
+    const disputes = await api("/v1/portal/disputes", { headers: headers() });
+    const disputeBox = $("portal-disputes");
+    disputeBox.innerHTML = "";
+    if (!disputes.length) {
+      disputeBox.append(line("No disputes filed."));
+    }
+    disputes.forEach((item) => {
+      const outcome = item.outcome ? " · " + item.outcome : "";
+      disputeBox.append(line(item.dispute_id + " · " + item.status + outcome + " · " + item.report_id));
+    });
   }
 
   $("portal-login").addEventListener("submit", async (event) => {
@@ -176,6 +196,7 @@
       });
       node.hidden = false;
       node.textContent = "Dispute " + filed.dispute_id + " is " + filed.status + ".";
+      await load();
     } catch (error) {
       node.hidden = false;
       node.textContent = error.message;
