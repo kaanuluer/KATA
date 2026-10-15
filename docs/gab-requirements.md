@@ -109,7 +109,7 @@ The service does not pass the raw claim into that formula when proofing is on. I
 
 These rules are on unless `GAB_DEFENSES=0` or the matching flag is `0`.
 
-- Transaction link (`GAB_REQUIRE_REPORT_LINK`): an unlinked report does not enter the score.
+- Transaction link (`GAB_REQUIRE_REPORT_LINK`): an unlinked report does not enter the score. `GAB_LINK_QUALITY` further ignores a verify under `GAB_LINK_MIN_AMOUNT` (5). A verify of at least `GAB_LINK_FULL_AMOUNT` (100) counts in full. A smaller qualifying verify counts at `GAB_LINK_THIN_WEIGHT` (0.25) unless the agent has `GAB_LINK_MIN_COUNTERPARTIES` (2) counterparties and the link is at least `GAB_LINK_MIN_AGE_DAYS` (1) old.
 - Reporter reputation (`GAB_REPORTER_REPUTATION`): an organization younger than `GAB_NEW_REPORTER_DAYS` (30), or with no creation time, is multiplied by `GAB_NEW_REPORTER_WEIGHT` (0.3). Each upheld dispute against that reporter halves the weight again, up to eight times.
 - Positive cap (`GAB_POSITIVE_CAP`): settled points diminish for repeat reports from the same reporter, then stop at `GAB_SETTLED_CAP_PER_REPORTER` (16) and `GAB_SETTLED_CAP_TOTAL` (25). `GAB_SETTLED_CAP_SCALES` raises that total by 5, and the per-reporter cap by 2, for each 500 of external volume once the agent has at least 3 counterparties and 500 of external volume. Each of those counterparties must have at least 100 with the agent. The raise stops after 8 steps. A ring with no external volume keeps the base cap.
 - Velocity (`GAB_VELOCITY`, `GAB_VELOCITY_ADAPTIVE`): the static windows above still apply. Segment windows are shopping 8 / 1,000, travel 6 / 2,500, treasury 4 / 5,000, and assistant 10 / 800. `VELOCITY_BURST` fires when today exceeds `GAB_VELOCITY_BURST_MULTIPLE` (3) times the median of at least three earlier days. `VELOCITY_CASHOUT` fires at `GAB_VELOCITY_CASHOUT_AMOUNT` (500) after `GAB_VELOCITY_QUIET_DAYS` (7), or after settled credit in the last 7 days when today also clears that multiple.
@@ -288,6 +288,12 @@ Set secrets in the host. Do not commit values.
 | `GAB_ALLOW_DEMO_SEED` | No | no | `1` allows `POST /v1/admin/seed-demo` to write the public demo rows into the live database. Leave unset except while loading a demo. |
 | `GAB_DEFENSES` | No | no | Default on. `0` turns off the link, reputation, positive cap, ring, velocity, re-registration, and dispute-hold rules together. |
 | `GAB_REQUIRE_REPORT_LINK` | No | no | Default follows `GAB_DEFENSES`. `0` scores reports that have no recorded verify. |
+| `GAB_LINK_QUALITY` | No | no | Default follows `GAB_DEFENSES`. Cheap or single-counterparty links weigh less. |
+| `GAB_LINK_MIN_AMOUNT` | No | no | Default 5. Below this, a verify does not let the report count. |
+| `GAB_LINK_FULL_AMOUNT` | No | no | Default 100. At or above this, the link weighs in full. |
+| `GAB_LINK_THIN_WEIGHT` | No | no | Default 0.25. |
+| `GAB_LINK_MIN_AGE_DAYS` | No | no | Default 1. |
+| `GAB_LINK_MIN_COUNTERPARTIES` | No | no | Default 2. |
 | `GAB_REPORTER_REPUTATION` | No | no | Default follows `GAB_DEFENSES`. |
 | `GAB_POSITIVE_CAP` | No | no | Default follows `GAB_DEFENSES`. |
 | `GAB_SETTLED_CAP_SCALES` | No | no | Default follows `GAB_DEFENSES`. Raises the settled cap with external volume and counterparty diversity. |

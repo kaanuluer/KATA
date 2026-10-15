@@ -20,6 +20,12 @@ from kata_service.score_model import ScoreWeights
 @dataclass(frozen=True)
 class ScorePolicy:
     require_transaction_link: bool = True
+    link_quality: bool = True
+    link_min_amount: int = 5
+    link_full_amount: int = 100
+    link_thin_weight: float = 0.25
+    link_min_age_days: int = 1
+    link_min_counterparties: int = 2
     reporter_reputation: bool = True
     positive_cap: bool = True
     settled_cap_total: int = 25
@@ -71,6 +77,7 @@ class ScorePolicy:
 
         return cls(
             require_transaction_link=False,
+            link_quality=False,
             reporter_reputation=False,
             positive_cap=False,
             settled_cap_scales=False,
@@ -89,6 +96,7 @@ class ScoreContext:
     upheld_by_reporter: dict[str, int] = field(default_factory=dict)
     linked_reporters: set[str] | None = None
     linked_actions: dict[str, set[str]] = field(default_factory=dict)
+    interactions: list[dict[str, Any]] | None = None
     ring_edges: set[tuple[str, str]] = field(default_factory=set)
     open_dispute_ids: set[str] = field(default_factory=set)
     identity_penalty: int = 0
@@ -138,6 +146,52 @@ def reputation_multiplier(org_id: str, policy: ScorePolicy, context: ScoreContex
     if upheld > 0:
         multiplier *= 0.5 ** min(upheld, 8)
     return multiplier
+
+
+def link_strength(report: dict[str, Any], policy: ScorePolicy, context: ScoreContext) -> float:
+    """How much a recorded verify should let a report weigh.
+
+    No interaction detail keeps the previous full weight. A verify under
+    link_min_amount does not count. A verify of link_full_amount or more
+    counts in full. Anything between counts at link_thin_weight unless the
+    agent has enough counterparties and the link is old enough.
+    """
+
+    if not policy.link_quality or not policy.require_transaction_link or context.interactions is None:
+        return 1.0
+    org_id = str(report.get("reporter_org_id") or "")
+    rows = [row for row in context.interactions if row.get("counterparty_org_id") == org_id]
+    action_id = report.get("action_id")
+    if action_id:
+        matched = [row for row in rows if row.get("action_id") == action_id]
+        if matched:
+            rows = matched
+    if not rows:
+        return 0.0
+    best = 0.0
+    oldest: str | None = None
+    for row in rows:
+        raw = row.get("amount")
+        amount = 0.0 if raw in (None, "") else float(raw)
+        best = max(best, amount)
+        stamp = str(row.get("at") or "")
+        if stamp and (oldest is None or stamp < oldest):
+            oldest = stamp
+    if best < policy.link_min_amount:
+        return 0.0
+    parties: set[str] = set()
+    for row in context.interactions:
+        raw = row.get("amount")
+        amount = 0.0 if raw in (None, "") else float(raw)
+        party = str(row.get("counterparty_org_id") or "")
+        if party and amount >= policy.link_min_amount:
+            parties.add(party)
+    age = age_days(oldest, context.now) if oldest and context.now else None
+    if best >= policy.link_full_amount:
+        return 1.0
+    if len(parties) >= policy.link_min_counterparties and age is not None and age >= policy.link_min_age_days:
+        return 1.0
+    return policy.link_thin_weight
 
 
 def report_is_linked(report: dict[str, Any], context: ScoreContext) -> bool:

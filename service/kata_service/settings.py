@@ -103,6 +103,12 @@ def _score_policy(env: dict[str, str], weights: ScoreWeights | None = None) -> S
         new_weight = 0.3
     return ScorePolicy(
         require_transaction_link=flag("GAB_REQUIRE_REPORT_LINK"),
+        link_quality=flag("GAB_LINK_QUALITY"),
+        link_min_amount=_positive_int(env.get("GAB_LINK_MIN_AMOUNT"), 5),
+        link_full_amount=_positive_int(env.get("GAB_LINK_FULL_AMOUNT"), 100),
+        link_thin_weight=_unit_float(env.get("GAB_LINK_THIN_WEIGHT"), 0.25),
+        link_min_age_days=_positive_int(env.get("GAB_LINK_MIN_AGE_DAYS"), 1),
+        link_min_counterparties=_positive_int(env.get("GAB_LINK_MIN_COUNTERPARTIES"), 2),
         reporter_reputation=flag("GAB_REPORTER_REPUTATION"),
         positive_cap=flag("GAB_POSITIVE_CAP"),
         settled_cap_total=_positive_int(env.get("GAB_SETTLED_CAP_TOTAL"), 25),

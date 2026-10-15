@@ -40,6 +40,7 @@ from kata_service.defenses import (
     decay_factor,
     effective_assurance,
     inheritance_penalty,
+    link_strength,
     lookback_days,
     report_is_linked,
     reporter_is_young,
@@ -198,7 +199,11 @@ def trust_score(
             continue
         if policy.require_transaction_link and not report_is_linked(report, context):
             continue
+        strength = link_strength(report, policy, context)
+        if strength <= 0:
+            continue
         weight = weights.reporter_weight(reporter_types.get(report["reporter_org_id"], ""))
+        weight *= strength
         if report["reporter_org_id"] == operator_org_id:
             weight *= weights.self_operator
         weight *= reputation_multiplier(report["reporter_org_id"], policy, context)
@@ -1549,6 +1554,7 @@ class BureauService:
             upheld_by_reporter=upheld,
             linked_reporters=linked,
             linked_actions=actions,
+            interactions=interactions,
             ring_edges=self._discounted_edges(edges) if self.policy.ring_detection else set(),
             open_dispute_ids=open_ids,
             identity_penalty=penalty,
@@ -1593,7 +1599,13 @@ class BureauService:
         actions = {}
         for item in interactions:
             actions.setdefault(item["counterparty_org_id"], set()).add(item["action_id"])
-        return report_is_linked(report, ScoreContext(linked_reporters=linked, linked_actions=actions))
+        context = ScoreContext(
+            now=self.stamp(),
+            linked_reporters=linked,
+            linked_actions=actions,
+            interactions=interactions,
+        )
+        return report_is_linked(report, context) and link_strength(report, self.policy, context) > 0
 
     def _annotate(self, agent: dict[str, Any], report: dict[str, Any]) -> dict[str, Any]:
         view = dict(report)
