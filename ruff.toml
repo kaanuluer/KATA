@@ -1,0 +1,5 @@
+# Gate syntax errors and undefined names. Broader style rules are not part of this check.
+line-length = 100
+
+[lint]
+select = ["E9", "F63", "F7", "F82"]
