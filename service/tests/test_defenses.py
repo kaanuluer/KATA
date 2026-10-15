@@ -108,7 +108,7 @@ def test_linked_chargeback_is_held_while_a_young_reporter_is_disputed():
     merchant = _org(client, "Techstore", "merchant")
     operator_key = _key(client, operator["org_id"])
     merchant_key = _key(client, merchant["org_id"])
-    _register(client, operator_key, principal_id="prn_owner")
+    _register(client, operator_key, principal_id="prn_owner", principal_email="owner@example.com")
     client.post(
         "/v1/agents/shopper-01/intents",
         headers={**_auth(operator_key), "Content-Type": "application/json"},
@@ -137,7 +137,6 @@ def test_linked_chargeback_is_held_while_a_young_reporter_is_disputed():
     dropped = client.get("/v1/agents/shopper-01", headers=_auth(operator_key)).json()["score"]
     assert dropped < before
     service = client.app.state.bureau
-    service.repo.upsert_login("owner@example.com", "prn_owner", service.stamp())
     client.post("/v1/portal/magic-link", json={"email": "owner@example.com"})
     token = service.dev_mailbox[-1]["token"]
     portal = client.post("/v1/sessions", json={"token": token}).json()["token"]

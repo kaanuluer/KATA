@@ -68,17 +68,20 @@ def _agent_keys():
     )
 
 
-def _register(client: TestClient, operator_key: str, principal_id: str = "prn_person") -> dict:
+def _register(client: TestClient, operator_key: str, principal_id: str = "prn_person", principal_email: str | None = None) -> dict:
     _principal, agent = _agent_keys()
+    body = {
+        "agent_id": "shopper-01",
+        "principal_id": principal_id,
+        "public_key": agent.public.to_jwk(),
+        "verification_level": "operator_verified",
+    }
+    if principal_email:
+        body["principal_email"] = principal_email
     response = client.post(
         "/v1/agents",
         headers=_auth(operator_key),
-        json={
-            "agent_id": "shopper-01",
-            "principal_id": principal_id,
-            "public_key": agent.public.to_jwk(),
-            "verification_level": "operator_verified",
-        },
+        json=body,
     )
     assert response.status_code == 200, response.text
     return response.json()
@@ -347,7 +350,7 @@ def test_portal_revoke_and_admin_dispute_review():
     merchant = _org(client, "Techstore", "merchant")
     operator_key = _key(client, operator["org_id"])
     merchant_key = _key(client, merchant["org_id"])
-    _register(client, operator_key, principal_id="prn_owner")
+    _register(client, operator_key, principal_id="prn_owner", principal_email="owner@example.com")
     agreement = _agreement("prn_owner")
     client.post(
         "/v1/agents/shopper-01/intents",
@@ -364,12 +367,10 @@ def test_portal_revoke_and_admin_dispute_review():
     )
     before = client.get("/v1/agents/shopper-01", headers=_auth(operator_key)).json()["score"]
     client.post("/v1/portal/magic-link", json={"email": "owner@example.com"})
-    # The registry principal is prn_owner, while a new magic link creates a new principal.
-    # Bind the login to the registered principal so the portal sees the agent.
     service = client.app.state.bureau
-    service.repo.upsert_login("owner@example.com", "prn_owner", service.stamp())
     token = service.dev_mailbox[-1]["token"]
     session = client.post("/v1/sessions", json={"token": token})
+    assert session.json()["principal_id"] == "prn_owner"
     assert session.status_code == 200, session.text
     portal = session.json()["token"]
     agents = client.get("/v1/portal/agents", headers=_auth(portal))
@@ -487,3 +488,125 @@ def test_admin_seed_is_idempotent_and_stays_off_unless_allowed():
     assert agent.json()["score"] == 724
     methods = {item["method"] for item in agent.json()["proofings"]}
     assert {"key_binding", "operator_review", "institution_attestation"} <= methods
+
+
+def test_principal_email_cannot_move_to_another_principal():
+    client = _client(dev_mailbox=True)
+    operator = _org(client, "Harbor Agents", "agent_operator")
+    operator_key = _key(client, operator["org_id"])
+    _register(client, operator_key, principal_id="prn_owner", principal_email="owner@example.com")
+    other_key = generate_keypair("EdDSA")
+    stolen = client.post(
+        "/v1/agents",
+        headers=_auth(operator_key),
+        json={
+            "agent_id": "shopper-02",
+            "principal_id": "prn_other",
+            "principal_email": "owner@example.com",
+            "public_key": other_key.public.to_jwk(),
+            "verification_level": "key_bound",
+        },
+    )
+    assert stolen.status_code == 409
+    assert stolen.json()["error"] == "email is already bound to another principal"
+    link = client.post("/v1/portal/magic-link", json={"email": "owner@example.com"})
+    assert link.json()["sent"] is True
+    service = client.app.state.bureau
+    token = service.dev_mailbox[-1]["token"]
+    session = client.post("/v1/sessions", json={"token": token})
+    assert session.status_code == 200
+    assert session.json()["principal_id"] == "prn_owner"
+    fresh = client.post("/v1/portal/magic-link", json={"email": "new-person@example.com"})
+    assert fresh.json()["sent"] is True
+    second = client.post("/v1/portal/magic-link", json={"email": "new-person@example.com"})
+    assert second.json()["sent"] is True
+    first_token = service.dev_mailbox[-2]["token"]
+    second_token = service.dev_mailbox[-1]["token"]
+    first_session = client.post("/v1/sessions", json={"token": first_token})
+    second_session = client.post("/v1/sessions", json={"token": second_token})
+    assert first_session.status_code == 200
+    assert second_session.status_code == 200
+    assert first_session.json()["principal_id"] == second_session.json()["principal_id"]
+
+
+def test_endpoint_rate_limits_do_not_block_other_routes():
+    client = _client(
+        rate_limit_per_minute=100,
+        verify_rate_limit_per_minute=2,
+        inquiry_rate_limit_per_minute=1,
+        report_rate_limit_per_minute=1,
+    )
+    assert client.post("/v1/verify", json={}).status_code != 429
+    assert client.post("/v1/verify", json={}).status_code != 429
+    assert client.post("/v1/verify", json={}).status_code == 429
+    created = client.post("/v1/orgs", headers=_auth("admin-test-token"), json={"name": "Still Open", "org_type": "merchant"})
+    assert created.status_code == 200
+    assert client.post("/v1/inquiries", json={}).status_code != 429
+    assert client.post("/v1/inquiries", json={}).status_code == 429
+    assert client.post("/v1/reports", json={}).status_code != 429
+    assert client.post("/v1/reports", json={}).status_code == 429
+
+
+def test_smtp_is_off_unless_configured_and_does_not_print_the_password():
+    from kata_service.bureau import SilentMailer, SmtpMailer, mailer_from_settings
+    from kata_service.settings import settings_from_env
+
+    missing = settings_from_env({})
+    assert isinstance(mailer_from_settings(missing), SilentMailer)
+    configured = settings_from_env(
+        {
+            "GAB_SMTP_HOST": "smtp.gmail.com",
+            "GAB_SMTP_PORT": "587",
+            "GAB_SMTP_USER": "mailbox",
+            "GAB_SMTP_PASSWORD": "test-smtp-secret",
+            "GAB_SMTP_FROM": "from@example.com",
+            "GAB_PUBLIC_BASE_URL": "https://globalagentbureau.com",
+        }
+    )
+    assert configured.public_base_url == "https://globalagentbureau.com"
+    mailer = mailer_from_settings(configured)
+    assert isinstance(mailer, SmtpMailer)
+    assert "test-smtp-secret" not in repr(mailer)
+    sent: dict[str, object] = {}
+
+    class FakeSMTP:
+        def __init__(self, host, port, timeout=None):
+            sent["host"] = host
+            sent["port"] = port
+
+        def ehlo(self):
+            return None
+
+        def starttls(self):
+            sent["tls"] = True
+
+        def login(self, user, password):
+            sent["user"] = user
+            sent["password"] = password
+
+        def send_message(self, message):
+            sent["to"] = message["To"]
+            sent["from"] = message["From"]
+            sent["body"] = message.get_content()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    import smtplib
+
+    original = smtplib.SMTP
+    smtplib.SMTP = FakeSMTP
+    try:
+        mailer.send_magic_link("person@example.com", "https://globalagentbureau.com/portal#token=abc")
+    finally:
+        smtplib.SMTP = original
+    assert sent["host"] == "smtp.gmail.com"
+    assert sent["port"] == 587
+    assert sent["tls"] is True
+    assert sent["user"] == "mailbox"
+    assert sent["from"] == "from@example.com"
+    assert "agent bureau" in str(sent["body"]).lower()
+    assert "credit bureau" not in str(sent["body"]).lower()

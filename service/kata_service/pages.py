@@ -767,10 +767,10 @@ _ENDPOINTS: tuple[dict[str, str], ...] = (
     {
         "method": "POST",
         "path": "/v1/agents",
-        "summary": "An agent operator registers an agent. public_key is an Ed25519 or P-256 JWK with no private d. principal_id is a pseudonymous id. Optional device_signal and key_signal link the agent to a recently denied agent and inherit a penalty. proofing_evidence is sha256 and 64 hex characters. With proofing on, operator_verified adds 120 points only when that hash is present. Without it the score uses key_bound.",
+        "summary": "An agent operator registers an agent. public_key is an Ed25519 or P-256 JWK with no private d. principal_id is a pseudonymous id. Optional principal_email binds that address to the principal. An address already bound to a different principal is rejected. Optional device_signal and key_signal link the agent to a recently denied agent and inherit a penalty. proofing_evidence is sha256 and 64 hex characters. With proofing on, operator_verified adds 120 points only when that hash is present. Without it the score uses key_bound.",
         "request": '{\n  "agent_id": "shopper-01",\n  "principal_id": "prn_demo",\n  "verification_level": "operator_verified",\n  "proofing_evidence": "sha256:…",\n  "public_key": {"kty": "OKP", "crv": "Ed25519", "x": "…"}\n}',
         "response": '{\n  "agent_id": "shopper-01",\n  "status": "active",\n  "verification_level": "operator_verified",\n  "assurance_level": "operator_verified",\n  "fingerprint": "sha256:…",\n  "score": 700,\n  "risk": 300,\n  "model_version": "gab-score-1"\n}',
-        "errors": "Other tenants do not receive principal_id. 409 when the agent id or key is already registered. 400 when proofing_evidence is not sha256 and 64 hex characters.",
+        "errors": "Other tenants do not receive principal_id. 409 when the agent id or key is already registered, or when principal_email is already bound to another principal. 400 when proofing_evidence is not sha256 and 64 hex characters.",
     },
     {
         "method": "POST",
@@ -815,10 +815,10 @@ _ENDPOINTS: tuple[dict[str, str], ...] = (
     {
         "method": "POST",
         "path": "/v1/portal/magic-link",
-        "summary": "Sends a portal sign-in link. The response is always sent true. In development, GAB_DEV_MAILBOX=1 keeps the latest link at GET /v1/dev/mailbox.",
+        "summary": "Sends a portal sign-in link. The response is always sent true. An email already bound to a principal keeps that principal. A new email creates a new principal id and does not move an existing binding. SMTP is used when the host, user, password, and from address are set. Otherwise the link is not printed unless the development mailbox is on.",
         "request": '{\n  "email": "principal@example.com"\n}',
         "response": '{\n  "sent": true\n}',
-        "errors": "POST /v1/sessions exchanges the token. A new email creates a new principal id.",
+        "errors": "POST /v1/sessions exchanges the token. A new email creates a new principal id. Registering principal_email on the agent binds the portal to that principal.",
     },
     {
         "method": "POST",

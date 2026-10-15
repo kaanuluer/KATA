@@ -173,15 +173,27 @@ class PostgresRepo:
             (principal_id, at),
         )
 
-    def upsert_login(self, email: str, principal_id: str, at: str) -> None:
+    def insert_login(self, email: str, principal_id: str, at: str) -> str:
+        """Bind an email once. A conflict leaves the existing principal in place."""
+
         digest = email_hash(email)
-        self._execute(
+        row = self._one(
             """
             INSERT INTO gab_logins (email_hash, email, principal_id, created_at) VALUES (%s, %s, %s, %s)
-            ON CONFLICT (email_hash) DO UPDATE SET principal_id = EXCLUDED.principal_id
+            ON CONFLICT (email_hash) DO NOTHING
+            RETURNING principal_id
             """,
             (digest, email.strip().lower(), principal_id, at),
         )
+        if row is not None:
+            return "inserted"
+        current = self.login_by_hash(digest)
+        if current is not None and current["principal_id"] == principal_id:
+            return "same"
+        return "conflict"
+
+    def upsert_login(self, email: str, principal_id: str, at: str) -> None:
+        self.insert_login(email, principal_id, at)
 
     def login_by_email(self, email: str) -> dict[str, Any] | None:
         return self.login_by_hash(email_hash(email))

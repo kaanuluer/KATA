@@ -39,6 +39,15 @@ class Settings:
     allow_demo_seed: bool = False
     score_policy: ScorePolicy = field(default_factory=ScorePolicy)
     consortium_match_threshold: int = 2
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_user: str | None = None
+    smtp_password: str | None = None
+    smtp_from: str | None = None
+    public_base_url: str = "http://127.0.0.1:8765"
+    verify_rate_limit_per_minute: int = 60
+    inquiry_rate_limit_per_minute: int = 30
+    report_rate_limit_per_minute: int = 10
 
     def log_key(self) -> PrivateKey | None:
         if self.log_signing_seed is None:
@@ -83,6 +92,15 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
         allow_demo_seed=_flag(env.get("GAB_ALLOW_DEMO_SEED")),
         score_policy=_score_policy(env, weights),
         consortium_match_threshold=_positive_int(env.get("GAB_CONSORTIUM_MATCH_THRESHOLD"), 2),
+        smtp_host=_blank(env.get("GAB_SMTP_HOST")),
+        smtp_port=_positive_int(env.get("GAB_SMTP_PORT"), 587),
+        smtp_user=_blank(env.get("GAB_SMTP_USER")),
+        smtp_password=_blank(env.get("GAB_SMTP_PASSWORD")),
+        smtp_from=_blank(env.get("GAB_SMTP_FROM")),
+        public_base_url=_blank(env.get("GAB_PUBLIC_BASE_URL")) or "http://127.0.0.1:8765",
+        verify_rate_limit_per_minute=_positive_int(env.get("GAB_VERIFY_RATE_LIMIT_PER_MINUTE"), 60),
+        inquiry_rate_limit_per_minute=_positive_int(env.get("GAB_INQUIRY_RATE_LIMIT_PER_MINUTE"), 30),
+        report_rate_limit_per_minute=_positive_int(env.get("GAB_REPORT_RATE_LIMIT_PER_MINUTE"), 10),
     )
 
 
