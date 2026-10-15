@@ -1,7 +1,7 @@
 [project]
 name = "kata-service"
 version = "0.1.0"
-description = "Vercel deployment service for KATA revocation, the transparency log, institution keys, and daily FX. Concept / open design, not production ready."
+description = "Global Agent Bureau service. KATA is the framework. Source-available, noncommercial."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "PolyForm-Noncommercial-1.0.0"

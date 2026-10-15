@@ -1,6 +1,6 @@
 # Price Integrity Example
 
-**Status: Concept / Open Design — not production ready.**
+**Status: framework note. Source-available, noncommercial.**
 
 ## Scenario
 

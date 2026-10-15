@@ -2,7 +2,7 @@
   "$id": "https://KATA.org/schemas/transparency-log.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "KATA transparency log tree head",
-  "description": "Signed Merkle tree head for the append-only log of agreements and revocations. The JWS typ is kata-tree-head+jws. Entries are hash-chained and the root is a binary Merkle root. Status: Concept / Open Design — not production ready.",
+  "description": "Signed Merkle tree head for the append-only log of agreements and revocations. The JWS typ is kata-tree-head+jws. Entries are hash-chained and the root is a binary Merkle root. Status: framework note.",
   "type": "object",
   "additionalProperties": false,
   "required": ["algorithm", "at", "kata_tree_head", "root", "tree_size", "signature"],

@@ -1,6 +1,6 @@
 # Standards Landscape
 
-**Status: Concept / Open Design — not production ready.**
+**Status: framework note. Source-available, noncommercial.**
 
 KATA does not replace existing identity or authorization standards. It operates **above and alongside** them, consuming their evidence and converting it into a broader trust and risk decision. This document surveys the relevant landscape and states how KATA relates to each.
 
@@ -44,7 +44,7 @@ KATA's stance is **standards-neutral**: where a credible standard exists, KATA c
 
 ### Agent-to-agent identity & messaging efforts
 
-- **What it covers:** Emerging work on how agents identify each other, discover capabilities, and exchange structured messages (various industry and open-source efforts are active and evolving).
+- **What it covers:** Emerging work on how agents identify each other, discover capabilities, and exchange structured messages (various industry efforts are active and evolving).
 - **How KATA relates:** KATA needs *some* agent identity substrate to function — it does not prescribe which one. Any agent protocol that provides attributable identity and structured action proposals can feed the KATA evaluation model. Interoperability here is an open research area (see [KATA.md](../KATA.md#25-open-questions)).
 
 ### IETF Web Bot Auth
@@ -59,7 +59,7 @@ Industry efforts to give agents signed, credentialed identity and safe payment r
 
 #### Universal Commerce Protocol (UCP)
 
-- **What it covers:** Open-source commerce standard (Apache 2.0; announced January 2026 by Google, co-developed with Shopify, Etsy, Wayfair, Target, Walmart; 20+ endorsers including Visa, Mastercard, Stripe, Adyen, Amex). Standardizes the full shopping journey for AI agents: capability discovery via `/.well-known/ucp` manifests, checkout sessions (cart, totals, `ready_for_complete` state), discounts, fulfillment, order management, post-purchase. The merchant remains merchant of record. Composable with AP2 (payments), A2A and MCP (transports).
+- **What it covers:** Apache-2.0 commerce standard (announced January 2026 by Google, co-developed with Shopify, Etsy, Wayfair, Target, Walmart; 20+ endorsers including Visa, Mastercard, Stripe, Adyen, Amex). Standardizes the full shopping journey for AI agents: capability discovery via `/.well-known/ucp` manifests, checkout sessions (cart, totals, `ready_for_complete` state), discounts, fulfillment, order management, post-purchase. The merchant remains merchant of record. Composable with AP2 (payments), A2A and MCP (transports).
 - **Trust-relevant primitives:** `UCP-Agent` profile header + `request-signature` (agent identity evidence); Identity Linking via OAuth 2.0 — the agent acts on the buyer's behalf without holding credentials (delegation evidence, e.g. scope `dev.ucp.shopping.checkout`); tokenized payments; verifiable credentials; cryptographic proof of user consent on authorizations.
 - **How KATA relates:** UCP standardizes the *commerce* layer but defines no trust decision. Its checkout session is a structured, machine-readable **action object** — the ideal pre-execution evaluation point for KATA (evaluate at `ready_for_complete`: does this checkout match the principal's intent?). Its agent headers and OAuth identity-linking are **identity and delegation evidence** KATA consumes. See [examples/ucp-checkout/](../examples/ucp-checkout/) for a worked evaluation.
 - **Shopify: UCP in production.** Shopify co-developed UCP and is its largest live deployment. Agentic Storefronts (Storefront Catalog MCP migrated to UCP in April–May 2026; Universal Cart for multi-item agentic checkout; on by default for eligible stores) serve ChatGPT, Perplexity, Microsoft Copilot, and Google Gemini/AI Mode, with agent orders landing in Shopify admin like any channel order. In September 2026 Shopify extended WebMCP to checkout (`get_checkout`, `update_checkout`, `complete_checkout`, including Shop Pay) so browser-based agents can complete purchases with buyer authorization — with protocol-level trust controls that mirror KATA concepts: changed totals require asking again (intent re-verification), agents cannot enter new card details (constrained action space), 3DS hands control back to the buyer (step-up), and agents identify via Web Bot Auth (agent identity signal; see [IETF Web Bot Auth](#ietf-web-bot-auth) above). Shop Pay operates as a payment handler inside UCP's modular payment architecture.
@@ -92,4 +92,4 @@ These are intentionally left open for community design — standardizing too ear
 
 ## Disclaimer
 
-KATA is an independent open framework and is **not affiliated with** W3C, Google, Visa, Mastercard, OpenAI, or any other organization unless explicitly stated otherwise. References to standards above are descriptive only.
+KATA is an independent framework. It is source-available, noncommercial. It is **not affiliated with** W3C, Google, Visa, Mastercard, OpenAI, or any other organization unless explicitly stated otherwise. References to standards above are descriptive only.

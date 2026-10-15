@@ -2,7 +2,7 @@
 
 ![KATA — Know And Trust Agents](assets/kata-hero.jpg)
 
-[![Concept · Open Design](https://img.shields.io/badge/Status-Concept%20%C2%B7%20Open%20Design-blue)](KATA.md)
+[![Global Agent Bureau](https://img.shields.io/badge/Global%20Agent%20Bureau-live-0f766e)](https://globalagentbureau.com)
 [![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-blue)](LICENSE)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](https://github.com/kaanuluer/KATA/pulls)
 
@@ -265,11 +265,9 @@ Once a reference implementation exists, evaluate it against the [AgentCommerceBe
 
 ## Contributing
 
-KATA is source-available. Issues, discussions, and pull requests are welcome — especially on intent schemas, delegation models, threat scenarios, and agentic fraud signals.
+The Global Agent Bureau service is live at https://globalagentbureau.com. KATA is the framework. This repository is source-available, noncommercial. Issues, discussions, and pull requests are welcome — especially on intent schemas, delegation models, threat scenarios, and agentic fraud signals.
 
 Contributions are accepted under the same [PolyForm Noncommercial License 1.0.0](LICENSE). The owner may offer commercial licenses.
-
-**Status: Concept / Open Design — not production ready.**
 
 ## Commercial use
 
@@ -285,4 +283,4 @@ Versions published before this change were released under Apache-2.0 and remain 
 
 ## Disclaimer
 
-KATA is an independent open framework. It is **not affiliated with** W3C, Google, Visa, Mastercard, OpenAI, or any other organization unless explicitly stated otherwise. Nothing in this repository is financial, legal, or security advice.
+KATA is an independent framework. It is source-available, noncommercial. It is **not affiliated with** W3C, Google, Visa, Mastercard, OpenAI, or any other organization unless explicitly stated otherwise. Nothing in this repository is financial, legal, or security advice.

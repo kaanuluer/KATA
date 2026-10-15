@@ -2,7 +2,7 @@
   "$id": "https://KATA.org/schemas/institution-keys.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "KATA institution keys",
-  "description": "Key document an institution publishes at https://<domain>/.well-known/kata-keys.json. KATA also keeps an allowlist. A rotated key stays trusted until not_after plus the grace period. The default grace is 7 days. Status: Concept / Open Design — not production ready.",
+  "description": "Key document an institution publishes at https://<domain>/.well-known/kata-keys.json. KATA also keeps an allowlist. A rotated key stays trusted until not_after plus the grace period. The default grace is 7 days. Status: framework note.",
   "type": "object",
   "additionalProperties": false,
   "required": ["keys"],

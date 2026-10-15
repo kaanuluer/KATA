@@ -1,6 +1,6 @@
 # Verifiable Intent — Worked KATA Evaluation
 
-**Status: Concept / Open Design — not production ready.**
+**Status: framework note. Source-available, noncommercial.**
 
 KATA is not affiliated with Mastercard or the Verifiable Intent Working Group.
 

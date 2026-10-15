@@ -1,6 +1,6 @@
 # AP2 Checkout — Worked KATA Evaluation
 
-**Status: Concept / Open Design — not production ready.**
+**Status: framework note. Source-available, noncommercial.**
 
 KATA is not affiliated with Google or the AP2 authors.
 

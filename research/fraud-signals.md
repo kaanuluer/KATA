@@ -1,6 +1,6 @@
 # Fraud Signals: Traditional → Agentic Mapping
 
-**Status: Concept / Open Design — not production ready.**
+**Status: framework note. Source-available, noncommercial.**
 
 KATA's core design principle:
 

@@ -67,7 +67,7 @@ Intent agreement, the machinery for KATA's third question.
 
 - [docs/intent-agreement.md](docs/intent-agreement.md) specifies the signed intent mandate, the agreement lifecycle, the action check (`ALLOW`, `STEP_UP`, `DENY`), the threat controls, and how AP2, Verifiable Intent, OAuth, RAR, and GNAP sit beside it. KATA's schemas stay authoritative.
 - [schemas/intent-mandate.json](schemas/intent-mandate.json) and [schemas/agreement.json](schemas/agreement.json). `intent.maximum_amount` stays the per-transaction ceiling. Cumulative and frequency limits are separate because they need a ledger.
-- [`reference/python`](reference/python) signs a mandate with Ed25519, verifies it, evaluates an action, and revokes or expires the agreement. Tests and `examples/purchase_check.py` cover an in-scope purchase and an out-of-scope one. No risk score and no behavior model. Not production ready.
+- [`reference/python`](reference/python) signs a mandate with Ed25519, verifies it, evaluates an action, and revokes or expires the agreement. Tests and `examples/purchase_check.py` cover an in-scope purchase and an out-of-scope one. No risk score and no behavior model. That sentence recorded the first library cut.
 
 ## 2026-10-12
 
