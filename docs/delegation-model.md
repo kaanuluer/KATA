@@ -1,6 +1,6 @@
 # KATA Delegation Model
 
-**Status: Concept / Open Design — not production ready.**
+**Status: framework note.** The Global Agent Bureau service is live. This page is the design note, not a customer or performance claim.
 
 Delegation is the explicit, machine-readable relationship between a **principal** (human, business, institution, system, or another agent) and an **agent** — the answer to *"who authorized this agent, to do what, for how long, under what conditions?"*
 

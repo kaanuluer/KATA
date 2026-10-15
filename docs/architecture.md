@@ -1,6 +1,6 @@
 # KATA Architecture
 
-**Status: Concept / Open Design — not production ready.**
+**Status: framework note.** The Global Agent Bureau service is live. This page is the design note, not a customer or performance claim.
 
 This document describes how KATA could be deployed as an infrastructure / service layer: the components, the data flow, and the deployment options. It is a reference architecture, not a product specification.
 
@@ -88,4 +88,4 @@ All three are deployment *patterns*, not products. The framework is standards-ne
 
 ## Out of scope for this document
 
-A reference library for the intent agreement now exists ([intent-agreement.md](intent-agreement.md)). Concrete wire protocols, gateway deployment, storage design, and multi-tenant isolation are still open.
+The Global Agent Bureau service hosts registration, stored intents, the rule score `gab-score-1`, and the synthetic stress test at `/simulation`. A wire protocol between institutions, and gossip between transparency logs, are still open. The intent-agreement rules are in [intent-agreement.md](intent-agreement.md).

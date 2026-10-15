@@ -4,7 +4,7 @@
 
 An unlinked report, or a report whose verify is under the link minimum, is rejected and not stored. A velocity breach is `DENY` with `kata_decision` `BLOCK` and does not record the spend. An open dispute has no review deadline.
 
-`/simulation` shows only the latest synthetic stress test. Every figure is labeled SYNTHETIC TEST DATA – not real customers. Earlier test columns are not on the page.
+The home page, the design roadmap, and `/simulation` state the same synthetic headline: 73% of adaptive attempted fraud dollars stopped ($0.71M executed) and 78% when attackers do not know the rules ($0.68M executed). Every public figure is labeled SYNTHETIC TEST DATA – not real customers.
 
 Negative reports now lose weight when they contradict a settled report from the same reporter, when one reporter concentrates negatives on one or two operators, or when several reporters reuse one evidence hash. Reporter reputation still applies.
 

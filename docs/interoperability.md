@@ -1,6 +1,6 @@
 # Interoperability
 
-**Status: Concept / Open Design — not production ready.**
+**Status: framework note.** The Global Agent Bureau service is live. This page is the design note, not a customer or performance claim.
 
 KATA does not replace the protocols below. A verified mandate or credential is evidence for one or more of the four KATA questions. It is not a KATA decision. KATA still has to score behavior, compare price integrity, and return one of seven decisions.
 

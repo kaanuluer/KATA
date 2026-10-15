@@ -1,6 +1,6 @@
 # KATA Agent Identity
 
-**Status: Concept / Open Design — not production ready.**
+**Status: framework note.** The Global Agent Bureau service is live. This page is the design note, not a customer or performance claim.
 
 Agent identity answers the first KATA question — **WHO is the agent?** — covering identity attributes, provenance verification, and reputation. It establishes *who the agent is*, which is necessary but never sufficient for trust.
 

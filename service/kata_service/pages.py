@@ -498,6 +498,15 @@ _MILESTONES = (
         "The organization dashboard is <a href=\"/dashboard\">/dashboard</a> and the individual portal is "
         "<a href=\"/portal\">/portal</a>.</p>",
     ),
+    _mile(
+        "2026-10-15",
+        "Bureau defenses and one synthetic stress test",
+        "<p>The service rejects an unlinked report, denies a velocity breach, and publishes one synthetic "
+        "stress test at <a href=\"/simulation\">/simulation</a>. Every figure is labeled "
+        "SYNTHETIC TEST DATA – not real customers. Against adaptive attackers, 73% of attempted fraud "
+        "dollars are stopped and $0.71M is executed. When attackers do not know the rules, 78% is stopped "
+        "and $0.68M is executed. The home page states that same headline.</p>",
+    ),
 )
 
 

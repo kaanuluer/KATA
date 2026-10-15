@@ -1,6 +1,6 @@
 # KATA Risk Model
 
-**Status: Concept / Open Design — not production ready.**
+**Status: framework note.** The live agent score is `gab-score-1`, an integer from 0 to 1000, at `GET /v1/score-model`. The synthetic stress test is at `/simulation` and is labeled SYNTHETIC TEST DATA – not real customers. A 0–100 sketch later in this note is not that score.
 
 This document describes how KATA composes risk: what the component risks are, how they are correlated rather than scored in isolation, and what an explainable decision must contain.
 

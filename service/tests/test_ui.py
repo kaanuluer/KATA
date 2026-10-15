@@ -38,6 +38,15 @@ def test_home_page_explains_kata_in_english():
     assert 'href="/dashboard"' in body
     assert 'href="/portal"' in body
     assert 'href="/simulation"' in body
+    assert "SYNTHETIC TEST DATA – not real customers" in body
+    assert "$0.71M" in body
+    assert "73%" in body
+    assert "$0.68M" in body
+    assert "78%" in body
+    assert "earlier test" not in body.lower()
+    assert "v2" not in body.lower()
+    assert "v3" not in body.lower()
+    assert "book a call" not in body.lower()
     assert '/assets/kata-logo.svg' in body
     assert '/assets/kata-icon.svg' in body
     assert "credit bureau" not in body.lower()
@@ -70,6 +79,9 @@ def test_history_page_uses_repository_facts():
     assert "2026-10-09T02:05:23Z" in body
     assert "2026-10-12T22:46:54Z" in body
     assert "2026-10-13T04:16:43Z" in body
+    assert "2026-10-15" in body
+    assert "SYNTHETIC TEST DATA – not real customers" in body
+    assert "$0.71M" in body
     assert 'href="https://github.com/kaanuluer/KATA"' in body
     assert "PolyForm Noncommercial" in body
     assert "PolyForm Noncommercial License 1.0.0" in body
@@ -108,6 +120,12 @@ def test_rendered_docs_come_from_the_repository():
     assert 'href="/docs/schemas/decision.json"' in design.text
     assert "open source" not in design.text.lower()
     assert "open-source" not in design.text.lower()
+    assert "SYNTHETIC TEST DATA – not real customers" in design.text
+    assert "$0.71M" in design.text
+    assert "73%" in design.text
+    assert 'href="/simulation"' in design.text
+    assert "Still no calibrated score" not in design.text
+    assert "not production ready" not in design.text.lower()
 
     authorization = client.get("/docs/authorization")
     assert authorization.status_code == 200

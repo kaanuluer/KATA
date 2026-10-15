@@ -1,6 +1,6 @@
 # KATA Intent Model
 
-**Status: Concept / Open Design — not production ready.**
+**Status: framework note.** The Global Agent Bureau service is live. This page is the design note, not a customer or performance claim.
 
 Intent is one of KATA's most important concepts: the principal's *declared purpose* for the delegation, expressed as structured, machine-readable data, and used as a first-class risk signal throughout the agent's session.
 

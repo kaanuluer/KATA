@@ -1,6 +1,6 @@
 # KATA Intent Agreement
 
-**Status: Concept / Open Design — not production ready.**
+**Status: these are the intent-agreement rules the live Global Agent Bureau service checks.** The synthetic stress test is a separate page, at `/simulation`, and it is not a customer or performance claim.
 
 This document specifies how a principal and an agent, and optionally a merchant, a payment provider, or an issuer, establish a verifiable agreement on what the agent may do, and how a proposed action is checked against that agreement.
 
@@ -359,7 +359,7 @@ Worked mappings of the commerce fields remain [interoperability.md](interoperabi
 |---|---|
 | Create, render, sign, and verify a mandate | Natural-language parsing into an intent. The caller supplies the structured intent. |
 | Propose, clarify, accept, acknowledge, amend, add an intent, revoke, expire | An HTTP API, a gateway, or storage shared across processes |
-| `ALLOW` / `STEP_UP` / `DENY` with the reason codes above | Risk scores, behavior profiles, drift across a session |
+| `ALLOW` / `STEP_UP` / `DENY` with the reason codes above | A behavior profile or drift model inside this library. The bureau score is `gab-score-1` on the service, not in this library. |
 | Hash-chained ledger, head and sequence on each check, 60-second staleness | A network protocol that ships the replica between processes |
 | Pull cache, signed push webhook, and a Merkle transparency log, all in process | Opening a socket, operating the log, or gossip between logs |
 | Price band, fees, merchant, category, settlement mismatch, `max_items` | A general constraint language. Other `constraints` keys are stored only. |
@@ -371,19 +371,23 @@ Demo keys in the example are derived from public seeds.
 
 ## Roadmap
 
-The next slices, in the order they unblock each other:
+What is live, then what is still open. The site publishes one synthetic stress test, at [/simulation](/simulation). SYNTHETIC TEST DATA – not real customers. It is not a measurement of real customers, and it is not a stand-in for another benchmark.
 
-1. **Revocation hosting.** The pull cache, the push webhook, and the signed Merkle log are in the library. What remains is who operates the log, which key verifiers trust for tree heads, and gossip between logs. The library verifies a key the deployment supplies.
-2. **Ledger sync.** Truncation and staleness are checked. What remains is a transport that carries the head between processes. This library does not open a socket.
-3. **Full evaluator.** Identity, delegation freshness, and behavior around this verdict, emitting the seven decisions. Still no calibrated score until there is a measurement.
-4. **Intent capture.** Propose a structured intent from the instruction, then require the KATA rendering as the confirmation. The parser is a separate component so a bad parse cannot sign itself.
-5. **Selective disclosure.** SD-JWT, if a deployment needs to show a subset of the mandate. ES256 is already a signing algorithm. Version the signing document rather than overloading `kata_mandate` `1`.
-6. **Institution-key operations.** The allowlist, `.well-known/kata-keys.json`, and a 7-day grace are specified. Fetching that document, and who maintains the allowlist, are deployment work.
-7. **Evaluation against AgentCommerceBench.** Run the reference check on the classes it can see (amount, category, quote, list, fees, replay, payee). Report recall at a stated false-positive budget. Do not cite a coverage number before that run. Silent downgrade still needs delivery evidence this layer does not have.
-8. **Envelope.** Only after the fields settle: VC packaging, or carrying the intent inside RAR `authorization_details`. Not a second schema.
+**Live.** Global Agent Bureau registers agents, checks stored intents, and publishes the rule score `gab-score-1`. The synthetic run uses 10,000 synthetic agents and 100,000 synthetic transactions over 90 days. Against adaptive attackers, 73% of attempted fraud dollars are stopped and $0.71M is executed. When attackers do not know the rules, 78% is stopped and $0.68M is executed. Legitimate agents denied at day 90 are 0.15% and 0.16%.
+
+**Still open.**
+
+1. **Revocation gossip.** The service hosts the pull list, the push webhook, and the signed Merkle log. Gossip between logs is not built. The library verifies a key the deployment supplies.
+2. **Ledger sync.** Truncation and staleness are checked inside one process. A transport that carries the head between processes is not built. This library does not open a socket.
+3. **Seven-outcome evaluator.** The bureau score is a rule score. It is not fit from outcomes, and it does not emit the wider seven decisions.
+4. **Intent capture.** Propose a structured intent from the instruction, then require the KATA rendering as the confirmation. The parser stays a separate component so a bad parse cannot sign itself.
+5. **Selective disclosure.** SD-JWT, if a deployment needs to show a subset of the mandate. ES256 is already a signing algorithm.
+6. **Institution-key operations.** `.well-known/kata-keys.json` is on the service. Who maintains the allowlist is still deployment work.
+7. **AgentCommerceBench.** That benchmark has not been run. Do not read the synthetic stress test as that result.
+8. **Envelope.** VC packaging, or carrying the intent inside RAR `authorization_details`, waits until the fields settle. Not a second schema.
 
 ## Still open
 
 Decisions 1 through 20 are applied. These are not:
 
-- The reference library does not open a socket. [`service/`](../service/) is a Vercel host for the pull list, the push webhook, the transparency log, `.well-known/kata-keys.json`, and a Frankfurter FX stub. Gossip between logs is still not built. The wallet or bank app still displays the confirmation.
+- The reference library does not open a socket. The live service hosts the bureau, the pull list, the push webhook, the transparency log, `.well-known/kata-keys.json`, and a Frankfurter FX stub. Gossip between logs is still not built. The wallet or bank app still displays the confirmation.
