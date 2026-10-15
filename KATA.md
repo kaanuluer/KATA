@@ -297,7 +297,7 @@ Conceptually:
 
 This is only an example.
 
-The framework should eventually define a formal intent schema.
+The framework should eventually define a formal intent schema. A signed form of this object — the intent mandate, the agreement lifecycle, and a reference check of an action against it — is drafted in [docs/intent-agreement.md](docs/intent-agreement.md). `maximum_amount` in that draft is the per-transaction ceiling.
 
 ---
 
@@ -982,13 +982,19 @@ docs/
     delegation-model.md
     agent-identity.md
     interoperability.md
+    intent-agreement.md
 
 schemas/
     agent.json
     delegation.json
     intent.json
+    intent-mandate.json
+    agreement.json
     action.json
     decision.json
+
+reference/
+    python/
 
 examples/
     shopping-agent/

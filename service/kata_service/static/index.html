@@ -1,0 +1,112 @@
+<section class="hero">
+  <p class="kicker">Global Agent Bureau</p>
+  <h1>Know the agent before the payment goes through.</h1>
+  <p class="lede">Global Agent Bureau is an independent agent bureau. Participants register agents, check signed intents, inquire with a purpose code, and report incidents. The checks are powered by KATA — Know And Trust Agents. A valid identity is not the same thing as a valid action.</p>
+  <p class="actions"><a class="button" href="/dashboard">Organization dashboard</a> <a class="button ghost" href="/portal">Individual portal</a></p>
+  <ol class="questions" id="questions">
+    <li>
+      <em>01</em>
+      <strong>Who is the agent?</strong>
+      <p>Identity and provenance of the agent that wants to act.</p>
+    </li>
+    <li>
+      <em>02</em>
+      <strong>Who authorized it?</strong>
+      <p>The principal who signed the delegation and the intent.</p>
+    </li>
+    <li>
+      <em>03</em>
+      <strong>What was it authorized to do?</strong>
+      <p>Purpose, ceiling, currency, merchants, and expiry.</p>
+    </li>
+    <li>
+      <em>04</em>
+      <strong>Does this behavior match?</strong>
+      <p>The payment is checked against that signed record.</p>
+    </li>
+  </ol>
+</section>
+
+<section id="demo">
+  <h2>Try a signed intent</h2>
+  <p class="lede">This sample uses public demo keys for K. Uluer and the agent shopper-01. The page asks the reference library to render the confirmation, sign it, and return allow, deny, or step-up. It does not spend money.</p>
+  <form id="demo-form" class="panel">
+    <div class="demo-grid">
+      <fieldset>
+        <legend>Intent the principal signs</legend>
+        <label for="maximum_amount">Maximum amount</label>
+        <input id="maximum_amount" name="maximum_amount" type="number" min="0" step="0.01" value="1500" required>
+        <label for="intent_currency">Currency</label>
+        <input id="intent_currency" name="intent_currency" value="CAD" maxlength="3" required>
+        <label for="purpose">Purpose</label>
+        <select id="purpose" name="purpose">
+          <option value="purchase" selected>purchase</option>
+          <option value="payment">payment</option>
+          <option value="transfer">transfer</option>
+        </select>
+        <label for="category">Category</label>
+        <input id="category" name="category" value="electronics">
+        <label for="allowed_merchant">Allowed merchant, if any</label>
+        <input id="allowed_merchant" name="allowed_merchant" placeholder="Leave empty for any merchant">
+        <label for="natural_language">Instruction</label>
+        <textarea id="natural_language" name="natural_language">Find and buy a laptop for me, maximum CAD 1,500.</textarea>
+        <label class="check" for="include_expiry">
+          <input id="include_expiry" name="include_expiry" type="checkbox" checked>
+          Include an expiry. Without one, the check asks for approval.
+        </label>
+        <label for="time_limit">Expiry date</label>
+        <input id="time_limit" name="time_limit" type="date">
+      </fieldset>
+      <fieldset>
+        <legend>Payment the agent proposes</legend>
+        <label for="item">Item</label>
+        <input id="item" name="item" value="Laptop" required>
+        <label for="payment_amount">Amount</label>
+        <input id="payment_amount" name="payment_amount" type="number" min="0" step="0.01" value="1300" required>
+        <label for="payment_currency">Currency</label>
+        <input id="payment_currency" name="payment_currency" value="CAD" maxlength="3" required>
+        <label for="payment_merchant">Merchant</label>
+        <input id="payment_merchant" name="payment_merchant" value="techstore.example" required>
+        <div class="actions">
+          <button type="submit">Sign and check</button>
+          <button class="ghost" type="button" data-preset="allow">CAD 1,300 laptop</button>
+          <button class="ghost" type="button" data-preset="deny">CAD 4,200 laptop</button>
+          <button class="ghost" type="button" data-preset="step">No expiry</button>
+        </div>
+      </fieldset>
+    </div>
+    <div id="demo-result" class="result" hidden aria-live="polite"></div>
+  </form>
+</section>
+
+<section id="operations">
+  <div class="ops-head">
+    <h2>What this deployment is publishing</h2>
+    <button id="refresh-ops" class="ghost" type="button">Refresh</button>
+  </div>
+  <div class="ops">
+    <article>
+      <h3>Revocation list</h3>
+      <p>Pulled from <span class="meta">GET /v1/revocations</span>. Cached for five minutes.</p>
+      <div id="revocation-body"><p>Loading the revocation list…</p></div>
+    </article>
+    <article>
+      <h3>Published keys</h3>
+      <p>The log public key and any extra records at <span class="meta">/.well-known/kata-keys.json</span>.</p>
+      <div id="keys-body"><p>Loading published keys…</p></div>
+    </article>
+    <article>
+      <h3>Transparency log</h3>
+      <p>The signed tree head from <span class="meta">GET /v1/log/head</span>.</p>
+      <div id="log-body"><p>Loading the tree head…</p></div>
+    </article>
+  </div>
+</section>
+
+<section id="stress-test">
+  <h2>Stress test</h2>
+  <p class="sim-banner">SYNTHETIC TEST DATA – not real customers</p>
+  <p class="lede">This is the latest synthetic stress test of the trust score: 10,000 synthetic agents and 100,000 synthetic transactions over 90 days. Against adaptive attackers, 73% of attempted fraud dollars are stopped and $0.71M is executed. When attackers do not know the rules, 78% is stopped and $0.68M is executed. Legitimate agents denied at day 90 are 0.15% and 0.16%. Tables and charts are on the <a href="/simulation">Simulation</a> page. Global Agent Bureau is an agent bureau. Learn more at <a href="https://globalagentbureau.com">globalagentbureau.com</a>.</p>
+</section>
+
+<!--HISTORY-->

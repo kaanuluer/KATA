@@ -1,0 +1,45 @@
+<section class="hero">
+  <p class="kicker">Individuals</p>
+  <h1>Your agents</h1>
+  <p class="lede">Sign in with the email bound to your pseudonymous principal id. You can see your agents, their assurance level, score, and risk, their authorizations, who inquired about them, and the incidents filed against them. You can revoke an agent or an intent, and you can dispute an incident and see the disputes you have filed.</p>
+</section>
+
+<form id="portal-login" class="panel">
+  <label for="portal-email">Email</label>
+  <input id="portal-email" type="email" value="principal@example.com" autocomplete="username" required>
+  <div class="actions">
+    <button type="submit">Email a sign-in link</button>
+    <button class="ghost" id="portal-mailbox" type="button">Open the development mailbox</button>
+  </div>
+  <p id="portal-status" class="meta" role="status"></p>
+</form>
+
+<div id="portal-app" hidden>
+  <div class="ops-head">
+    <p id="portal-who" class="meta"></p>
+    <button id="portal-out" class="ghost" type="button">Sign out</button>
+  </div>
+  <section class="panel">
+    <h2>Agents</h2>
+    <div id="portal-agents"></div>
+  </section>
+  <section class="panel">
+    <h2>Who inquired</h2>
+    <div id="portal-inquiries"></div>
+  </section>
+  <section class="panel">
+    <h2>Your disputes</h2>
+    <div id="portal-disputes"></div>
+  </section>
+  <section class="panel">
+    <h2>Dispute an incident</h2>
+    <form id="dispute-form">
+      <label for="dispute-report">Report id</label>
+      <input id="dispute-report" required placeholder="rpt_…">
+      <label for="dispute-statement">Statement</label>
+      <textarea id="dispute-statement" required>This incident does not match what I authorized.</textarea>
+      <button type="submit">File dispute</button>
+    </form>
+    <div id="dispute-result" class="result" hidden></div>
+  </section>
+</div>

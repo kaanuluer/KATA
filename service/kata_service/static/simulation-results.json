@@ -1,0 +1,3422 @@
+{
+ "label": "SYNTHETIC TEST DATA \u2013 not real customers",
+ "setup": {
+  "agents": 10000,
+  "transactions": 100000,
+  "days": 90,
+  "seed": 20261015,
+  "mix": {
+   "legit": 0.8,
+   "risky": 0.12,
+   "malicious": 0.08
+  }
+ },
+ "headline": {
+  "unaware": {
+   "attempted_fraud_usd": 3076261.339310157,
+   "blocked_by_deny_usd": 731582.9759613918,
+   "caught_by_stepup_usd": 1660912.7876598246,
+   "fraud_loss_usd": 683765.5756889374,
+   "fraud_prevented_share_usd": 0.7777283851175434,
+   "mal_ever_denied": 0.27373612823674476,
+   "mal_final_cur_identity": {
+    "allow": 0.05795314426633785,
+    "step_up": 0.5881627620221949,
+    "deny": 0.35388409371146734
+   },
+   "mal_flagged_final": 0.9420468557336621,
+   "legit_final": {
+    "allow": 0.7084168336673347,
+    "step_up": 0.2899549098196393,
+    "deny": 0.001628256513026052
+   },
+   "legit_txn_share": {
+    "step_up": 0.48033788238806713,
+    "allow": 0.5185922396526629,
+    "deny": 0.001069877959269995
+   },
+   "ring_theft_usd": 73506.19637967879,
+   "ring_peak_ge650": 0.14432989690721648,
+   "ring_peak_ge750": 0.0,
+   "targets_final_below500": 0.0,
+   "targets_ever_below500": 0.0,
+   "targets_final_below650": 0.2860125260960334,
+   "nontargets_final_below650": 0.29193870752831447,
+   "fake_report_targets": 479,
+   "fake_reports_filed": 1932,
+   "sybil_identities_created": 371,
+   "rereg_total": 371,
+   "rereg_linked": 370,
+   "rereg_mode": {
+    "naive": 371
+   },
+   "rereg_mode_linked": {
+    "naive": 370
+   },
+   "attacker_fab_cost_usd": 21468.150828080154,
+   "attacker_identity_cost_usd": 0.0,
+   "loss_by_tier": {
+    "static": 406045.45954659634,
+    "smurf": 131605.34084500524,
+    "ring": 73506.19637967879,
+    "selfdeal": 35566.52944447652,
+    "sleeper": 37042.04947317945
+   },
+   "attempt_by_tier": {
+    "static": 2311317.8514279644,
+    "smurf": 438155.81832453917,
+    "ring": 187967.1851228057,
+    "selfdeal": 70716.77193996888,
+    "sleeper": 68103.71249487648
+   },
+   "tier_counts": {
+    "ring": 194,
+    "smurf": 145,
+    "static": 288,
+    "sleeper": 111,
+    "selfdeal": 73
+   },
+   "tier_flagged": {
+    "ring": 0.9639175257731959,
+    "selfdeal": 0.9452054794520548,
+    "smurf": 0.9793103448275862,
+    "sleeper": 0.9459459459459459,
+    "static": 0.90625
+   },
+   "velocity_stepups_legit": 4338,
+   "velocity_stepups_malicious": 68,
+   "velocity_reasons": {
+    "VELOCITY_AMOUNT": 136,
+    "VELOCITY_BURST": 3710,
+    "VELOCITY_CASHOUT": 691
+   },
+   "legit_agents_with_discounted_settled_edges": 192,
+   "ring_edges_discounted": 1901,
+   "edges_total": 27925,
+   "loss_by_segment": {
+    "shopping": 95254.8348177184,
+    "assistant": 30357.353842214994,
+    "travel": 167104.41397011428,
+    "treasury": 391048.97305888927
+   },
+   "attempt_by_segment": {
+    "assistant": 88610.43106170636,
+    "shopping": 269569.17780675023,
+    "travel": 694353.1616227184,
+    "treasury": 2023728.568818979
+   },
+   "weekly_loss_usd": [
+    77078.60589059745,
+    64317.01927444877,
+    56064.11459284077,
+    35938.69588446246,
+    49563.57966949106,
+    54384.93415323791,
+    80135.34959092362,
+    50693.5676369843,
+    49408.078233774766,
+    37396.37510854862,
+    40706.7362311532,
+    43362.84000045611,
+    44715.67942201772
+   ],
+   "weekly_attempt_usd": [
+    230277.75736372286,
+    222513.62888703478,
+    248049.79155034974,
+    170009.73449482908,
+    197426.33632495868,
+    165978.48412159111,
+    273638.29659756675,
+    303610.9828692784,
+    268501.5342697595,
+    210351.15312939088,
+    280781.7807428885,
+    216431.56728044906,
+    288690.2916783349
+   ]
+  },
+  "adaptive": {
+   "attempted_fraud_usd": 2624924.1991276173,
+   "blocked_by_deny_usd": 438041.55485375476,
+   "caught_by_stepup_usd": 1476420.1050662966,
+   "fraud_loss_usd": 710462.539207561,
+   "fraud_prevented_share_usd": 0.7293397883856302,
+   "mal_ever_denied": 0.27003699136868065,
+   "mal_final_cur_identity": {
+    "allow": 0.10234278668310727,
+    "step_up": 0.5955610357583231,
+    "deny": 0.30209617755856966
+   },
+   "mal_flagged_final": 0.8976572133168927,
+   "legit_final": {
+    "allow": 0.7060370741482966,
+    "step_up": 0.29245991983967934,
+    "deny": 0.001503006012024048
+   },
+   "legit_txn_share": {
+    "step_up": 0.4864461391090156,
+    "allow": 0.5121480910142692,
+    "deny": 0.0014057698767152259
+   },
+   "ring_theft_usd": 97851.73964425785,
+   "ring_peak_ge650": 0.4587628865979381,
+   "ring_peak_ge750": 0.06701030927835051,
+   "targets_final_below500": 0.0,
+   "targets_ever_below500": 0.027139874739039668,
+   "targets_final_below650": 0.31941544885177453,
+   "nontargets_final_below650": 0.2923384410393071,
+   "fake_report_targets": 479,
+   "fake_reports_filed": 1932,
+   "sybil_identities_created": 175,
+   "rereg_total": 175,
+   "rereg_linked": 71,
+   "rereg_mode": {
+    "fresh": 100,
+    "partial": 50,
+    "wait": 25
+   },
+   "rereg_mode_linked": {
+    "partial": 48,
+    "wait": 23
+   },
+   "attacker_fab_cost_usd": 25955.272958885525,
+   "attacker_identity_cost_usd": 4000.0,
+   "loss_by_tier": {
+    "static": 329968.27994587703,
+    "smurf": 198729.31846410135,
+    "selfdeal": 42185.92078863952,
+    "ring": 97851.73964425785,
+    "sleeper": 41727.28036468585
+   },
+   "attempt_by_tier": {
+    "static": 1890922.3124441043,
+    "ring": 191816.87607326036,
+    "smurf": 415063.0468474257,
+    "selfdeal": 64636.780398399154,
+    "sleeper": 62485.18336442386
+   },
+   "tier_counts": {
+    "ring": 194,
+    "smurf": 145,
+    "static": 288,
+    "sleeper": 111,
+    "selfdeal": 73
+   },
+   "tier_flagged": {
+    "ring": 0.8865979381443299,
+    "selfdeal": 0.8767123287671232,
+    "smurf": 0.9379310344827586,
+    "sleeper": 0.918918918918919,
+    "static": 0.8819444444444444
+   },
+   "velocity_stepups_legit": 4196,
+   "velocity_stepups_malicious": 73,
+   "velocity_reasons": {
+    "VELOCITY_AMOUNT": 110,
+    "VELOCITY_BURST": 3636,
+    "VELOCITY_CASHOUT": 657,
+    "VELOCITY_COUNT": 3
+   },
+   "legit_agents_with_discounted_settled_edges": 167,
+   "ring_edges_discounted": 561,
+   "edges_total": 27802,
+   "loss_by_segment": {
+    "shopping": 107313.41398121175,
+    "assistant": 46096.02883634991,
+    "travel": 249388.84606347088,
+    "treasury": 307664.25032652897
+   },
+   "attempt_by_segment": {
+    "assistant": 99950.61404187087,
+    "shopping": 258821.09608335063,
+    "travel": 726474.3937741285,
+    "treasury": 1539678.0952282648
+   },
+   "weekly_loss_usd": [
+    47573.52424434983,
+    53544.44813489176,
+    59372.3303306475,
+    31408.01799969574,
+    42051.31380656704,
+    31732.954498176132,
+    84009.17363332563,
+    64341.74355284132,
+    94893.00857290637,
+    50325.13838120311,
+    61900.64059494436,
+    41839.44082099014,
+    47470.80463702252
+   ],
+   "weekly_attempt_usd": [
+    138996.27619230121,
+    141653.15309684214,
+    246238.34686664116,
+    206230.53696694155,
+    150728.88353758553,
+    119999.5312292215,
+    214969.35913328824,
+    207081.5504125789,
+    297533.6118298588,
+    212329.69034697706,
+    261111.55814247424,
+    213413.7891433028,
+    214637.91222960292
+   ]
+  }
+ },
+ "sensitivity": {
+  "adaptive_link0": {
+   "attempted_fraud_usd": 3069757.6215114864,
+   "blocked_by_deny_usd": 595030.1043192524,
+   "caught_by_stepup_usd": 1677558.894019028,
+   "fraud_loss_usd": 797168.6231732033,
+   "fraud_prevented_share_usd": 0.7403154511004377,
+   "mal_ever_denied": 0.2688039457459926,
+   "mal_final_cur_identity": {
+    "allow": 0.12330456226880394,
+    "step_up": 0.5807644882860666,
+    "deny": 0.2959309494451295
+   },
+   "mal_flagged_final": 0.8766954377311961,
+   "legit_final": {
+    "allow": 0.7090430861723447,
+    "step_up": 0.2895791583166333,
+    "deny": 0.0013777555110220442
+   },
+   "legit_txn_share": {
+    "step_up": 0.48365948023835886,
+    "allow": 0.5153452844506923,
+    "deny": 0.0009952353109488326
+   },
+   "ring_theft_usd": 104763.82054249936,
+   "ring_peak_ge650": 0.4587628865979381,
+   "ring_peak_ge750": 0.07216494845360824,
+   "targets_final_below500": 0.0,
+   "targets_ever_below500": 0.0,
+   "targets_final_below650": 0.29227557411273486,
+   "nontargets_final_below650": 0.29087275149900066,
+   "fake_report_targets": 479,
+   "fake_reports_filed": 1932,
+   "sybil_identities_created": 172,
+   "rereg_total": 172,
+   "rereg_linked": 71,
+   "rereg_mode": {
+    "fresh": 95,
+    "partial": 56,
+    "wait": 21
+   },
+   "rereg_mode_linked": {
+    "partial": 53,
+    "wait": 18
+   },
+   "attacker_fab_cost_usd": 23078.891534745955,
+   "attacker_identity_cost_usd": 3800.0,
+   "loss_by_tier": {
+    "static": 404651.9823924192,
+    "smurf": 197857.2661008396,
+    "selfdeal": 48962.27446044448,
+    "ring": 104763.82054249936,
+    "sleeper": 40933.27967700111
+   },
+   "attempt_by_tier": {
+    "static": 2300249.3393347785,
+    "ring": 201839.7466648669,
+    "smurf": 423131.08134836826,
+    "selfdeal": 75273.86173522982,
+    "sleeper": 69263.59242823918
+   },
+   "tier_counts": {
+    "ring": 194,
+    "smurf": 145,
+    "static": 288,
+    "sleeper": 111,
+    "selfdeal": 73
+   },
+   "tier_flagged": {
+    "ring": 0.8041237113402062,
+    "selfdeal": 0.863013698630137,
+    "smurf": 0.9586206896551724,
+    "sleeper": 0.9009009009009009,
+    "static": 0.8784722222222222
+   },
+   "velocity_stepups_legit": 4319,
+   "velocity_stepups_malicious": 67,
+   "velocity_reasons": {
+    "VELOCITY_AMOUNT": 125,
+    "VELOCITY_BURST": 3673,
+    "VELOCITY_CASHOUT": 730
+   },
+   "legit_agents_with_discounted_settled_edges": 176,
+   "ring_edges_discounted": 609,
+   "edges_total": 27987,
+   "loss_by_segment": {
+    "shopping": 117383.16062490661,
+    "assistant": 39978.1974395526,
+    "travel": 246419.8859067527,
+    "treasury": 393387.37920199154
+   },
+   "attempt_by_segment": {
+    "assistant": 89978.38844697755,
+    "shopping": 283618.7085715676,
+    "travel": 682104.3197805968,
+    "treasury": 2014056.2047123427
+   },
+   "weekly_loss_usd": [
+    47573.52424434983,
+    37506.9234831233,
+    80533.32482596894,
+    48766.16852709661,
+    51506.40269539234,
+    55563.29175326282,
+    88407.69271920963,
+    100647.11451810558,
+    53914.31226754268,
+    80414.26460269265,
+    69906.42388910317,
+    42272.0708046714,
+    40157.10884268459
+   ],
+   "weekly_attempt_usd": [
+    138996.27619230121,
+    188969.61238938678,
+    274369.70605111186,
+    206909.28009989156,
+    195705.5034859678,
+    238806.63221337,
+    350740.13989712263,
+    248508.7061597529,
+    248399.74355979406,
+    220611.91144797677,
+    303072.806345063,
+    252916.9952018947,
+    201750.30846785143
+   ]
+  },
+  "adaptive_link100": {
+   "attempted_fraud_usd": 2782135.7092526387,
+   "blocked_by_deny_usd": 479493.9155192592,
+   "caught_by_stepup_usd": 1499745.6938935632,
+   "fraud_loss_usd": 802896.0998398215,
+   "fraud_prevented_share_usd": 0.7114101597669719,
+   "mal_ever_denied": 0.28976572133168926,
+   "mal_final_cur_identity": {
+    "allow": 0.0998766954377312,
+    "step_up": 0.6017262638717632,
+    "deny": 0.29839704069050554
+   },
+   "mal_flagged_final": 0.9001233045622687,
+   "legit_final": {
+    "allow": 0.7082915831663327,
+    "step_up": 0.28970440881763526,
+    "deny": 0.002004008016032064
+   },
+   "legit_txn_share": {
+    "step_up": 0.48786434942711765,
+    "allow": 0.5101078586268241,
+    "deny": 0.002027791946058246
+   },
+   "ring_theft_usd": 111960.93102235472,
+   "ring_peak_ge650": 0.44329896907216493,
+   "ring_peak_ge750": 0.07731958762886598,
+   "targets_final_below500": 0.0,
+   "targets_ever_below500": 0.07933194154488518,
+   "targets_final_below650": 0.2964509394572025,
+   "nontargets_final_below650": 0.29140572951365756,
+   "fake_report_targets": 479,
+   "fake_reports_filed": 1932,
+   "sybil_identities_created": 187,
+   "rereg_total": 187,
+   "rereg_linked": 79,
+   "rereg_mode": {
+    "fresh": 103,
+    "partial": 54,
+    "wait": 30
+   },
+   "rereg_mode_linked": {
+    "partial": 51,
+    "wait": 28
+   },
+   "attacker_fab_cost_usd": 29399.941251729877,
+   "attacker_identity_cost_usd": 4120.0,
+   "loss_by_tier": {
+    "static": 429380.1312365928,
+    "smurf": 187815.77588229487,
+    "selfdeal": 39888.9768706636,
+    "ring": 111960.93102235472,
+    "sleeper": 33850.284827914846
+   },
+   "attempt_by_tier": {
+    "static": 2042129.4178065965,
+    "ring": 209694.92818619442,
+    "smurf": 410005.57714620547,
+    "selfdeal": 59631.92994590351,
+    "sleeper": 60673.8561677389
+   },
+   "tier_counts": {
+    "ring": 194,
+    "smurf": 145,
+    "static": 288,
+    "sleeper": 111,
+    "selfdeal": 73
+   },
+   "tier_flagged": {
+    "ring": 0.9175257731958762,
+    "selfdeal": 0.821917808219178,
+    "smurf": 0.9517241379310345,
+    "sleeper": 0.9009009009009009,
+    "static": 0.8819444444444444
+   },
+   "velocity_stepups_legit": 4211,
+   "velocity_stepups_malicious": 60,
+   "velocity_reasons": {
+    "VELOCITY_AMOUNT": 133,
+    "VELOCITY_BURST": 3588,
+    "VELOCITY_CASHOUT": 674,
+    "VELOCITY_COUNT": 2
+   },
+   "legit_agents_with_discounted_settled_edges": 168,
+   "ring_edges_discounted": 565,
+   "edges_total": 28188,
+   "loss_by_segment": {
+    "shopping": 114164.20245472663,
+    "assistant": 43103.27352576563,
+    "travel": 272909.5515974167,
+    "treasury": 372719.0722619115
+   },
+   "attempt_by_segment": {
+    "assistant": 93377.03252958553,
+    "shopping": 287308.99635714217,
+    "travel": 745778.7773580588,
+    "treasury": 1655670.9030078542
+   },
+   "weekly_loss_usd": [
+    47573.52424434983,
+    69995.08194668977,
+    73879.5966681696,
+    53810.04346017531,
+    44198.31861199754,
+    50172.131703846026,
+    80006.70033413269,
+    88420.84554981114,
+    93332.25115918987,
+    57600.18596671601,
+    69066.37945133056,
+    36967.89222956095,
+    37873.1485138512
+   ],
+   "weekly_attempt_usd": [
+    138996.27619230121,
+    222040.35999232487,
+    228608.03862319043,
+    220984.70889284328,
+    221328.9982836766,
+    178528.72974227852,
+    261353.24365630184,
+    216911.8932200135,
+    229259.43129448406,
+    228124.92269153884,
+    265840.77883596905,
+    203842.82108762822,
+    166315.50674008855
+   ]
+  },
+  "adaptive_noaged": {
+   "attempted_fraud_usd": 2824753.8169726045,
+   "blocked_by_deny_usd": 657483.928009994,
+   "caught_by_stepup_usd": 1336745.369734422,
+   "fraud_loss_usd": 830524.5192281953,
+   "fraud_prevented_share_usd": 0.7059833978317092,
+   "mal_ever_denied": 0.28606658446362515,
+   "mal_final_cur_identity": {
+    "allow": 0.08261405672009864,
+    "step_up": 0.6140567200986436,
+    "deny": 0.3033292231812577
+   },
+   "mal_flagged_final": 0.9173859432799014,
+   "legit_final": {
+    "allow": 0.7086673346693386,
+    "step_up": 0.28970440881763526,
+    "deny": 0.001628256513026052
+   },
+   "legit_txn_share": {
+    "step_up": 0.4835475162658771,
+    "allow": 0.5151835587126631,
+    "deny": 0.0012689250214597614
+   },
+   "ring_theft_usd": 104149.09517954943,
+   "ring_peak_ge650": 0.42783505154639173,
+   "ring_peak_ge750": 0.06701030927835051,
+   "targets_final_below500": 0.0041753653444676405,
+   "targets_ever_below500": 0.025052192066805846,
+   "targets_final_below650": 0.31106471816283926,
+   "nontargets_final_below650": 0.2900732844770153,
+   "fake_report_targets": 479,
+   "fake_reports_filed": 1932,
+   "sybil_identities_created": 170,
+   "rereg_total": 170,
+   "rereg_linked": 67,
+   "rereg_mode": {
+    "fresh": 96,
+    "partial": 49,
+    "wait": 25
+   },
+   "rereg_mode_linked": {
+    "partial": 43,
+    "wait": 24
+   },
+   "attacker_fab_cost_usd": 25421.42802567347,
+   "attacker_identity_cost_usd": 3840.0,
+   "loss_by_tier": {
+    "static": 456557.83631096367,
+    "smurf": 189735.11006003144,
+    "ring": 104149.09517954943,
+    "selfdeal": 41214.05039023016,
+    "sleeper": 38868.427287420105
+   },
+   "attempt_by_tier": {
+    "static": 2078137.0606160623,
+    "smurf": 420573.8603451452,
+    "ring": 193381.03684215609,
+    "selfdeal": 64886.434744752994,
+    "sleeper": 67775.42442449565
+   },
+   "tier_counts": {
+    "ring": 194,
+    "smurf": 145,
+    "static": 288,
+    "sleeper": 111,
+    "selfdeal": 73
+   },
+   "tier_flagged": {
+    "ring": 0.8814432989690721,
+    "selfdeal": 0.958904109589041,
+    "smurf": 0.9517241379310345,
+    "sleeper": 0.9009009009009009,
+    "static": 0.9201388888888888
+   },
+   "velocity_stepups_legit": 4230,
+   "velocity_stepups_malicious": 75,
+   "velocity_reasons": {
+    "VELOCITY_AMOUNT": 135,
+    "VELOCITY_BURST": 3712,
+    "VELOCITY_CASHOUT": 628
+   },
+   "legit_agents_with_discounted_settled_edges": 179,
+   "ring_edges_discounted": 576,
+   "edges_total": 28021,
+   "loss_by_segment": {
+    "shopping": 112371.48402946247,
+    "assistant": 38064.83376891803,
+    "travel": 254057.29970269266,
+    "treasury": 426030.90172712156
+   },
+   "attempt_by_segment": {
+    "assistant": 83905.58937498477,
+    "shopping": 271358.33483982144,
+    "travel": 705220.0529453713,
+    "treasury": 1764269.8398124333
+   },
+   "weekly_loss_usd": [
+    47858.05751663233,
+    59444.0378124896,
+    64525.2381282341,
+    47750.212895240606,
+    65378.21042670568,
+    70718.73333130582,
+    73419.28850570992,
+    100435.46305453061,
+    52349.18916737371,
+    81012.06103419464,
+    55444.12710752573,
+    47329.65143677963,
+    64860.24881147226
+   ],
+   "weekly_attempt_usd": [
+    244597.3904925079,
+    132797.61359074013,
+    280321.75797846273,
+    185076.51529379215,
+    164581.26194528377,
+    172609.87044908284,
+    221952.21142292733,
+    249081.31949490702,
+    197328.8492904406,
+    231558.80124809532,
+    244926.43470029178,
+    218257.31218599656,
+    281664.47888008365
+   ]
+  },
+  "adaptive_allaged": {
+   "attempted_fraud_usd": 2908391.9865154554,
+   "blocked_by_deny_usd": 478089.3914701232,
+   "caught_by_stepup_usd": 1536713.1556894707,
+   "fraud_loss_usd": 893589.4393558656,
+   "fraud_prevented_share_usd": 0.692754813141101,
+   "mal_ever_denied": 0.27373612823674476,
+   "mal_final_cur_identity": {
+    "allow": 0.093711467324291,
+    "step_up": 0.5906288532675709,
+    "deny": 0.3156596794081381
+   },
+   "mal_flagged_final": 0.906288532675709,
+   "legit_final": {
+    "allow": 0.7059118236472945,
+    "step_up": 0.29220941883767537,
+    "deny": 0.00187875751503006
+   },
+   "legit_txn_share": {
+    "step_up": 0.4863092942537601,
+    "allow": 0.5117126755657291,
+    "deny": 0.0019780301805108046
+   },
+   "ring_theft_usd": 97469.34517481553,
+   "ring_peak_ge650": 0.4484536082474227,
+   "ring_peak_ge750": 0.09278350515463918,
+   "targets_final_below500": 0.0041753653444676405,
+   "targets_ever_below500": 0.0709812108559499,
+   "targets_final_below650": 0.33402922755741127,
+   "nontargets_final_below650": 0.29153897401732176,
+   "fake_report_targets": 479,
+   "fake_reports_filed": 1932,
+   "sybil_identities_created": 186,
+   "rereg_total": 186,
+   "rereg_linked": 83,
+   "rereg_mode": {
+    "fresh": 99,
+    "partial": 57,
+    "wait": 30
+   },
+   "rereg_mode_linked": {
+    "partial": 54,
+    "wait": 29
+   },
+   "attacker_fab_cost_usd": 25752.538104752533,
+   "attacker_identity_cost_usd": 3960.0,
+   "loss_by_tier": {
+    "static": 524185.8213007604,
+    "smurf": 179152.98665327855,
+    "ring": 97469.34517481553,
+    "selfdeal": 47668.044586851305,
+    "sleeper": 45113.24164015998
+   },
+   "attempt_by_tier": {
+    "static": 2157861.5355772376,
+    "smurf": 410226.577949228,
+    "ring": 203624.00818755015,
+    "selfdeal": 66906.89641597243,
+    "sleeper": 69772.9683854707
+   },
+   "tier_counts": {
+    "ring": 194,
+    "smurf": 145,
+    "static": 288,
+    "sleeper": 111,
+    "selfdeal": 73
+   },
+   "tier_flagged": {
+    "ring": 0.9020618556701031,
+    "selfdeal": 0.8493150684931506,
+    "smurf": 0.9586206896551724,
+    "sleeper": 0.9369369369369369,
+    "static": 0.8854166666666666
+   },
+   "velocity_stepups_legit": 4254,
+   "velocity_stepups_malicious": 105,
+   "velocity_reasons": {
+    "VELOCITY_AMOUNT": 129,
+    "VELOCITY_BURST": 3713,
+    "VELOCITY_CASHOUT": 678
+   },
+   "legit_agents_with_discounted_settled_edges": 186,
+   "ring_edges_discounted": 571,
+   "edges_total": 27838,
+   "loss_by_segment": {
+    "shopping": 118186.41412844883,
+    "assistant": 41261.49248509972,
+    "travel": 261176.059048346,
+    "treasury": 472965.47369397106
+   },
+   "attempt_by_segment": {
+    "assistant": 99449.95657184016,
+    "shopping": 280146.17095933174,
+    "travel": 711582.5933679064,
+    "treasury": 1817213.2656163818
+   },
+   "weekly_loss_usd": [
+    50980.945650118985,
+    56300.76988767781,
+    64735.23036289783,
+    51832.82419650165,
+    97759.5075152634,
+    53539.500394507835,
+    80591.90121488842,
+    97124.40649182467,
+    94727.68167560556,
+    74768.84661891389,
+    71717.34833321381,
+    40401.150726783286,
+    59109.32628766869
+   ],
+   "weekly_attempt_usd": [
+    202240.0440654739,
+    145391.8794362938,
+    169885.75613876517,
+    188566.61537821588,
+    207752.02856211903,
+    201116.45654714535,
+    221959.05967652786,
+    319007.9433212717,
+    268657.11519928335,
+    201904.3097128951,
+    271934.7238081381,
+    201874.5606028866,
+    308101.49406644504
+   ]
+  },
+  "adaptive_fresh30": {
+   "attempted_fraud_usd": 2763239.5526664318,
+   "blocked_by_deny_usd": 536375.6567965252,
+   "caught_by_stepup_usd": 1416171.063730265,
+   "fraud_loss_usd": 810692.8321396459,
+   "fraud_prevented_share_usd": 0.7066150738334087,
+   "mal_ever_denied": 0.28236744759556104,
+   "mal_final_cur_identity": {
+    "allow": 0.09124537607891492,
+    "step_up": 0.591861898890259,
+    "deny": 0.31689272503082616
+   },
+   "mal_flagged_final": 0.9087546239210851,
+   "legit_final": {
+    "allow": 0.7057865731462926,
+    "step_up": 0.29220941883767537,
+    "deny": 0.002004008016032064
+   },
+   "legit_txn_share": {
+    "step_up": 0.48645857955040245,
+    "allow": 0.5117997586554371,
+    "deny": 0.0017416617941604568
+   },
+   "ring_theft_usd": 108049.52925240588,
+   "ring_peak_ge650": 0.4536082474226804,
+   "ring_peak_ge750": 0.061855670103092786,
+   "targets_final_below500": 0.006263048016701462,
+   "targets_ever_below500": 0.04801670146137787,
+   "targets_final_below650": 0.3465553235908142,
+   "nontargets_final_below650": 0.29087275149900066,
+   "fake_report_targets": 479,
+   "fake_reports_filed": 1932,
+   "sybil_identities_created": 207,
+   "rereg_total": 207,
+   "rereg_linked": 143,
+   "rereg_mode": {
+    "partial": 121,
+    "fresh": 51,
+    "wait": 35
+   },
+   "rereg_mode_linked": {
+    "partial": 110,
+    "wait": 33
+   },
+   "attacker_fab_cost_usd": 26864.505797828664,
+   "attacker_identity_cost_usd": 2040.0,
+   "loss_by_tier": {
+    "static": 447458.88666331535,
+    "smurf": 175291.8666567131,
+    "selfdeal": 38990.595689237685,
+    "ring": 108049.52925240588,
+    "sleeper": 40901.95387797538
+   },
+   "attempt_by_tier": {
+    "static": 2016852.0920480692,
+    "ring": 201764.3345094395,
+    "smurf": 410263.49699868954,
+    "selfdeal": 63421.17137053423,
+    "sleeper": 70938.45773970234
+   },
+   "tier_counts": {
+    "ring": 194,
+    "smurf": 145,
+    "static": 288,
+    "sleeper": 111,
+    "selfdeal": 73
+   },
+   "tier_flagged": {
+    "ring": 0.9072164948453608,
+    "selfdeal": 0.8767123287671232,
+    "smurf": 0.9586206896551724,
+    "sleeper": 0.8828828828828829,
+    "static": 0.9027777777777778
+   },
+   "velocity_stepups_legit": 4194,
+   "velocity_stepups_malicious": 71,
+   "velocity_reasons": {
+    "VELOCITY_AMOUNT": 134,
+    "VELOCITY_BURST": 3634,
+    "VELOCITY_CASHOUT": 635
+   },
+   "legit_agents_with_discounted_settled_edges": 161,
+   "ring_edges_discounted": 568,
+   "edges_total": 27936,
+   "loss_by_segment": {
+    "shopping": 110654.37202251553,
+    "assistant": 31922.31047718986,
+    "travel": 215157.1205730898,
+    "treasury": 452959.02906685224
+   },
+   "attempt_by_segment": {
+    "assistant": 79677.40873335906,
+    "shopping": 266861.1768452897,
+    "travel": 668046.4447932378,
+    "treasury": 1748654.5222945495
+   },
+   "weekly_loss_usd": [
+    47573.52424434983,
+    40926.23751862681,
+    63200.693487707336,
+    64250.923146251924,
+    43287.57522745524,
+    55014.84838852991,
+    100602.95771988637,
+    85052.21550750657,
+    56020.67485897226,
+    72028.62162175744,
+    68260.80259754398,
+    47313.096431221726,
+    67160.66138983797
+   ],
+   "weekly_attempt_usd": [
+    138996.27619230121,
+    177521.6814221101,
+    248826.5812606962,
+    191593.78801758977,
+    160391.0421915245,
+    212336.2562683217,
+    221255.31747067714,
+    210446.48300156437,
+    251274.91089915816,
+    234944.49958714834,
+    303946.68745254993,
+    173298.7841330124,
+    238407.24476978194
+   ]
+  },
+  "adaptive_fresh100": {
+   "attempted_fraud_usd": 2854057.665435289,
+   "blocked_by_deny_usd": 475651.3362111138,
+   "caught_by_stepup_usd": 1578443.7358821842,
+   "fraud_loss_usd": 799962.5933419984,
+   "fraud_prevented_share_usd": 0.7197104308612519,
+   "mal_ever_denied": 0.2712700369913687,
+   "mal_final_cur_identity": {
+    "allow": 0.08508014796547472,
+    "step_up": 0.6337854500616523,
+    "deny": 0.281134401972873
+   },
+   "mal_flagged_final": 0.9149198520345253,
+   "legit_final": {
+    "allow": 0.7067885771543087,
+    "step_up": 0.2913326653306613,
+    "deny": 0.00187875751503006
+   },
+   "legit_txn_share": {
+    "step_up": 0.48627197292959956,
+    "allow": 0.5116753542415685,
+    "deny": 0.0020526728288319668
+   },
+   "ring_theft_usd": 99345.13304586045,
+   "ring_peak_ge650": 0.4639175257731959,
+   "ring_peak_ge750": 0.05670103092783505,
+   "targets_final_below500": 0.0020876826722338203,
+   "targets_ever_below500": 0.03966597077244259,
+   "targets_final_below650": 0.3235908141962422,
+   "nontargets_final_below650": 0.29127248500999336,
+   "fake_report_targets": 479,
+   "fake_reports_filed": 1932,
+   "sybil_identities_created": 152,
+   "rereg_total": 152,
+   "rereg_linked": 24,
+   "rereg_mode": {
+    "fresh": 128,
+    "wait": 24
+   },
+   "rereg_mode_linked": {
+    "wait": 24
+   },
+   "attacker_fab_cost_usd": 26538.981216990785,
+   "attacker_identity_cost_usd": 5120.0,
+   "loss_by_tier": {
+    "static": 408922.0749621786,
+    "smurf": 201014.8863207548,
+    "selfdeal": 56132.62007076551,
+    "ring": 99345.13304586045,
+    "sleeper": 34547.878942440606
+   },
+   "attempt_by_tier": {
+    "static": 2101608.373156385,
+    "ring": 191582.39434221407,
+    "smurf": 420850.2025778149,
+    "selfdeal": 76385.65773962549,
+    "sleeper": 63631.037619262126
+   },
+   "tier_counts": {
+    "ring": 194,
+    "smurf": 145,
+    "static": 288,
+    "sleeper": 111,
+    "selfdeal": 73
+   },
+   "tier_flagged": {
+    "ring": 0.8969072164948454,
+    "selfdeal": 0.863013698630137,
+    "smurf": 0.9724137931034482,
+    "sleeper": 0.9369369369369369,
+    "static": 0.9027777777777778
+   },
+   "velocity_stepups_legit": 4246,
+   "velocity_stepups_malicious": 81,
+   "velocity_reasons": {
+    "VELOCITY_AMOUNT": 120,
+    "VELOCITY_BURST": 3713,
+    "VELOCITY_CASHOUT": 653
+   },
+   "legit_agents_with_discounted_settled_edges": 173,
+   "ring_edges_discounted": 594,
+   "edges_total": 27854,
+   "loss_by_segment": {
+    "shopping": 114623.49722394136,
+    "assistant": 37111.05616431117,
+    "travel": 273974.621563186,
+    "treasury": 374253.41839056165
+   },
+   "attempt_by_segment": {
+    "assistant": 84562.85880882111,
+    "shopping": 275409.5492068402,
+    "travel": 723899.8604434087,
+    "treasury": 1770185.3969762272
+   },
+   "weekly_loss_usd": [
+    42390.59701719429,
+    52472.40137564427,
+    82758.21918351615,
+    66019.6715575749,
+    60391.34982051255,
+    48325.4596427214,
+    60112.546115761215,
+    74025.85369091819,
+    66393.32681191077,
+    51429.71406011716,
+    58439.81859022589,
+    65282.494361985795,
+    71921.14111391759
+   ],
+   "weekly_attempt_usd": [
+    161735.0985856994,
+    186749.59170479505,
+    212755.68192655907,
+    188464.98672443838,
+    170551.30774137515,
+    262364.78611797985,
+    209998.29869612397,
+    202714.8355324152,
+    215883.84964552007,
+    285756.356191054,
+    311468.29563571146,
+    228363.36713213057,
+    217251.20980149618
+   ]
+  }
+ },
+ "defense_off": {
+  "adaptive_no_ring_detection": {
+   "attempted_fraud_usd": 2839278.2097170013,
+   "blocked_by_deny_usd": 504144.6648467906,
+   "caught_by_stepup_usd": 1507538.333210317,
+   "fraud_loss_usd": 827595.2116598852,
+   "fraud_prevented_share_usd": 0.7085191550346966,
+   "mal_ever_denied": 0.2626387176325524,
+   "mal_final_cur_identity": {
+    "allow": 0.11713933415536375,
+    "step_up": 0.6017262638717632,
+    "deny": 0.281134401972873
+   },
+   "mal_flagged_final": 0.8828606658446363,
+   "legit_final": {
+    "allow": 0.7079158316633266,
+    "step_up": 0.2904559118236473,
+    "deny": 0.001628256513026052
+   },
+   "legit_txn_share": {
+    "step_up": 0.4856001890947091,
+    "allow": 0.5129442792630282,
+    "deny": 0.0014555316422626675
+   },
+   "ring_theft_usd": 109481.13439803652,
+   "ring_peak_ge650": 0.6288659793814433,
+   "ring_peak_ge750": 0.11855670103092783,
+   "targets_final_below500": 0.0041753653444676405,
+   "targets_ever_below500": 0.037578288100208766,
+   "targets_final_below650": 0.31524008350730687,
+   "nontargets_final_below650": 0.2906062624916722,
+   "fake_report_targets": 479,
+   "fake_reports_filed": 1932,
+   "sybil_identities_created": 187,
+   "rereg_total": 187,
+   "rereg_linked": 95,
+   "rereg_mode": {
+    "fresh": 88,
+    "partial": 63,
+    "wait": 36
+   },
+   "rereg_mode_linked": {
+    "partial": 61,
+    "wait": 34
+   },
+   "attacker_fab_cost_usd": 26032.433096310993,
+   "attacker_identity_cost_usd": 3520.0,
+   "loss_by_tier": {
+    "static": 452518.2014877038,
+    "smurf": 183909.60543545205,
+    "selfdeal": 43236.55720227487,
+    "ring": 109481.13439803652,
+    "sleeper": 38449.71313641956
+   },
+   "attempt_by_tier": {
+    "static": 2108332.278059285,
+    "ring": 196064.4957730963,
+    "smurf": 402581.95001403487,
+    "selfdeal": 70557.3786796357,
+    "sleeper": 61742.10719094051
+   },
+   "tier_counts": {
+    "ring": 194,
+    "smurf": 145,
+    "static": 288,
+    "sleeper": 111,
+    "selfdeal": 73
+   },
+   "tier_flagged": {
+    "ring": 0.8092783505154639,
+    "selfdeal": 0.8904109589041096,
+    "smurf": 0.9517241379310345,
+    "sleeper": 0.8828828828828829,
+    "static": 0.8958333333333334
+   },
+   "velocity_stepups_legit": 4272,
+   "velocity_stepups_malicious": 76,
+   "velocity_reasons": {
+    "VELOCITY_AMOUNT": 141,
+    "VELOCITY_BURST": 3673,
+    "VELOCITY_CASHOUT": 666
+   },
+   "legit_agents_with_discounted_settled_edges": 0,
+   "ring_edges_discounted": 0,
+   "edges_total": 27914,
+   "loss_by_segment": {
+    "shopping": 106002.0391771172,
+    "assistant": 43029.870583292366,
+    "travel": 225945.8142975543,
+    "treasury": 452617.48760192236
+   },
+   "attempt_by_segment": {
+    "assistant": 96280.41915483678,
+    "shopping": 264792.5005557359,
+    "travel": 683632.2543101436,
+    "treasury": 1794573.0356962786
+   },
+   "weekly_loss_usd": [
+    47573.52424434983,
+    39228.28614143043,
+    49529.440230047556,
+    39798.23893966033,
+    66375.91038120627,
+    66301.98447427314,
+    105496.27476415984,
+    120625.6109187199,
+    62777.64742510491,
+    68281.5458687036,
+    50255.86778978835,
+    40890.356541590256,
+    70460.52394085206
+   ],
+   "weekly_attempt_usd": [
+    138996.27619230121,
+    160382.0880178864,
+    211811.94114127263,
+    139669.89854542937,
+    183595.9924098043,
+    267073.06927611685,
+    258385.9623343379,
+    315921.9161479362,
+    242700.94135006334,
+    250011.7947961208,
+    233579.42072429069,
+    170394.4424105416,
+    266754.4663708932
+   ]
+  },
+  "unaware_no_ring_detection": {
+   "attempted_fraud_usd": 2961978.3570706975,
+   "blocked_by_deny_usd": 787145.826928892,
+   "caught_by_stepup_usd": 1437365.8422281235,
+   "fraud_loss_usd": 737466.6879136855,
+   "fraud_prevented_share_usd": 0.751022256407364,
+   "mal_ever_denied": 0.28236744759556104,
+   "mal_final_cur_identity": {
+    "allow": 0.10850801479654747,
+    "step_up": 0.5487053020961775,
+    "deny": 0.34278668310727495
+   },
+   "mal_flagged_final": 0.8914919852034525,
+   "legit_final": {
+    "allow": 0.7072895791583166,
+    "step_up": 0.29120741482965934,
+    "deny": 0.001503006012024048
+   },
+   "legit_txn_share": {
+    "step_up": 0.4791809213390891,
+    "allow": 0.519823843349962,
+    "deny": 0.0009952353109488326
+   },
+   "ring_theft_usd": 98366.32535269806,
+   "ring_peak_ge650": 0.5773195876288659,
+   "ring_peak_ge750": 0.02577319587628866,
+   "targets_final_below500": 0.0,
+   "targets_ever_below500": 0.0,
+   "targets_final_below650": 0.29227557411273486,
+   "nontargets_final_below650": 0.2927381745502998,
+   "fake_report_targets": 479,
+   "fake_reports_filed": 1932,
+   "sybil_identities_created": 362,
+   "rereg_total": 362,
+   "rereg_linked": 359,
+   "rereg_mode": {
+    "naive": 362
+   },
+   "rereg_mode_linked": {
+    "naive": 359
+   },
+   "attacker_fab_cost_usd": 20868.672812767956,
+   "attacker_identity_cost_usd": 0.0,
+   "loss_by_tier": {
+    "static": 437388.3159759057,
+    "smurf": 131283.63916622876,
+    "ring": 98366.32535269806,
+    "selfdeal": 35623.347557874506,
+    "sleeper": 34805.05986097979
+   },
+   "attempt_by_tier": {
+    "static": 2190925.0707044746,
+    "smurf": 445533.06176329165,
+    "ring": 195843.17229607503,
+    "selfdeal": 68708.67196371318,
+    "sleeper": 60968.38034314451
+   },
+   "tier_counts": {
+    "ring": 194,
+    "smurf": 145,
+    "static": 288,
+    "sleeper": 111,
+    "selfdeal": 73
+   },
+   "tier_flagged": {
+    "ring": 0.7628865979381443,
+    "selfdeal": 0.9178082191780822,
+    "smurf": 0.993103448275862,
+    "sleeper": 0.9279279279279279,
+    "static": 0.90625
+   },
+   "velocity_stepups_legit": 4348,
+   "velocity_stepups_malicious": 89,
+   "velocity_reasons": {
+    "VELOCITY_AMOUNT": 154,
+    "VELOCITY_BURST": 3696,
+    "VELOCITY_CASHOUT": 701
+   },
+   "legit_agents_with_discounted_settled_edges": 0,
+   "ring_edges_discounted": 0,
+   "edges_total": 27932,
+   "loss_by_segment": {
+    "shopping": 106169.66058715162,
+    "assistant": 36762.0454131953,
+    "travel": 161085.9778196191,
+    "treasury": 433449.0040937207
+   },
+   "attempt_by_segment": {
+    "assistant": 97261.55113686617,
+    "shopping": 285470.6064644754,
+    "travel": 679178.2205202574,
+    "treasury": 1900067.9789490995
+   },
+   "weekly_loss_usd": [
+    77078.60589059745,
+    64317.01927444877,
+    54919.1965797176,
+    85174.56728197091,
+    32360.67350849486,
+    49088.2180068938,
+    48479.82646889228,
+    52107.814930767236,
+    58196.44757651899,
+    42003.49480030741,
+    77842.43367933204,
+    46315.10989004453,
+    49583.28002570085
+   ],
+   "weekly_attempt_usd": [
+    230277.75736372286,
+    222513.62888703478,
+    242642.44759583773,
+    237025.92774059158,
+    196799.57993659494,
+    214860.13188490947,
+    225605.68586877245,
+    258983.8037422428,
+    277667.70091106003,
+    219211.3315734164,
+    276835.80340678367,
+    173833.81434821564,
+    185720.74381151499
+   ]
+  },
+  "unaware_no_positive_cap": {
+   "attempted_fraud_usd": 2887762.4098251746,
+   "blocked_by_deny_usd": 733584.1146358622,
+   "caught_by_stepup_usd": 1424749.0327815819,
+   "fraud_loss_usd": 729429.2624077358,
+   "fraud_prevented_share_usd": 0.7474067603602141,
+   "mal_ever_denied": 0.2872996300863132,
+   "mal_final_cur_identity": {
+    "allow": 0.06658446362515413,
+    "step_up": 0.5819975339087546,
+    "deny": 0.35141800246609123
+   },
+   "mal_flagged_final": 0.9334155363748459,
+   "legit_final": {
+    "allow": 0.7252004008016032,
+    "step_up": 0.2732965931863727,
+    "deny": 0.001503006012024048
+   },
+   "legit_txn_share": {
+    "step_up": 0.4729233793214983,
+    "allow": 0.5261187066917135,
+    "deny": 0.0009579139867882513
+   },
+   "ring_theft_usd": 74331.32875497112,
+   "ring_peak_ge650": 0.16494845360824742,
+   "ring_peak_ge750": 0.005154639175257732,
+   "targets_final_below500": 0.0,
+   "targets_ever_below500": 0.0,
+   "targets_final_below650": 0.2567849686847599,
+   "nontargets_final_below650": 0.2759493670886076,
+   "fake_report_targets": 479,
+   "fake_reports_filed": 1932,
+   "sybil_identities_created": 370,
+   "rereg_total": 370,
+   "rereg_linked": 368,
+   "rereg_mode": {
+    "naive": 370
+   },
+   "rereg_mode_linked": {
+    "naive": 368
+   },
+   "attacker_fab_cost_usd": 21635.14494712332,
+   "attacker_identity_cost_usd": 0.0,
+   "loss_by_tier": {
+    "static": 435129.791225707,
+    "smurf": 132930.69430114748,
+    "ring": 74331.32875497112,
+    "selfdeal": 37231.593547502205,
+    "sleeper": 49805.85457840936
+   },
+   "attempt_by_tier": {
+    "static": 2122553.461672987,
+    "smurf": 439411.31996434723,
+    "ring": 186029.25918268485,
+    "selfdeal": 63742.40591297722,
+    "sleeper": 76025.96309218198
+   },
+   "tier_counts": {
+    "ring": 194,
+    "smurf": 145,
+    "static": 288,
+    "sleeper": 111,
+    "selfdeal": 73
+   },
+   "tier_flagged": {
+    "ring": 0.9639175257731959,
+    "selfdeal": 0.958904109589041,
+    "smurf": 0.9655172413793104,
+    "sleeper": 0.918918918918919,
+    "static": 0.8958333333333334
+   },
+   "velocity_stepups_legit": 4436,
+   "velocity_stepups_malicious": 57,
+   "velocity_reasons": {
+    "VELOCITY_AMOUNT": 142,
+    "VELOCITY_BURST": 3837,
+    "VELOCITY_CASHOUT": 668
+   },
+   "legit_agents_with_discounted_settled_edges": 164,
+   "ring_edges_discounted": 1856,
+   "edges_total": 28106,
+   "loss_by_segment": {
+    "shopping": 103324.81421438052,
+    "assistant": 28036.03425026197,
+    "travel": 201221.7516744674,
+    "treasury": 396846.6622686271
+   },
+   "attempt_by_segment": {
+    "assistant": 88805.12828417172,
+    "shopping": 282203.4855815745,
+    "travel": 692159.1561249911,
+    "treasury": 1824594.639834441
+   },
+   "weekly_loss_usd": [
+    77078.60589059745,
+    64317.01927444877,
+    56064.11459284077,
+    35938.69588446246,
+    59137.956737397006,
+    41372.611181954315,
+    63115.81986232204,
+    89390.90977604748,
+    56059.79016912803,
+    56991.78501772608,
+    35404.51391874229,
+    54039.42855072255,
+    40518.011551347714
+   ],
+   "weekly_attempt_usd": [
+    230277.75736372286,
+    222513.62888703478,
+    248049.79155034974,
+    170009.73449482908,
+    204213.77610418247,
+    191100.08742793972,
+    232663.72697632646,
+    236791.06144962608,
+    196251.3325981167,
+    207761.48005112985,
+    315424.7301039743,
+    205008.68257041214,
+    227696.6202475344
+   ]
+  },
+  "adaptive_no_positive_cap": {
+   "attempted_fraud_usd": 2790384.3350368417,
+   "blocked_by_deny_usd": 600972.7933987787,
+   "caught_by_stepup_usd": 1374796.8719519614,
+   "fraud_loss_usd": 814614.6696861029,
+   "fraud_prevented_share_usd": 0.7080636314297014,
+   "mal_ever_denied": 0.26633785450061653,
+   "mal_final_cur_identity": {
+    "allow": 0.09864364981504316,
+    "step_up": 0.6091245376078915,
+    "deny": 0.2922318125770654
+   },
+   "mal_flagged_final": 0.9013563501849569,
+   "legit_final": {
+    "allow": 0.7233216432865731,
+    "step_up": 0.2749248496993988,
+    "deny": 0.0017535070140280561
+   },
+   "legit_txn_share": {
+    "step_up": 0.4764813455581404,
+    "allow": 0.5218640757374071,
+    "deny": 0.001654578704452434
+   },
+   "ring_theft_usd": 154330.24291693472,
+   "ring_peak_ge650": 0.6288659793814433,
+   "ring_peak_ge750": 0.25257731958762886,
+   "targets_final_below500": 0.0,
+   "targets_ever_below500": 0.05219206680584551,
+   "targets_final_below650": 0.302713987473904,
+   "nontargets_final_below650": 0.275016655562958,
+   "fake_report_targets": 479,
+   "fake_reports_filed": 1932,
+   "sybil_identities_created": 185,
+   "rereg_total": 185,
+   "rereg_linked": 66,
+   "rereg_mode": {
+    "fresh": 111,
+    "partial": 54,
+    "wait": 20
+   },
+   "rereg_mode_linked": {
+    "partial": 49,
+    "wait": 17
+   },
+   "attacker_fab_cost_usd": 26237.634255903482,
+   "attacker_identity_cost_usd": 4440.0,
+   "loss_by_tier": {
+    "static": 380059.34843338915,
+    "smurf": 195771.6427960472,
+    "selfdeal": 47950.20809913812,
+    "ring": 154330.24291693472,
+    "sleeper": 36503.22744059246
+   },
+   "attempt_by_tier": {
+    "static": 1986299.4598424719,
+    "ring": 250805.17633112054,
+    "smurf": 420222.9499569331,
+    "selfdeal": 71116.56115446877,
+    "sleeper": 61940.18775185144
+   },
+   "tier_counts": {
+    "ring": 194,
+    "smurf": 145,
+    "static": 288,
+    "sleeper": 111,
+    "selfdeal": 73
+   },
+   "tier_flagged": {
+    "ring": 0.8814432989690721,
+    "selfdeal": 0.9178082191780822,
+    "smurf": 0.9241379310344827,
+    "sleeper": 0.8828828828828829,
+    "static": 0.90625
+   },
+   "velocity_stepups_legit": 4387,
+   "velocity_stepups_malicious": 93,
+   "velocity_reasons": {
+    "VELOCITY_AMOUNT": 139,
+    "VELOCITY_BURST": 3867,
+    "VELOCITY_CASHOUT": 648,
+    "VELOCITY_COUNT": 1
+   },
+   "legit_agents_with_discounted_settled_edges": 194,
+   "ring_edges_discounted": 607,
+   "edges_total": 28036,
+   "loss_by_segment": {
+    "shopping": 131688.06738406388,
+    "assistant": 57418.11060028529,
+    "travel": 241022.27267340786,
+    "treasury": 384486.2190283449
+   },
+   "attempt_by_segment": {
+    "assistant": 114575.03731910231,
+    "shopping": 293948.2661795887,
+    "travel": 699910.7528319375,
+    "treasury": 1681950.2787062156
+   },
+   "weekly_loss_usd": [
+    47813.52424434983,
+    53246.76774586906,
+    77507.13198913647,
+    70731.26139803798,
+    46154.21750286208,
+    76866.44684609526,
+    98378.46850311989,
+    73204.61793012654,
+    75864.9138476255,
+    56601.41862183577,
+    46293.74850607481,
+    46804.02469678941,
+    45148.12785417946
+   ],
+   "weekly_attempt_usd": [
+    139157.3967430659,
+    151871.50869841973,
+    260387.67763502538,
+    245043.5752354473,
+    156146.63191469767,
+    201610.68412041693,
+    202657.80882003103,
+    272665.65146084107,
+    244700.0811812481,
+    229205.13440690332,
+    274436.0278421138,
+    198183.60664588376,
+    214318.55033274984
+   ]
+  },
+  "adaptive_no_scaled_cap": {
+   "attempted_fraud_usd": 2899377.5319064106,
+   "blocked_by_deny_usd": 605380.0280767533,
+   "caught_by_stepup_usd": 1516965.346922003,
+   "fraud_loss_usd": 777032.1569076555,
+   "fraud_prevented_share_usd": 0.7320003523664136,
+   "mal_ever_denied": 0.26140567200986436,
+   "mal_final_cur_identity": {
+    "allow": 0.08877928483353884,
+    "step_up": 0.6128236744759556,
+    "deny": 0.29839704069050554
+   },
+   "mal_flagged_final": 0.9112207151664612,
+   "legit_final": {
+    "allow": 0.6808617234468938,
+    "step_up": 0.3173847695390782,
+    "deny": 0.0017535070140280561
+   },
+   "legit_txn_share": {
+    "step_up": 0.5087891718398169,
+    "allow": 0.4893696428349278,
+    "deny": 0.00184118532525534
+   },
+   "ring_theft_usd": 89808.25941741346,
+   "ring_peak_ge650": 0.27835051546391754,
+   "ring_peak_ge750": 0.0,
+   "targets_final_below500": 0.0020876826722338203,
+   "targets_ever_below500": 0.060542797494780795,
+   "targets_final_below650": 0.34029227557411273,
+   "nontargets_final_below650": 0.31778814123917387,
+   "fake_report_targets": 479,
+   "fake_reports_filed": 1932,
+   "sybil_identities_created": 166,
+   "rereg_total": 166,
+   "rereg_linked": 77,
+   "rereg_mode": {
+    "fresh": 81,
+    "partial": 56,
+    "wait": 29
+   },
+   "rereg_mode_linked": {
+    "partial": 50,
+    "wait": 27
+   },
+   "attacker_fab_cost_usd": 26212.61287998187,
+   "attacker_identity_cost_usd": 3240.0,
+   "loss_by_tier": {
+    "static": 432186.84653173387,
+    "smurf": 180343.56832878405,
+    "selfdeal": 35599.77114091336,
+    "ring": 89808.25941741346,
+    "sleeper": 39093.71148880989
+   },
+   "attempt_by_tier": {
+    "static": 2158189.8923707274,
+    "ring": 188416.01799776242,
+    "smurf": 418597.1815517046,
+    "selfdeal": 65294.084457068144,
+    "sleeper": 68880.3555291525
+   },
+   "tier_counts": {
+    "ring": 194,
+    "smurf": 145,
+    "static": 288,
+    "sleeper": 111,
+    "selfdeal": 73
+   },
+   "tier_flagged": {
+    "ring": 0.8917525773195877,
+    "selfdeal": 0.8904109589041096,
+    "smurf": 0.9586206896551724,
+    "sleeper": 0.9099099099099099,
+    "static": 0.90625
+   },
+   "velocity_stepups_legit": 4091,
+   "velocity_stepups_malicious": 53,
+   "velocity_reasons": {
+    "VELOCITY_AMOUNT": 117,
+    "VELOCITY_BURST": 3502,
+    "VELOCITY_CASHOUT": 645,
+    "VELOCITY_COUNT": 2
+   },
+   "legit_agents_with_discounted_settled_edges": 145,
+   "ring_edges_discounted": 507,
+   "edges_total": 27848,
+   "loss_by_segment": {
+    "shopping": 92773.81465488295,
+    "assistant": 35627.27698503277,
+    "travel": 216643.73977910925,
+    "treasury": 431987.32548862963
+   },
+   "attempt_by_segment": {
+    "assistant": 85418.56699117694,
+    "shopping": 262040.15904527798,
+    "travel": 732005.777120173,
+    "treasury": 1819913.0287497852
+   },
+   "weekly_loss_usd": [
+    47573.52424434983,
+    62667.14552896083,
+    80503.72088632394,
+    86522.60043950874,
+    56341.2696555709,
+    28753.294514569643,
+    62048.62071666088,
+    77742.38901059366,
+    36378.81091439806,
+    76742.35367300794,
+    66541.6362940736,
+    42687.658731233554,
+    52529.13229840343
+   ],
+   "weekly_attempt_usd": [
+    138996.27619230121,
+    168105.37637756017,
+    277273.8348065006,
+    197064.0649363567,
+    159977.58237655822,
+    221855.4666403277,
+    236139.8348223501,
+    249107.37697913393,
+    234892.00427616885,
+    254088.66068594018,
+    294403.6030127563,
+    202792.04211460272,
+    264681.4086858542
+   ]
+  },
+  "unaware_no_transaction_link": {
+   "attempted_fraud_usd": 3109103.2259886265,
+   "blocked_by_deny_usd": 749334.3848502503,
+   "caught_by_stepup_usd": 1547671.8499368958,
+   "fraud_loss_usd": 812096.9912014893,
+   "fraud_prevented_share_usd": 0.7388002481187288,
+   "mal_ever_denied": 0.2786683107274969,
+   "mal_final_cur_identity": {
+    "allow": 0.06165228113440197,
+    "step_up": 0.6066584463625154,
+    "deny": 0.3316892725030826
+   },
+   "mal_flagged_final": 0.938347718865598,
+   "legit_final": {
+    "allow": 0.7086673346693386,
+    "step_up": 0.2899549098196393,
+    "deny": 0.0013777555110220442
+   },
+   "legit_txn_share": {
+    "step_up": 0.4833360287623005,
+    "allow": 0.5153452844506923,
+    "deny": 0.001318686787007203
+   },
+   "ring_theft_usd": 73751.87331163487,
+   "ring_peak_ge650": 0.13917525773195877,
+   "ring_peak_ge750": 0.0,
+   "targets_final_below500": 0.0,
+   "targets_ever_below500": 0.018789144050104383,
+   "targets_final_below650": 0.2818371607515658,
+   "nontargets_final_below650": 0.29193870752831447,
+   "fake_report_targets": 479,
+   "fake_reports_filed": 1932,
+   "sybil_identities_created": 415,
+   "rereg_total": 415,
+   "rereg_linked": 414,
+   "rereg_mode": {
+    "naive": 415
+   },
+   "rereg_mode_linked": {
+    "naive": 414
+   },
+   "attacker_fab_cost_usd": 21256.258185261955,
+   "attacker_identity_cost_usd": 0.0,
+   "loss_by_tier": {
+    "static": 535622.1744572506,
+    "smurf": 134134.62032531554,
+    "ring": 73751.87331163487,
+    "selfdeal": 32368.903963043915,
+    "sleeper": 36219.41914424405
+   },
+   "attempt_by_tier": {
+    "static": 2339931.7472347612,
+    "smurf": 448552.5383659753,
+    "ring": 182985.7780942747,
+    "selfdeal": 65760.94601200148,
+    "sleeper": 71872.21628161806
+   },
+   "tier_counts": {
+    "ring": 194,
+    "smurf": 145,
+    "static": 288,
+    "sleeper": 111,
+    "selfdeal": 73
+   },
+   "tier_flagged": {
+    "ring": 0.9381443298969072,
+    "selfdeal": 0.9452054794520548,
+    "smurf": 0.9724137931034482,
+    "sleeper": 0.9369369369369369,
+    "static": 0.9201388888888888
+   },
+   "velocity_stepups_legit": 4476,
+   "velocity_stepups_malicious": 60,
+   "velocity_reasons": {
+    "VELOCITY_AMOUNT": 126,
+    "VELOCITY_BURST": 3826,
+    "VELOCITY_CASHOUT": 718
+   },
+   "legit_agents_with_discounted_settled_edges": 192,
+   "ring_edges_discounted": 1894,
+   "edges_total": 27699,
+   "loss_by_segment": {
+    "shopping": 92950.452938833,
+    "assistant": 26693.012387217874,
+    "travel": 215252.70125446067,
+    "treasury": 477200.82462097704
+   },
+   "attempt_by_segment": {
+    "assistant": 91459.73738920075,
+    "shopping": 279878.78483973234,
+    "travel": 770147.7990408549,
+    "treasury": 1967616.9047188456
+   },
+   "weekly_loss_usd": [
+    77078.60589059745,
+    42842.584381244116,
+    52975.8984778386,
+    79419.56481688727,
+    48335.909183826756,
+    35403.49257837458,
+    73096.88472310847,
+    73360.35847540111,
+    92676.81761485805,
+    59009.18162315761,
+    76777.90987731119,
+    46492.35874518455,
+    54627.42481369885
+   ],
+   "weekly_attempt_usd": [
+    230277.75736372286,
+    190228.29784712507,
+    221243.42098312743,
+    178708.96225132563,
+    231612.98530821165,
+    202918.15932808298,
+    256810.6972208288,
+    284976.6090113124,
+    231527.53069599156,
+    258909.0355652356,
+    322606.0919177941,
+    221829.03722703134,
+    277454.64126884466
+   ]
+  },
+  "adaptive_no_transaction_link": {
+   "attempted_fraud_usd": 3038117.1903061154,
+   "blocked_by_deny_usd": 580078.2353005608,
+   "caught_by_stepup_usd": 1584370.7519834505,
+   "fraud_loss_usd": 873668.2030221007,
+   "fraud_prevented_share_usd": 0.7124310392601836,
+   "mal_ever_denied": 0.279901356350185,
+   "mal_final_cur_identity": {
+    "allow": 0.09247842170160296,
+    "step_up": 0.6041923551171393,
+    "deny": 0.3033292231812577
+   },
+   "mal_flagged_final": 0.9075215782983971,
+   "legit_final": {
+    "allow": 0.7097945891783567,
+    "step_up": 0.2884519038076152,
+    "deny": 0.0017535070140280561
+   },
+   "legit_txn_share": {
+    "step_up": 0.4842068596593807,
+    "allow": 0.5139146336912034,
+    "deny": 0.0018785066494159213
+   },
+   "ring_theft_usd": 103254.42650460864,
+   "ring_peak_ge650": 0.4742268041237113,
+   "ring_peak_ge750": 0.07216494845360824,
+   "targets_final_below500": 0.0020876826722338203,
+   "targets_ever_below500": 0.07306889352818371,
+   "targets_final_below650": 0.29018789144050106,
+   "nontargets_final_below650": 0.29020652898067956,
+   "fake_report_targets": 479,
+   "fake_reports_filed": 1932,
+   "sybil_identities_created": 186,
+   "rereg_total": 186,
+   "rereg_linked": 82,
+   "rereg_mode": {
+    "fresh": 95,
+    "partial": 55,
+    "wait": 36
+   },
+   "rereg_mode_linked": {
+    "partial": 48,
+    "wait": 34
+   },
+   "attacker_fab_cost_usd": 26068.928459991563,
+   "attacker_identity_cost_usd": 3800.0,
+   "loss_by_tier": {
+    "static": 510773.9339271164,
+    "smurf": 181387.27873246145,
+    "selfdeal": 41340.49962442692,
+    "ring": 103254.42650460864,
+    "sleeper": 36912.064233486475
+   },
+   "attempt_by_tier": {
+    "static": 2310240.303245426,
+    "ring": 194769.7074418594,
+    "smurf": 406347.2508340815,
+    "selfdeal": 62825.029431346135,
+    "sleeper": 63934.89935340004
+   },
+   "tier_counts": {
+    "ring": 194,
+    "smurf": 145,
+    "static": 288,
+    "sleeper": 111,
+    "selfdeal": 73
+   },
+   "tier_flagged": {
+    "ring": 0.8762886597938144,
+    "selfdeal": 0.8904109589041096,
+    "smurf": 0.9793103448275862,
+    "sleeper": 0.9009009009009009,
+    "static": 0.8993055555555556
+   },
+   "velocity_stepups_legit": 4255,
+   "velocity_stepups_malicious": 73,
+   "velocity_reasons": {
+    "VELOCITY_AMOUNT": 155,
+    "VELOCITY_BURST": 3656,
+    "VELOCITY_CASHOUT": 664
+   },
+   "legit_agents_with_discounted_settled_edges": 173,
+   "ring_edges_discounted": 580,
+   "edges_total": 27833,
+   "loss_by_segment": {
+    "shopping": 109059.78113450248,
+    "assistant": 37447.0418048674,
+    "travel": 258732.15809858075,
+    "treasury": 468429.2219841494
+   },
+   "attempt_by_segment": {
+    "assistant": 83678.8440622823,
+    "shopping": 263139.6691052332,
+    "travel": 733675.8261837286,
+    "treasury": 1957622.8509548702
+   },
+   "weekly_loss_usd": [
+    47573.52424434983,
+    62091.69135762551,
+    60666.39032069579,
+    96999.31885659364,
+    81164.46079358092,
+    76382.83290864274,
+    63928.515595704055,
+    93264.22121480668,
+    56530.77659395925,
+    51773.25746435434,
+    75745.26979266632,
+    51235.55224618232,
+    56312.39163293868
+   ],
+   "weekly_attempt_usd": [
+    138996.27619230121,
+    211756.65765904612,
+    224714.94901778834,
+    216541.82022570315,
+    214416.38967546273,
+    192628.36849467154,
+    289499.66693855176,
+    287393.35309827095,
+    200800.38247204336,
+    271068.6918353588,
+    300479.88867304684,
+    247999.53037777415,
+    241821.2156460954
+   ]
+  },
+  "adaptive_no_report_consistency": {
+   "attempted_fraud_usd": 2626820.5946168224,
+   "blocked_by_deny_usd": 438601.75768960547,
+   "caught_by_stepup_usd": 1477971.1314872368,
+   "fraud_loss_usd": 710247.7054399756,
+   "fraud_prevented_share_usd": 0.7296169723598576,
+   "mal_ever_denied": 0.27003699136868065,
+   "mal_final_cur_identity": {
+    "allow": 0.10234278668310727,
+    "step_up": 0.593094944512947,
+    "deny": 0.30456226880394577
+   },
+   "mal_flagged_final": 0.8976572133168927,
+   "legit_final": {
+    "allow": 0.7061623246492986,
+    "step_up": 0.29233466933867736,
+    "deny": 0.001503006012024048
+   },
+   "legit_txn_share": {
+    "step_up": 0.4864212582262419,
+    "allow": 0.5121480910142692,
+    "deny": 0.0014306507594889467
+   },
+   "ring_theft_usd": 97851.73964425785,
+   "ring_peak_ge650": 0.4587628865979381,
+   "ring_peak_ge750": 0.06701030927835051,
+   "targets_final_below500": 0.0,
+   "targets_ever_below500": 0.029227557411273485,
+   "targets_final_below650": 0.31941544885177453,
+   "nontargets_final_below650": 0.2922051965356429,
+   "fake_report_targets": 479,
+   "fake_reports_filed": 1932,
+   "sybil_identities_created": 175,
+   "rereg_total": 175,
+   "rereg_linked": 71,
+   "rereg_mode": {
+    "fresh": 100,
+    "partial": 50,
+    "wait": 25
+   },
+   "rereg_mode_linked": {
+    "partial": 48,
+    "wait": 23
+   },
+   "attacker_fab_cost_usd": 25970.199473704448,
+   "attacker_identity_cost_usd": 4000.0,
+   "loss_by_tier": {
+    "static": 329968.27994587703,
+    "smurf": 198514.48469651592,
+    "selfdeal": 42185.92078863952,
+    "ring": 97851.73964425785,
+    "sleeper": 41727.28036468585
+   },
+   "attempt_by_tier": {
+    "static": 1892473.3388650445,
+    "ring": 192068.56361200233,
+    "smurf": 415156.7283769491,
+    "selfdeal": 64636.780398399154,
+    "sleeper": 62485.18336442386
+   },
+   "tier_counts": {
+    "ring": 194,
+    "smurf": 145,
+    "static": 288,
+    "sleeper": 111,
+    "selfdeal": 73
+   },
+   "tier_flagged": {
+    "ring": 0.8917525773195877,
+    "selfdeal": 0.863013698630137,
+    "smurf": 0.9379310344827586,
+    "sleeper": 0.918918918918919,
+    "static": 0.8819444444444444
+   },
+   "velocity_stepups_legit": 4198,
+   "velocity_stepups_malicious": 73,
+   "velocity_reasons": {
+    "VELOCITY_AMOUNT": 110,
+    "VELOCITY_BURST": 3639,
+    "VELOCITY_CASHOUT": 656,
+    "VELOCITY_COUNT": 3
+   },
+   "legit_agents_with_discounted_settled_edges": 167,
+   "ring_edges_discounted": 561,
+   "edges_total": 27795,
+   "loss_by_segment": {
+    "shopping": 107313.41398121175,
+    "assistant": 46121.195068764486,
+    "travel": 249148.84606347088,
+    "treasury": 307664.25032652897
+   },
+   "attempt_by_segment": {
+    "assistant": 99818.85796329995,
+    "shopping": 259298.22123018684,
+    "travel": 728025.4201950687,
+    "treasury": 1539678.0952282648
+   },
+   "weekly_loss_usd": [
+    47573.52424434983,
+    53544.44813489176,
+    59372.3303306475,
+    31408.01799969574,
+    42051.31380656704,
+    31732.954498176132,
+    84009.17363332563,
+    64341.74355284132,
+    94893.00857290637,
+    50325.13838120311,
+    61900.64059494436,
+    41839.44082099014,
+    47255.97086943709
+   ],
+   "weekly_attempt_usd": [
+    138996.27619230121,
+    141653.15309684214,
+    246238.34686664116,
+    206230.53696694155,
+    150728.88353758553,
+    119999.5312292215,
+    214969.35913328824,
+    207081.5504125789,
+    297759.0494379531,
+    212329.69034697706,
+    262914.2721021564,
+    213413.7891433028,
+    214506.15615103202
+   ]
+  },
+  "adaptive_no_reporter_reputation": {
+   "attempted_fraud_usd": 2711209.2330512377,
+   "blocked_by_deny_usd": 509217.9471749325,
+   "caught_by_stepup_usd": 1446800.0784630445,
+   "fraud_loss_usd": 755191.2074132656,
+   "fraud_prevented_share_usd": 0.7214559473289484,
+   "mal_ever_denied": 0.2638717632552404,
+   "mal_final_cur_identity": {
+    "allow": 0.11344019728729964,
+    "step_up": 0.6054254007398274,
+    "deny": 0.281134401972873
+   },
+   "mal_flagged_final": 0.8865598027127004,
+   "legit_final": {
+    "allow": 0.6907565130260521,
+    "step_up": 0.30222945891783565,
+    "deny": 0.0070140280561122245
+   },
+   "legit_txn_share": {
+    "step_up": 0.4886480972344899,
+    "allow": 0.5073709615217148,
+    "deny": 0.00398094124379533
+   },
+   "ring_theft_usd": 101948.1327964719,
+   "ring_peak_ge650": 0.4742268041237113,
+   "ring_peak_ge750": 0.061855670103092786,
+   "targets_final_below500": 0.08559498956158663,
+   "targets_ever_below500": 0.1524008350730689,
+   "targets_final_below650": 0.6430062630480167,
+   "nontargets_final_below650": 0.28794137241838774,
+   "fake_report_targets": 479,
+   "fake_reports_filed": 1932,
+   "sybil_identities_created": 172,
+   "rereg_total": 172,
+   "rereg_linked": 74,
+   "rereg_mode": {
+    "fresh": 93,
+    "partial": 48,
+    "wait": 31
+   },
+   "rereg_mode_linked": {
+    "partial": 44,
+    "wait": 30
+   },
+   "attacker_fab_cost_usd": 25625.4305934408,
+   "attacker_identity_cost_usd": 3720.0,
+   "loss_by_tier": {
+    "static": 389537.20086970984,
+    "smurf": 180582.8469676196,
+    "selfdeal": 45162.30137833346,
+    "ring": 101948.1327964719,
+    "sleeper": 37960.725401130956
+   },
+   "attempt_by_tier": {
+    "static": 1992531.2723883959,
+    "ring": 190851.78838325688,
+    "smurf": 395973.5447723976,
+    "selfdeal": 66976.45272684302,
+    "sleeper": 64876.17478034945
+   },
+   "tier_counts": {
+    "ring": 194,
+    "smurf": 145,
+    "static": 288,
+    "sleeper": 111,
+    "selfdeal": 73
+   },
+   "tier_flagged": {
+    "ring": 0.8144329896907216,
+    "selfdeal": 0.7945205479452054,
+    "smurf": 0.9448275862068966,
+    "sleeper": 0.9279279279279279,
+    "static": 0.9131944444444444
+   },
+   "velocity_stepups_legit": 4366,
+   "velocity_stepups_malicious": 82,
+   "velocity_reasons": {
+    "VELOCITY_AMOUNT": 120,
+    "VELOCITY_BURST": 3827,
+    "VELOCITY_CASHOUT": 661,
+    "VELOCITY_COUNT": 2
+   },
+   "legit_agents_with_discounted_settled_edges": 160,
+   "ring_edges_discounted": 550,
+   "edges_total": 27788,
+   "loss_by_segment": {
+    "shopping": 115977.17410630218,
+    "assistant": 40590.873117118375,
+    "travel": 226700.26612162488,
+    "treasury": 371922.89406822
+   },
+   "attempt_by_segment": {
+    "assistant": 88191.45365442743,
+    "shopping": 274276.2347336192,
+    "travel": 727862.2148370374,
+    "treasury": 1620879.3298261557
+   },
+   "weekly_loss_usd": [
+    47573.52424434983,
+    53544.44813489176,
+    57284.41002239745,
+    44396.13924047206,
+    77859.1840956861,
+    43524.56156945998,
+    90603.66249064782,
+    83769.20102735555,
+    54379.18006727643,
+    76221.39359809813,
+    48918.84736306456,
+    37157.35145333777,
+    39959.30410622799
+   ],
+   "weekly_attempt_usd": [
+    138800.05963828915,
+    141653.15309684214,
+    246419.90796609977,
+    182315.67082007788,
+    211243.6358527609,
+    147474.7193920364,
+    205106.87566414196,
+    220788.43997384142,
+    257244.41171668904,
+    216562.6534159912,
+    284601.7347410188,
+    188260.4191743723,
+    270737.5515990792
+   ]
+  },
+  "adaptive_no_link_quality": {
+   "attempted_fraud_usd": 2850962.8503285274,
+   "blocked_by_deny_usd": 485430.97709239216,
+   "caught_by_stepup_usd": 1577887.4606858909,
+   "fraud_loss_usd": 787644.4125502371,
+   "fraud_prevented_share_usd": 0.7237268761816823,
+   "mal_ever_denied": 0.28236744759556104,
+   "mal_final_cur_identity": {
+    "allow": 0.09617755856966707,
+    "step_up": 0.6115906288532675,
+    "deny": 0.2922318125770654
+   },
+   "mal_flagged_final": 0.903822441430333,
+   "legit_final": {
+    "allow": 0.7064128256513026,
+    "step_up": 0.29195891783567135,
+    "deny": 0.001628256513026052
+   },
+   "legit_txn_share": {
+    "step_up": 0.4861848898398915,
+    "allow": 0.5123720189592327,
+    "deny": 0.0014430912008758072
+   },
+   "ring_theft_usd": 110124.11471512096,
+   "ring_peak_ge650": 0.4484536082474227,
+   "ring_peak_ge750": 0.06701030927835051,
+   "targets_final_below500": 0.0020876826722338203,
+   "targets_ever_below500": 0.029227557411273485,
+   "targets_final_below650": 0.3298538622129436,
+   "nontargets_final_below650": 0.29127248500999336,
+   "fake_report_targets": 479,
+   "fake_reports_filed": 1932,
+   "sybil_identities_created": 190,
+   "rereg_total": 190,
+   "rereg_linked": 84,
+   "rereg_mode": {
+    "fresh": 99,
+    "partial": 62,
+    "wait": 29
+   },
+   "rereg_mode_linked": {
+    "partial": 58,
+    "wait": 26
+   },
+   "attacker_fab_cost_usd": 26015.822288534055,
+   "attacker_identity_cost_usd": 3960.0,
+   "loss_by_tier": {
+    "static": 399501.9163914432,
+    "smurf": 200624.88075641083,
+    "selfdeal": 36829.18645844643,
+    "ring": 110124.11471512096,
+    "sleeper": 40564.31422881775
+   },
+   "attempt_by_tier": {
+    "static": 2098040.9271899085,
+    "ring": 201570.6544101264,
+    "smurf": 421974.47493346606,
+    "selfdeal": 63036.31655353976,
+    "sleeper": 66340.47724148042
+   },
+   "tier_counts": {
+    "ring": 194,
+    "smurf": 145,
+    "static": 288,
+    "sleeper": 111,
+    "selfdeal": 73
+   },
+   "tier_flagged": {
+    "ring": 0.8711340206185567,
+    "selfdeal": 0.8904109589041096,
+    "smurf": 0.9586206896551724,
+    "sleeper": 0.8738738738738738,
+    "static": 0.9131944444444444
+   },
+   "velocity_stepups_legit": 4387,
+   "velocity_stepups_malicious": 48,
+   "velocity_reasons": {
+    "VELOCITY_AMOUNT": 109,
+    "VELOCITY_BURST": 3805,
+    "VELOCITY_CASHOUT": 672,
+    "VELOCITY_COUNT": 1
+   },
+   "legit_agents_with_discounted_settled_edges": 175,
+   "ring_edges_discounted": 585,
+   "edges_total": 27973,
+   "loss_by_segment": {
+    "shopping": 113860.33631856054,
+    "assistant": 42813.146589151445,
+    "travel": 240791.2719742769,
+    "treasury": 390179.6576682501
+   },
+   "attempt_by_segment": {
+    "assistant": 90679.68312265734,
+    "shopping": 276578.823856732,
+    "travel": 711384.4399994834,
+    "treasury": 1772319.9033496496
+   },
+   "weekly_loss_usd": [
+    47573.52424434983,
+    54311.616960495994,
+    88771.29485604925,
+    42705.03992465245,
+    69895.52758115272,
+    41607.40180322716,
+    76428.7210001586,
+    84113.09885781206,
+    42727.18088087911,
+    86636.040888583,
+    73464.67784132391,
+    46583.52812064876,
+    32826.75959090608
+   ],
+   "weekly_attempt_usd": [
+    138996.27619230121,
+    142782.46938812555,
+    267538.1921099608,
+    144764.67625799545,
+    185883.1786689191,
+    198171.26972470066,
+    237921.4114371812,
+    259440.09097009266,
+    234905.0179849107,
+    278955.34997733746,
+    307408.5037813518,
+    231830.4903479996,
+    222365.9234876481
+   ]
+  },
+  "unaware_no_rereg_linking": {
+   "attempted_fraud_usd": 2826410.158010008,
+   "blocked_by_deny_usd": 583390.9918345424,
+   "caught_by_stepup_usd": 1454691.1228990152,
+   "fraud_loss_usd": 788328.0432764479,
+   "fraud_prevented_share_usd": 0.721085051636141,
+   "mal_ever_denied": 0.2688039457459926,
+   "mal_final_cur_identity": {
+    "allow": 0.06288532675709001,
+    "step_up": 0.6473489519112207,
+    "deny": 0.28976572133168926
+   },
+   "mal_flagged_final": 0.93711467324291,
+   "legit_final": {
+    "allow": 0.7065380761523046,
+    "step_up": 0.29195891783567135,
+    "deny": 0.001503006012024048
+   },
+   "legit_txn_share": {
+    "step_up": 0.48278864934127863,
+    "allow": 0.5162534366719331,
+    "deny": 0.0009579139867882513
+   },
+   "ring_theft_usd": 79915.74042188787,
+   "ring_peak_ge650": 0.15463917525773196,
+   "ring_peak_ge750": 0.0,
+   "targets_final_below500": 0.0,
+   "targets_ever_below500": 0.0,
+   "targets_final_below650": 0.2881002087682672,
+   "nontargets_final_below650": 0.2938041305796136,
+   "fake_report_targets": 479,
+   "fake_reports_filed": 1932,
+   "sybil_identities_created": 147,
+   "rereg_total": 147,
+   "rereg_linked": 0,
+   "rereg_mode": {
+    "naive": 147
+   },
+   "rereg_mode_linked": {},
+   "attacker_fab_cost_usd": 19613.40435117433,
+   "attacker_identity_cost_usd": 0.0,
+   "loss_by_tier": {
+    "static": 419722.5493543783,
+    "smurf": 209752.3523911532,
+    "ring": 79915.74042188787,
+    "selfdeal": 35749.48790084734,
+    "sleeper": 43187.91320818187
+   },
+   "attempt_by_tier": {
+    "static": 2048846.7078800644,
+    "smurf": 442341.09579995094,
+    "ring": 199955.61964155716,
+    "selfdeal": 65233.858771090534,
+    "sleeper": 70032.87591734462
+   },
+   "tier_counts": {
+    "ring": 194,
+    "smurf": 145,
+    "static": 288,
+    "sleeper": 111,
+    "selfdeal": 73
+   },
+   "tier_flagged": {
+    "ring": 0.9536082474226805,
+    "selfdeal": 0.9315068493150684,
+    "smurf": 0.9517241379310345,
+    "sleeper": 0.9459459459459459,
+    "static": 0.9166666666666666
+   },
+   "velocity_stepups_legit": 4405,
+   "velocity_stepups_malicious": 65,
+   "velocity_reasons": {
+    "VELOCITY_AMOUNT": 146,
+    "VELOCITY_BURST": 3770,
+    "VELOCITY_CASHOUT": 673,
+    "VELOCITY_COUNT": 2
+   },
+   "legit_agents_with_discounted_settled_edges": 173,
+   "ring_edges_discounted": 1755,
+   "edges_total": 27883,
+   "loss_by_segment": {
+    "shopping": 100658.07557332296,
+    "assistant": 37893.15723435197,
+    "travel": 199022.1069791477,
+    "treasury": 450754.7034896259
+   },
+   "attempt_by_segment": {
+    "assistant": 88822.17653275412,
+    "shopping": 271361.93475650233,
+    "travel": 626667.1912581298,
+    "treasury": 1839558.8554626212
+   },
+   "weekly_loss_usd": [
+    77078.60589059745,
+    71419.14224022567,
+    54546.09212894888,
+    76970.01452563952,
+    85808.47895939315,
+    40980.119249500036,
+    54945.972365713336,
+    54033.19152626606,
+    56558.66083636776,
+    50379.87521730134,
+    57122.9160346444,
+    48063.66511858727,
+    60421.3091832635
+   ],
+   "weekly_attempt_usd": [
+    230277.75736372286,
+    251139.0980417382,
+    242036.91490125487,
+    180055.3130024918,
+    187400.1361978588,
+    219281.9384628079,
+    195598.38594791212,
+    221051.90950541958,
+    196128.95456817493,
+    215837.49301329162,
+    256379.34393987173,
+    214338.52381582564,
+    216884.3892496364
+   ]
+  },
+  "unaware_no_report_consistency": {
+   "attempted_fraud_usd": 3076261.339310157,
+   "blocked_by_deny_usd": 731582.9759613918,
+   "caught_by_stepup_usd": 1660912.7876598246,
+   "fraud_loss_usd": 683765.5756889374,
+   "fraud_prevented_share_usd": 0.7777283851175434,
+   "mal_ever_denied": 0.27373612823674476,
+   "mal_final_cur_identity": {
+    "allow": 0.05795314426633785,
+    "step_up": 0.5881627620221949,
+    "deny": 0.35388409371146734
+   },
+   "mal_flagged_final": 0.9420468557336621,
+   "legit_final": {
+    "allow": 0.7084168336673347,
+    "step_up": 0.2899549098196393,
+    "deny": 0.001628256513026052
+   },
+   "legit_txn_share": {
+    "step_up": 0.48033788238806713,
+    "allow": 0.5185922396526629,
+    "deny": 0.001069877959269995
+   },
+   "ring_theft_usd": 73506.19637967879,
+   "ring_peak_ge650": 0.14432989690721648,
+   "ring_peak_ge750": 0.0,
+   "targets_final_below500": 0.0,
+   "targets_ever_below500": 0.0,
+   "targets_final_below650": 0.2860125260960334,
+   "nontargets_final_below650": 0.29193870752831447,
+   "fake_report_targets": 479,
+   "fake_reports_filed": 1932,
+   "sybil_identities_created": 371,
+   "rereg_total": 371,
+   "rereg_linked": 370,
+   "rereg_mode": {
+    "naive": 371
+   },
+   "rereg_mode_linked": {
+    "naive": 370
+   },
+   "attacker_fab_cost_usd": 21468.150828080154,
+   "attacker_identity_cost_usd": 0.0,
+   "loss_by_tier": {
+    "static": 406045.45954659634,
+    "smurf": 131605.34084500524,
+    "ring": 73506.19637967879,
+    "selfdeal": 35566.52944447652,
+    "sleeper": 37042.04947317945
+   },
+   "attempt_by_tier": {
+    "static": 2311317.8514279644,
+    "smurf": 438155.81832453917,
+    "ring": 187967.1851228057,
+    "selfdeal": 70716.77193996888,
+    "sleeper": 68103.71249487648
+   },
+   "tier_counts": {
+    "ring": 194,
+    "smurf": 145,
+    "static": 288,
+    "sleeper": 111,
+    "selfdeal": 73
+   },
+   "tier_flagged": {
+    "ring": 0.9639175257731959,
+    "selfdeal": 0.9452054794520548,
+    "smurf": 0.9793103448275862,
+    "sleeper": 0.9459459459459459,
+    "static": 0.90625
+   },
+   "velocity_stepups_legit": 4338,
+   "velocity_stepups_malicious": 68,
+   "velocity_reasons": {
+    "VELOCITY_AMOUNT": 136,
+    "VELOCITY_BURST": 3710,
+    "VELOCITY_CASHOUT": 691
+   },
+   "legit_agents_with_discounted_settled_edges": 192,
+   "ring_edges_discounted": 1901,
+   "edges_total": 27925,
+   "loss_by_segment": {
+    "shopping": 95254.8348177184,
+    "assistant": 30357.353842214994,
+    "travel": 167104.41397011428,
+    "treasury": 391048.97305888927
+   },
+   "attempt_by_segment": {
+    "assistant": 88610.43106170636,
+    "shopping": 269569.17780675023,
+    "travel": 694353.1616227184,
+    "treasury": 2023728.568818979
+   },
+   "weekly_loss_usd": [
+    77078.60589059745,
+    64317.01927444877,
+    56064.11459284077,
+    35938.69588446246,
+    49563.57966949106,
+    54384.93415323791,
+    80135.34959092362,
+    50693.5676369843,
+    49408.078233774766,
+    37396.37510854862,
+    40706.7362311532,
+    43362.84000045611,
+    44715.67942201772
+   ],
+   "weekly_attempt_usd": [
+    230277.75736372286,
+    222513.62888703478,
+    248049.79155034974,
+    170009.73449482908,
+    197426.33632495868,
+    165978.48412159111,
+    273638.29659756675,
+    303610.9828692784,
+    268501.5342697595,
+    210351.15312939088,
+    280781.7807428885,
+    216431.56728044906,
+    288690.2916783349
+   ]
+  },
+  "adaptive_no_rereg_linking": {
+   "attempted_fraud_usd": 2766921.590100374,
+   "blocked_by_deny_usd": 483776.2097154552,
+   "caught_by_stepup_usd": 1484327.269972162,
+   "fraud_loss_usd": 798818.1104127524,
+   "fraud_prevented_share_usd": 0.7112971638694777,
+   "mal_ever_denied": 0.27003699136868065,
+   "mal_final_cur_identity": {
+    "allow": 0.09494451294697903,
+    "step_up": 0.6078914919852034,
+    "deny": 0.2971639950678175
+   },
+   "mal_flagged_final": 0.905055487053021,
+   "legit_final": {
+    "allow": 0.7090430861723447,
+    "step_up": 0.2892034068136273,
+    "deny": 0.0017535070140280561
+   },
+   "legit_txn_share": {
+    "step_up": 0.48523941629449013,
+    "allow": 0.5126830299939041,
+    "deny": 0.0020775537116056878
+   },
+   "ring_theft_usd": 100383.92494114352,
+   "ring_peak_ge650": 0.4793814432989691,
+   "ring_peak_ge750": 0.061855670103092786,
+   "targets_final_below500": 0.0020876826722338203,
+   "targets_ever_below500": 0.06263048016701461,
+   "targets_final_below650": 0.3173277661795407,
+   "nontargets_final_below650": 0.28927381745503,
+   "fake_report_targets": 479,
+   "fake_reports_filed": 1932,
+   "sybil_identities_created": 141,
+   "rereg_total": 141,
+   "rereg_linked": 0,
+   "rereg_mode": {
+    "fresh": 76,
+    "partial": 46,
+    "wait": 19
+   },
+   "rereg_mode_linked": {},
+   "attacker_fab_cost_usd": 26173.695900818442,
+   "attacker_identity_cost_usd": 3040.0,
+   "loss_by_tier": {
+    "static": 405903.4013617662,
+    "smurf": 208985.0756314448,
+    "selfdeal": 44692.22656801311,
+    "ring": 100383.92494114352,
+    "sleeper": 38853.481910383845
+   },
+   "attempt_by_tier": {
+    "static": 2003926.2385889986,
+    "ring": 215366.03972269932,
+    "smurf": 414584.455322574,
+    "selfdeal": 67889.0484251181,
+    "sleeper": 65155.80804098102
+   },
+   "tier_counts": {
+    "ring": 194,
+    "smurf": 145,
+    "static": 288,
+    "sleeper": 111,
+    "selfdeal": 73
+   },
+   "tier_flagged": {
+    "ring": 0.8969072164948454,
+    "selfdeal": 0.8493150684931506,
+    "smurf": 0.9586206896551724,
+    "sleeper": 0.8918918918918919,
+    "static": 0.9027777777777778
+   },
+   "velocity_stepups_legit": 4236,
+   "velocity_stepups_malicious": 82,
+   "velocity_reasons": {
+    "VELOCITY_AMOUNT": 122,
+    "VELOCITY_BURST": 3692,
+    "VELOCITY_CASHOUT": 672,
+    "VELOCITY_COUNT": 5
+   },
+   "legit_agents_with_discounted_settled_edges": 153,
+   "ring_edges_discounted": 534,
+   "edges_total": 27961,
+   "loss_by_segment": {
+    "shopping": 104296.38805616777,
+    "assistant": 45460.23484835309,
+    "travel": 233530.07357032993,
+    "treasury": 415531.4139379005
+   },
+   "attempt_by_segment": {
+    "assistant": 102894.44529577582,
+    "shopping": 266115.18535144377,
+    "travel": 690245.3393301613,
+    "treasury": 1707666.6201229922
+   },
+   "weekly_loss_usd": [
+    42390.59701719429,
+    49300.25684351784,
+    48008.843301324174,
+    52516.64921280302,
+    53218.20675889488,
+    34610.826761323726,
+    57043.691876015546,
+    109289.09112817899,
+    68542.01223528729,
+    82782.33842621617,
+    97564.05837678935,
+    53813.46424034548,
+    49738.074234860745
+   ],
+   "weekly_attempt_usd": [
+    161735.0985856994,
+    122177.57720607484,
+    177892.79819251294,
+    184301.4744635349,
+    204117.2330932144,
+    182295.01800351575,
+    256294.45611199195,
+    250807.36827730984,
+    282464.20949060266,
+    198782.330742971,
+    307465.8671348258,
+    201464.7868223771,
+    237123.37197574246
+   ]
+  },
+  "adaptive_no_inherited_history": {
+   "attempted_fraud_usd": 2772280.6397588453,
+   "blocked_by_deny_usd": 510901.0771879536,
+   "caught_by_stepup_usd": 1427220.1157924377,
+   "fraud_loss_usd": 834159.446778455,
+   "fraud_prevented_share_usd": 0.6991071413134362,
+   "mal_ever_denied": 0.2638717632552404,
+   "mal_final_cur_identity": {
+    "allow": 0.09001233045622688,
+    "step_up": 0.6128236744759556,
+    "deny": 0.2971639950678175
+   },
+   "mal_flagged_final": 0.9099876695437731,
+   "legit_final": {
+    "allow": 0.7076653306613226,
+    "step_up": 0.2905811623246493,
+    "deny": 0.0017535070140280561
+   },
+   "legit_txn_share": {
+    "step_up": 0.48734185088886955,
+    "allow": 0.5110782130549992,
+    "deny": 0.0015799360561312716
+   },
+   "ring_theft_usd": 110290.20205134088,
+   "ring_peak_ge650": 0.44329896907216493,
+   "ring_peak_ge750": 0.061855670103092786,
+   "targets_final_below500": 0.0,
+   "targets_ever_below500": 0.04801670146137787,
+   "targets_final_below650": 0.3173277661795407,
+   "nontargets_final_below650": 0.29073950699533646,
+   "fake_report_targets": 479,
+   "fake_reports_filed": 1932,
+   "sybil_identities_created": 145,
+   "rereg_total": 145,
+   "rereg_linked": 59,
+   "rereg_mode": {
+    "fresh": 83,
+    "partial": 40,
+    "wait": 22
+   },
+   "rereg_mode_linked": {
+    "partial": 37,
+    "wait": 22
+   },
+   "attacker_fab_cost_usd": 25922.235198992683,
+   "attacker_identity_cost_usd": 3320.0,
+   "loss_by_tier": {
+    "static": 431244.3351109172,
+    "smurf": 204775.35788529748,
+    "selfdeal": 45684.24790897684,
+    "ring": 110290.20205134088,
+    "sleeper": 42165.303821920876
+   },
+   "attempt_by_tier": {
+    "static": 1990242.2363043183,
+    "ring": 220858.43121859984,
+    "smurf": 424256.64802885917,
+    "selfdeal": 67858.94059999778,
+    "sleeper": 69064.38360706912
+   },
+   "tier_counts": {
+    "ring": 194,
+    "smurf": 145,
+    "static": 288,
+    "sleeper": 111,
+    "selfdeal": 73
+   },
+   "tier_flagged": {
+    "ring": 0.9020618556701031,
+    "selfdeal": 0.8767123287671232,
+    "smurf": 0.9517241379310345,
+    "sleeper": 0.8918918918918919,
+    "static": 0.9097222222222222
+   },
+   "velocity_stepups_legit": 4325,
+   "velocity_stepups_malicious": 86,
+   "velocity_reasons": {
+    "VELOCITY_AMOUNT": 119,
+    "VELOCITY_BURST": 3769,
+    "VELOCITY_CASHOUT": 678
+   },
+   "legit_agents_with_discounted_settled_edges": 180,
+   "ring_edges_discounted": 575,
+   "edges_total": 27976,
+   "loss_by_segment": {
+    "shopping": 121022.42905088632,
+    "assistant": 43499.51871040307,
+    "travel": 241079.92373103354,
+    "treasury": 428557.5752861309
+   },
+   "attempt_by_segment": {
+    "assistant": 93836.65184466,
+    "shopping": 268430.37978840055,
+    "travel": 741586.7158309435,
+    "treasury": 1668426.8922948411
+   },
+   "weekly_loss_usd": [
+    47573.52424434983,
+    53544.44813489176,
+    59844.27398450956,
+    57073.003856115705,
+    72360.42042511194,
+    69083.3912779605,
+    52827.181205089444,
+    70468.54584461989,
+    61306.5339074085,
+    69839.00423707532,
+    116963.5736167086,
+    46063.1730817776,
+    57212.37296283512
+   ],
+   "weekly_attempt_usd": [
+    138996.27619230121,
+    141653.15309684214,
+    259008.66402796775,
+    135450.91162215156,
+    252611.16908254326,
+    232647.97114586274,
+    204264.0040297811,
+    232093.83520770937,
+    211312.4840704592,
+    269429.752775863,
+    292728.29973663384,
+    212804.68018143586,
+    189279.43858929572
+   ]
+  },
+  "adaptive_no_velocity": {
+   "attempted_fraud_usd": 3120761.1033456624,
+   "blocked_by_deny_usd": 435006.7730085412,
+   "caught_by_stepup_usd": 1703124.742634882,
+   "fraud_loss_usd": 982629.5877022282,
+   "fraud_prevented_share_usd": 0.6851314294295758,
+   "mal_ever_denied": 0.27373612823674476,
+   "mal_final_cur_identity": {
+    "allow": 0.07398273736128237,
+    "step_up": 0.6276202219482121,
+    "deny": 0.29839704069050554
+   },
+   "mal_flagged_final": 0.9260172626387176,
+   "legit_final": {
+    "allow": 0.7057865731462926,
+    "step_up": 0.29245991983967934,
+    "deny": 0.0017535070140280561
+   },
+   "legit_txn_share": {
+    "step_up": 0.4315962330343481,
+    "allow": 0.5662888919298856,
+    "deny": 0.002114875035766269
+   },
+   "ring_theft_usd": 150570.57586911062,
+   "ring_peak_ge650": 0.4536082474226804,
+   "ring_peak_ge750": 0.061855670103092786,
+   "targets_final_below500": 0.0020876826722338203,
+   "targets_ever_below500": 0.05219206680584551,
+   "targets_final_below650": 0.33194154488517746,
+   "nontargets_final_below650": 0.2918054630246502,
+   "fake_report_targets": 479,
+   "fake_reports_filed": 1932,
+   "sybil_identities_created": 180,
+   "rereg_total": 180,
+   "rereg_linked": 88,
+   "rereg_mode": {
+    "fresh": 89,
+    "partial": 63,
+    "wait": 28
+   },
+   "rereg_mode_linked": {
+    "partial": 60,
+    "wait": 28
+   },
+   "attacker_fab_cost_usd": 25898.87950759164,
+   "attacker_identity_cost_usd": 3560.0,
+   "loss_by_tier": {
+    "static": 544244.1109090062,
+    "smurf": 195756.37356296385,
+    "selfdeal": 50039.48796363042,
+    "sleeper": 42019.03939751929,
+    "ring": 150570.57586911062
+   },
+   "attempt_by_tier": {
+    "static": 2327573.4720189758,
+    "ring": 237095.07575859543,
+    "smurf": 407983.8315272542,
+    "selfdeal": 74848.04767128195,
+    "sleeper": 73260.676369551
+   },
+   "tier_counts": {
+    "ring": 194,
+    "smurf": 145,
+    "static": 288,
+    "sleeper": 111,
+    "selfdeal": 73
+   },
+   "tier_flagged": {
+    "ring": 0.9020618556701031,
+    "selfdeal": 0.9041095890410958,
+    "smurf": 0.9862068965517241,
+    "sleeper": 0.918918918918919,
+    "static": 0.9201388888888888
+   },
+   "velocity_stepups_legit": 0,
+   "velocity_stepups_malicious": 0,
+   "velocity_reasons": {},
+   "legit_agents_with_discounted_settled_edges": 155,
+   "ring_edges_discounted": 518,
+   "edges_total": 28092,
+   "loss_by_segment": {
+    "shopping": 159279.023088421,
+    "assistant": 45825.542716581615,
+    "travel": 250789.22137521583,
+    "treasury": 526735.8005220112
+   },
+   "attempt_by_segment": {
+    "assistant": 93780.84336430127,
+    "shopping": 307827.0361764727,
+    "travel": 673050.1248502476,
+    "treasury": 2046103.0989546336
+   },
+   "weekly_loss_usd": [
+    46091.14866290189,
+    39856.096143862014,
+    69318.76016747892,
+    51164.666536376346,
+    70316.54595614178,
+    63928.166988775934,
+    78910.08485836485,
+    133217.76590327662,
+    108605.72867989418,
+    41799.7698295259,
+    129230.0431357565,
+    65143.82878146702,
+    85046.98205840781
+   ],
+   "weekly_attempt_usd": [
+    287042.95853912696,
+    172723.02147639735,
+    236780.47103924,
+    197165.12774314437,
+    207981.96170767656,
+    245881.7015044488,
+    222523.17152737733,
+    284235.0316431059,
+    252174.98382433265,
+    266793.4989791067,
+    293443.95369999687,
+    237877.4641030234,
+    216137.7575586792
+   ]
+  },
+  "unaware_no_velocity": {
+   "attempted_fraud_usd": 3037933.1118423734,
+   "blocked_by_deny_usd": 874060.1414126449,
+   "caught_by_stepup_usd": 1420181.2029067713,
+   "fraud_loss_usd": 743691.7675229583,
+   "fraud_prevented_share_usd": 0.7551981099834216,
+   "mal_ever_denied": 0.3008631319358816,
+   "mal_final_cur_identity": {
+    "allow": 0.06288532675709001,
+    "step_up": 0.5696670776818742,
+    "deny": 0.36744759556103573
+   },
+   "mal_flagged_final": 0.93711467324291,
+   "legit_final": {
+    "allow": 0.7091683366733467,
+    "step_up": 0.2892034068136273,
+    "deny": 0.001628256513026052
+   },
+   "legit_txn_share": {
+    "step_up": 0.42735404252142867,
+    "allow": 0.5714641155468196,
+    "deny": 0.0011818419317517386
+   },
+   "ring_theft_usd": 76823.34089648242,
+   "ring_peak_ge650": 0.14948453608247422,
+   "ring_peak_ge750": 0.0,
+   "targets_final_below500": 0.0020876826722338203,
+   "targets_ever_below500": 0.0020876826722338203,
+   "targets_final_below650": 0.2776617954070981,
+   "nontargets_final_below650": 0.291672218520986,
+   "fake_report_targets": 479,
+   "fake_reports_filed": 1932,
+   "sybil_identities_created": 406,
+   "rereg_total": 406,
+   "rereg_linked": 406,
+   "rereg_mode": {
+    "naive": 406
+   },
+   "rereg_mode_linked": {
+    "naive": 406
+   },
+   "attacker_fab_cost_usd": 21849.529523015695,
+   "attacker_identity_cost_usd": 0.0,
+   "loss_by_tier": {
+    "static": 478340.68663802155,
+    "smurf": 120774.92956773636,
+    "ring": 76823.34089648242,
+    "selfdeal": 34870.92286711229,
+    "sleeper": 32881.88755360552
+   },
+   "attempt_by_tier": {
+    "static": 2287361.8743478516,
+    "smurf": 437888.9672444288,
+    "ring": 187882.18375976293,
+    "selfdeal": 62933.212545750466,
+    "sleeper": 61866.87394458028
+   },
+   "tier_counts": {
+    "ring": 194,
+    "smurf": 145,
+    "static": 288,
+    "sleeper": 111,
+    "selfdeal": 73
+   },
+   "tier_flagged": {
+    "ring": 0.9536082474226805,
+    "selfdeal": 0.9452054794520548,
+    "smurf": 0.9655172413793104,
+    "sleeper": 0.918918918918919,
+    "static": 0.9166666666666666
+   },
+   "velocity_stepups_legit": 0,
+   "velocity_stepups_malicious": 0,
+   "velocity_reasons": {},
+   "legit_agents_with_discounted_settled_edges": 164,
+   "ring_edges_discounted": 1812,
+   "edges_total": 28050,
+   "loss_by_segment": {
+    "shopping": 99930.50894139777,
+    "assistant": 30066.356886001307,
+    "travel": 189054.00424847536,
+    "treasury": 424640.89744708367
+   },
+   "attempt_by_segment": {
+    "assistant": 90472.24630779629,
+    "shopping": 280578.4220730272,
+    "travel": 710723.0265207399,
+    "treasury": 1956159.4169408125
+   },
+   "weekly_loss_usd": [
+    82409.59124317809,
+    84288.65586831479,
+    41901.06223445196,
+    70999.88233212243,
+    35582.968796480236,
+    30718.77648175912,
+    55185.098018437515,
+    64925.69351588559,
+    37578.92070083223,
+    41149.189578395715,
+    85464.17412126392,
+    40890.56745310057,
+    72597.18717873607
+   ],
+   "weekly_attempt_usd": [
+    227818.66043746058,
+    205939.21643168968,
+    210920.886100209,
+    227795.58040971772,
+    134670.40252173692,
+    164885.47123381455,
+    196869.34818867937,
+    214583.1687274378,
+    236959.5292195243,
+    302908.6326815845,
+    332706.5973132266,
+    223944.61500131633,
+    357931.00357597717
+   ]
+  },
+  "adaptive_no_adaptive_velocity": {
+   "attempted_fraud_usd": 3120816.7070384696,
+   "blocked_by_deny_usd": 435006.7730085412,
+   "caught_by_stepup_usd": 1703180.3463276888,
+   "fraud_loss_usd": 982629.5877022282,
+   "fraud_prevented_share_usd": 0.6851370394531422,
+   "mal_ever_denied": 0.27373612823674476,
+   "mal_final_cur_identity": {
+    "allow": 0.07398273736128237,
+    "step_up": 0.6276202219482121,
+    "deny": 0.29839704069050554
+   },
+   "mal_flagged_final": 0.9260172626387176,
+   "legit_final": {
+    "allow": 0.7057865731462926,
+    "step_up": 0.29245991983967934,
+    "deny": 0.0017535070140280561
+   },
+   "legit_txn_share": {
+    "step_up": 0.4316086734757349,
+    "allow": 0.5662764514884988,
+    "deny": 0.002114875035766269
+   },
+   "ring_theft_usd": 150570.57586911062,
+   "ring_peak_ge650": 0.4536082474226804,
+   "ring_peak_ge750": 0.061855670103092786,
+   "targets_final_below500": 0.0020876826722338203,
+   "targets_ever_below500": 0.05219206680584551,
+   "targets_final_below650": 0.33194154488517746,
+   "nontargets_final_below650": 0.2918054630246502,
+   "fake_report_targets": 479,
+   "fake_reports_filed": 1932,
+   "sybil_identities_created": 180,
+   "rereg_total": 180,
+   "rereg_linked": 88,
+   "rereg_mode": {
+    "fresh": 89,
+    "partial": 63,
+    "wait": 28
+   },
+   "rereg_mode_linked": {
+    "partial": 60,
+    "wait": 28
+   },
+   "attacker_fab_cost_usd": 25898.87950759164,
+   "attacker_identity_cost_usd": 3560.0,
+   "loss_by_tier": {
+    "static": 544244.1109090062,
+    "smurf": 195756.37356296385,
+    "selfdeal": 50039.48796363042,
+    "sleeper": 42019.03939751929,
+    "ring": 150570.57586911062
+   },
+   "attempt_by_tier": {
+    "static": 2327629.075711783,
+    "ring": 237095.07575859543,
+    "smurf": 407983.8315272542,
+    "selfdeal": 74848.04767128195,
+    "sleeper": 73260.676369551
+   },
+   "tier_counts": {
+    "ring": 194,
+    "smurf": 145,
+    "static": 288,
+    "sleeper": 111,
+    "selfdeal": 73
+   },
+   "tier_flagged": {
+    "ring": 0.9020618556701031,
+    "selfdeal": 0.9041095890410958,
+    "smurf": 0.9862068965517241,
+    "sleeper": 0.918918918918919,
+    "static": 0.9201388888888888
+   },
+   "velocity_stepups_legit": 1,
+   "velocity_stepups_malicious": 0,
+   "velocity_reasons": {
+    "VELOCITY_AMOUNT": 1
+   },
+   "legit_agents_with_discounted_settled_edges": 155,
+   "ring_edges_discounted": 518,
+   "edges_total": 28092,
+   "loss_by_segment": {
+    "shopping": 159279.023088421,
+    "assistant": 45825.542716581615,
+    "travel": 250789.22137521583,
+    "treasury": 526735.8005220112
+   },
+   "attempt_by_segment": {
+    "assistant": 93780.84336430127,
+    "shopping": 307882.63986927975,
+    "travel": 673050.1248502476,
+    "treasury": 2046103.0989546336
+   },
+   "weekly_loss_usd": [
+    46091.14866290189,
+    39856.096143862014,
+    69318.76016747892,
+    51164.666536376346,
+    70316.54595614178,
+    63928.166988775934,
+    78910.08485836485,
+    133217.76590327662,
+    108605.72867989418,
+    41799.7698295259,
+    129230.0431357565,
+    65143.82878146702,
+    85046.98205840781
+   ],
+   "weekly_attempt_usd": [
+    287042.95853912696,
+    172723.02147639735,
+    236780.47103924,
+    197165.12774314437,
+    207981.96170767656,
+    245937.3051972558,
+    222523.17152737733,
+    284235.0316431059,
+    252174.98382433265,
+    266793.4989791067,
+    293443.95369999687,
+    237877.4641030234,
+    216137.7575586792
+   ]
+  },
+  "adaptive_no_proofing_gate": {
+   "attempted_fraud_usd": 2921454.4653992383,
+   "blocked_by_deny_usd": 686495.6132159363,
+   "caught_by_stepup_usd": 1397882.2916690619,
+   "fraud_loss_usd": 837076.5605142419,
+   "fraud_prevented_share_usd": 0.7134726656094401,
+   "mal_ever_denied": 0.2762022194821208,
+   "mal_final_cur_identity": {
+    "allow": 0.09864364981504316,
+    "step_up": 0.5906288532675709,
+    "deny": 0.31072749691738594
+   },
+   "mal_flagged_final": 0.9013563501849569,
+   "legit_final": {
+    "allow": 0.7075400801603207,
+    "step_up": 0.2907064128256513,
+    "deny": 0.0017535070140280561
+   },
+   "legit_txn_share": {
+    "step_up": 0.46675292039361554,
+    "allow": 0.5316795839916401,
+    "deny": 0.001567495614744411
+   },
+   "ring_theft_usd": 99450.44895504374,
+   "ring_peak_ge650": 0.4793814432989691,
+   "ring_peak_ge750": 0.08762886597938144,
+   "targets_final_below500": 0.0041753653444676405,
+   "targets_ever_below500": 0.03966597077244259,
+   "targets_final_below650": 0.32150313152400833,
+   "nontargets_final_below650": 0.2906062624916722,
+   "fake_report_targets": 479,
+   "fake_reports_filed": 1932,
+   "sybil_identities_created": 175,
+   "rereg_total": 175,
+   "rereg_linked": 80,
+   "rereg_mode": {
+    "fresh": 90,
+    "partial": 60,
+    "wait": 25
+   },
+   "rereg_mode_linked": {
+    "partial": 56,
+    "wait": 24
+   },
+   "attacker_fab_cost_usd": 26417.082545728586,
+   "attacker_identity_cost_usd": 3600.0,
+   "loss_by_tier": {
+    "static": 459915.9749021006,
+    "smurf": 185592.53453271856,
+    "ring": 99450.44895504374,
+    "sleeper": 46315.56226491529,
+    "selfdeal": 45802.03985946323
+   },
+   "attempt_by_tier": {
+    "static": 2168878.519408298,
+    "smurf": 406700.16383104835,
+    "ring": 205347.76238956305,
+    "sleeper": 71949.69007049862,
+    "selfdeal": 68578.32969983069
+   },
+   "tier_counts": {
+    "ring": 194,
+    "smurf": 145,
+    "static": 288,
+    "sleeper": 111,
+    "selfdeal": 73
+   },
+   "tier_flagged": {
+    "ring": 0.9072164948453608,
+    "selfdeal": 0.9041095890410958,
+    "smurf": 0.9379310344827586,
+    "sleeper": 0.8828828828828829,
+    "static": 0.8854166666666666
+   },
+   "velocity_stepups_legit": 4418,
+   "velocity_stepups_malicious": 101,
+   "velocity_reasons": {
+    "VELOCITY_AMOUNT": 146,
+    "VELOCITY_BURST": 3842,
+    "VELOCITY_CASHOUT": 701,
+    "VELOCITY_COUNT": 3
+   },
+   "legit_agents_with_discounted_settled_edges": 181,
+   "ring_edges_discounted": 582,
+   "edges_total": 28150,
+   "loss_by_segment": {
+    "assistant": 41379.38639204324,
+    "shopping": 114216.91272295751,
+    "treasury": 452336.98160607915,
+    "travel": 229143.27979316146
+   },
+   "attempt_by_segment": {
+    "assistant": 89720.0488266652,
+    "shopping": 272078.9935082904,
+    "treasury": 1873854.2320659934,
+    "travel": 685801.1909982889
+   },
+   "weekly_loss_usd": [
+    58600.22337626777,
+    54508.49914770613,
+    76035.09124617698,
+    83929.90918691923,
+    48312.61512692223,
+    52840.41661065368,
+    98216.72825364373,
+    97276.2970648051,
+    54694.787087439734,
+    55326.45295097801,
+    46190.279518236435,
+    52488.71804342173,
+    58656.54290107049
+   ],
+   "weekly_attempt_usd": [
+    223668.63064510646,
+    174234.3596628588,
+    298883.72575342294,
+    191358.81678833938,
+    192261.2212937991,
+    207133.84602306387,
+    204164.3224692197,
+    263355.7281668922,
+    208254.80488850147,
+    238498.45792749678,
+    260955.71362272848,
+    217578.1363831307,
+    241106.70177467988
+   ]
+  },
+  "adaptive_no_established_operator_path": {
+   "attempted_fraud_usd": 3051534.2844601525,
+   "blocked_by_deny_usd": 693998.7677950918,
+   "caught_by_stepup_usd": 1530499.0821250186,
+   "fraud_loss_usd": 827036.4345400508,
+   "fraud_prevented_share_usd": 0.7289768498582142,
+   "mal_ever_denied": 0.27003699136868065,
+   "mal_final_cur_identity": {
+    "allow": 0.0752157829839704,
+    "step_up": 0.6313193588162762,
+    "deny": 0.2934648581997534
+   },
+   "mal_flagged_final": 0.9247842170160296,
+   "legit_final": {
+    "allow": 0.6376503006012024,
+    "step_up": 0.36072144288577157,
+    "deny": 0.001628256513026052
+   },
+   "legit_txn_share": {
+    "step_up": 0.5202965801226628,
+    "allow": 0.4777502705796002,
+    "deny": 0.0019531492977370836
+   },
+   "ring_theft_usd": 105438.63328719023,
+   "ring_peak_ge650": 0.4587628865979381,
+   "ring_peak_ge750": 0.06701030927835051,
+   "targets_final_below500": 0.0020876826722338203,
+   "targets_ever_below500": 0.054279749478079335,
+   "targets_final_below650": 0.3695198329853862,
+   "nontargets_final_below650": 0.361892071952032,
+   "fake_report_targets": 479,
+   "fake_reports_filed": 1932,
+   "sybil_identities_created": 159,
+   "rereg_total": 159,
+   "rereg_linked": 63,
+   "rereg_mode": {
+    "fresh": 92,
+    "partial": 43,
+    "wait": 24
+   },
+   "rereg_mode_linked": {
+    "partial": 40,
+    "wait": 23
+   },
+   "attacker_fab_cost_usd": 26735.50061404824,
+   "attacker_identity_cost_usd": 3680.0,
+   "loss_by_tier": {
+    "static": 437018.6205266664,
+    "smurf": 204446.11293374302,
+    "ring": 105438.63328719023,
+    "sleeper": 34958.78640757032,
+    "selfdeal": 45174.281384880196
+   },
+   "attempt_by_tier": {
+    "static": 2309797.460129335,
+    "ring": 190496.67393183275,
+    "smurf": 419165.10121792747,
+    "selfdeal": 66456.82690705088,
+    "sleeper": 65618.22227401582
+   },
+   "tier_counts": {
+    "ring": 194,
+    "smurf": 145,
+    "static": 288,
+    "sleeper": 111,
+    "selfdeal": 73
+   },
+   "tier_flagged": {
+    "ring": 0.9020618556701031,
+    "selfdeal": 0.8904109589041096,
+    "smurf": 0.9793103448275862,
+    "sleeper": 0.918918918918919,
+    "static": 0.9236111111111112
+   },
+   "velocity_stepups_legit": 4066,
+   "velocity_stepups_malicious": 74,
+   "velocity_reasons": {
+    "VELOCITY_AMOUNT": 139,
+    "VELOCITY_BURST": 3440,
+    "VELOCITY_CASHOUT": 682,
+    "VELOCITY_COUNT": 1
+   },
+   "legit_agents_with_discounted_settled_edges": 182,
+   "ring_edges_discounted": 594,
+   "edges_total": 28039,
+   "loss_by_segment": {
+    "shopping": 117405.27116554166,
+    "treasury": 439398.9192918495,
+    "assistant": 38527.84277935029,
+    "travel": 231704.40130330838
+   },
+   "attempt_by_segment": {
+    "assistant": 91407.79839762086,
+    "shopping": 272318.9651480162,
+    "treasury": 1991046.1840099816,
+    "travel": 696761.3369045418
+   },
+   "weekly_loss_usd": [
+    70522.84187005868,
+    55822.32752584504,
+    51869.18471789618,
+    50436.361742115965,
+    35473.92883872636,
+    68804.03353347455,
+    82146.64822780679,
+    59606.43326019434,
+    50875.2394744531,
+    105483.14308994904,
+    70435.67246549264,
+    70627.55056530435,
+    54933.06922873297
+   ],
+   "weekly_attempt_usd": [
+    177223.63129666864,
+    163171.94545873124,
+    225787.2011242644,
+    201344.29681295293,
+    148140.00744688857,
+    204308.23291564136,
+    280809.358105865,
+    316813.9070438964,
+    223480.80341958386,
+    284339.1969984228,
+    313961.44946227194,
+    236505.97964032457,
+    275648.27473464905
+   ]
+  }
+ }
+}

@@ -1,6 +1,6 @@
 # KATA Architecture
 
-**Status: Concept / Open Design — not production ready.**
+**Status: framework note.** The Global Agent Bureau service is live. This page is the design note, not a customer or performance claim.
 
 This document describes how KATA could be deployed as an infrastructure / service layer: the components, the data flow, and the deployment options. It is a reference architecture, not a product specification.
 
@@ -13,7 +13,7 @@ KATA should sit **between the AI agent and the world it acts on** — evaluating
 | Component | Responsibility |
 |---|---|
 | **Identity module** | Establishes and validates agent identity and provenance: agent identifier, provider, model, version, deployment environment, cryptographic identity, credentials, and security posture. Consumes evidence from existing identity systems (verifiable credentials, workload identity, OAuth/OIDC). |
-| **Intent module** | Parses and stores the principal's structured intent (purpose, limits, constraints, time window, allowed actions). Measures the distance between declared intent and observed action on every evaluation. Detects intent drift over time. |
+| **Intent module** | Parses and stores the principal's structured intent (purpose, limits, constraints, time window, allowed actions). Holds the signed intent agreement. Measures the distance between declared intent and observed action on every evaluation. Detects intent drift over time. The reference check is [`reference/python`](../reference/python); the agreement is [intent-agreement.md](intent-agreement.md). |
 | **Behavior module** | Maintains the agent's behavioral profile: tool usage patterns, API sequences, velocity, scope changes, retry behavior, infrastructure changes. Flags anomalies as risk signals. |
 | **Risk engine** | Correlates signals across all modules into a connected risk graph. Combines component risks (identity, delegation, intent, behavior, action, transaction) into an explainable risk assessment — never just a number. |
 | **Policy / decision** | Applies policy rules to the risk assessment and emits one of the seven KATA decisions (`ALLOW`, `ALLOW_WITH_MONITORING`, `STEP_UP`, `HUMAN_APPROVAL`, `BLOCK`, `REVOKE`, `QUARANTINE`). Decisions are machine-readable and explainable: decision + risk score + reasons + required action. |
@@ -88,4 +88,4 @@ All three are deployment *patterns*, not products. The framework is standards-ne
 
 ## Out of scope for this document
 
-Concrete wire protocols, SDK implementations, storage design, and multi-tenant isolation are deliberately left open for future design and community input.
+The Global Agent Bureau service hosts registration, stored intents, the rule score `gab-score-1`, and the synthetic stress test at `/simulation`. A wire protocol between institutions, and gossip between transparency logs, are still open. The intent-agreement rules are in [intent-agreement.md](intent-agreement.md).

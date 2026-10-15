@@ -1,6 +1,6 @@
 # KATA Delegation Model
 
-**Status: Concept / Open Design — not production ready.**
+**Status: framework note.** The Global Agent Bureau service is live. This page is the design note, not a customer or performance claim.
 
 Delegation is the explicit, machine-readable relationship between a **principal** (human, business, institution, system, or another agent) and an **agent** — the answer to *"who authorized this agent, to do what, for how long, under what conditions?"*
 
@@ -76,6 +76,10 @@ When an agent delegates to a sub-agent:
 - The full chain from the root principal must be verifiable at evaluation time.
 - Each link records who delegated to whom, when, and under what narrowed scope.
 - A break or revocation anywhere in the chain invalidates everything below it.
+
+## Intent agreement
+
+The signed intent agreement is stored inside the delegation (`intent_agreement`). `scope.maximum_amount` stays the per-transaction ceiling. `scope.cumulative_maximum` is the separate total. One delegation may carry several live intents; each must stay inside the parent set's amount. The record, the confirmation text, and the action check are specified in [intent-agreement.md](intent-agreement.md). Revoking the agreement is a signed act by the principal who signed it. Revoking the delegation remains the Q2 control. A price failure on an action does not, by itself, revoke either record.
 
 ## Evidence from payment mandates
 

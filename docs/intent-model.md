@@ -1,6 +1,6 @@
 # KATA Intent Model
 
-**Status: Concept / Open Design — not production ready.**
+**Status: framework note.** The Global Agent Bureau service is live. This page is the design note, not a customer or performance claim.
 
 Intent is one of KATA's most important concepts: the principal's *declared purpose* for the delegation, expressed as structured, machine-readable data, and used as a first-class risk signal throughout the agent's session.
 
@@ -106,6 +106,12 @@ Detection approach:
 - Evaluations always reference the intent version in force at the time of the action.
 - Revocation of a delegation invalidates all intents bound to it.
 
+## Signed agreement
+
+The fields above are the intent. The **intent mandate** is that object signed by the principal and bound to one agent key. The **agreement** lives inside the delegation and may hold several live mandates. `maximum_amount` stays the per-transaction ceiling. Each intent's cumulative slice is separate, and the slices together cannot exceed the parent total. KATA holds the spend ledger on the agreement.
+
+Specification, threat notes, and the reference check: [intent-agreement.md](intent-agreement.md).
+
 ## Examples
 
-See [`examples/shopping-agent/`](../examples/shopping-agent/) for a worked ceiling mismatch, [`examples/price-integrity/`](../examples/price-integrity/) for a charge under the ceiling that still fails the quote, and [`schemas/intent.json`](../schemas/intent.json) for the schema draft.
+See [`examples/shopping-agent/`](../examples/shopping-agent/) for a worked ceiling mismatch, [`examples/price-integrity/`](../examples/price-integrity/) for a charge under the ceiling that still fails the quote, and [`schemas/intent.json`](../schemas/intent.json) for the schema draft. The runnable in-scope / out-of-scope check is [`reference/python/examples/purchase_check.py`](../reference/python/examples/purchase_check.py).

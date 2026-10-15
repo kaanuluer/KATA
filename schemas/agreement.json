@@ -1,0 +1,187 @@
+{
+  "$id": "https://KATA.org/schemas/agreement.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "KATA Intent Agreement",
+  "description": "Lifecycle record for the live intents inside a delegation: proposal, clarification, acceptance, acknowledgement, amendment, added intents, revocation, and expiry. KATA holds the spend ledger on this record. The event log is an audit trail. It is not, by itself, a revocation status service. Status: Concept / Open Design — not production ready.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["agreement_id", "status", "mandates", "events", "ledger", "ledger_sequence", "ledger_as_of"],
+  "properties": {
+    "agreement_id": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["proposed", "clarifying", "accepted", "active", "revoked", "expired"],
+      "description": "Advisory. Evaluators derive authority from the signature, the window, the revocation signature, and required acknowledgements."
+    },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "mandates": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "intent-mandate.json" },
+      "description": "Live intents. One agreement may hold several. Each must stay inside parent_limits."
+    },
+    "parent_limits": {
+      "$ref": "intent-mandate.json#/$defs/parentLimits",
+      "description": "The parent set. A live intent's per-transaction ceiling and cumulative slice, and the sum of those slices, must not exceed it."
+    },
+    "ledger": {
+      "type": "array",
+      "description": "Hash-chained charges KATA has recorded. An empty array means nothing has been spent. Omitting the field means the total is unknown.",
+      "items": { "$ref": "#/$defs/ledgerEntry" }
+    },
+    "ledger_sequence": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of ledger entries. An authorization check carries this sequence. A lower sequence is a truncated ledger."
+    },
+    "ledger_head": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "Hash of the last ledger entry. Absent when the ledger is empty."
+    },
+    "ledger_as_of": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When this replica of the ledger was last synced. Older than the configured staleness window steps up. Default window is 60 seconds."
+    },
+    "mandate_history": {
+      "type": "array",
+      "items": { "$ref": "intent-mandate.json" },
+      "description": "Earlier mandate versions, newest amendment's predecessor last. Not authoritative for a new action."
+    },
+    "acknowledgements": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/acknowledgement" },
+      "description": "Countersignatures of the current mandate hash. An acknowledgement of an older hash does not count."
+    },
+    "revocation": { "$ref": "#/$defs/revocation" },
+    "events": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/event" }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "status": { "enum": ["accepted", "active", "expired"] } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "mandates": {
+            "items": {
+              "required": ["signature", "rendering", "algorithm"],
+              "properties": {
+                "principal": { "required": ["public_key"] }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "jws": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protected", "payload", "signature"],
+      "properties": {
+        "protected": { "type": "string" },
+        "payload": { "type": "string" },
+        "signature": { "type": "string" }
+      }
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "id"],
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": ["principal", "agent", "merchant", "psp", "issuer", "policy"]
+        },
+        "id": { "type": "string" }
+      }
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_id", "type", "at", "actor", "agreement_id", "mandate_hash", "event_hash"],
+      "properties": {
+        "event_id": { "type": "string" },
+        "type": {
+          "type": "string",
+          "enum": ["proposed", "clarified", "accepted", "activated", "acknowledged", "amended", "added", "revoked", "expired"]
+        },
+        "at": { "type": "string", "format": "date-time" },
+        "actor": { "$ref": "#/$defs/actor" },
+        "agreement_id": { "type": "string" },
+        "mandate_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "prev_event_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "event_hash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "SHA-256 of the canonical event with this field removed. Each event names the previous event_hash."
+        },
+        "note": { "type": "string" },
+        "detail": { "type": "object" }
+      }
+    },
+    "acknowledgement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kata_ack", "agreement_id", "mandate_hash", "role", "id", "at", "public_key", "signature"],
+      "properties": {
+        "kata_ack": { "const": "1" },
+        "agreement_id": { "type": "string" },
+        "mandate_hash": { "type": "string" },
+        "role": { "type": "string", "enum": ["agent", "merchant", "psp", "issuer"] },
+        "id": { "type": "string" },
+        "at": { "type": "string", "format": "date-time" },
+        "public_key": { "$ref": "intent-mandate.json#/$defs/publicJwk" },
+        "domain": {
+          "type": "string",
+          "description": "Domain that publishes this institution key at /.well-known/kata-keys.json."
+        },
+        "signature": { "$ref": "#/$defs/jws" }
+      }
+    },
+    "ledgerEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action_id", "at", "currency", "outcome", "sequence", "entry_hash"],
+      "properties": {
+        "action_id": { "type": "string" },
+        "amount": { "type": "number", "minimum": 0 },
+        "at": { "type": "string", "format": "date-time" },
+        "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+        "entry_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "idempotency_key": { "type": "string" },
+        "intent_id": { "type": "string" },
+        "outcome": { "type": "string", "enum": ["allowed", "authorized", "settled", "failed"] },
+        "prev_entry_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "sequence": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "revocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kata_revocation", "agreement_id", "mandate_hash", "at", "reason", "signature"],
+      "properties": {
+        "kata_revocation": { "const": "1" },
+        "agreement_id": { "type": "string" },
+        "mandate_hash": { "type": "string" },
+        "at": { "type": "string", "format": "date-time" },
+        "reason": { "type": "string" },
+        "mandate_hashes": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+          "description": "Every live mandate hash covered by this revocation. Present when the agreement holds more than one intent."
+        },
+        "signature": { "$ref": "#/$defs/jws" }
+      }
+    }
+  }
+}

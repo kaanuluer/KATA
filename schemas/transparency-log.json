@@ -1,0 +1,37 @@
+{
+  "$id": "https://KATA.org/schemas/transparency-log.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "KATA transparency log tree head",
+  "description": "Signed Merkle tree head for the append-only log of agreements and revocations. The JWS typ is kata-tree-head+jws. Entries are hash-chained and the root is a binary Merkle root. Status: Concept / Open Design — not production ready.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["algorithm", "at", "kata_tree_head", "root", "tree_size", "signature"],
+  "properties": {
+    "algorithm": {
+      "type": "string",
+      "enum": ["EdDSA", "ES256"]
+    },
+    "at": { "type": "string", "format": "date-time" },
+    "kata_tree_head": { "const": "1" },
+    "root": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "Merkle root of the entry hashes. An empty log is the SHA-256 of the empty byte string."
+    },
+    "tree_size": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of hash-chained entries under this root."
+    },
+    "signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protected", "payload", "signature"],
+      "properties": {
+        "protected": { "type": "string" },
+        "payload": { "type": "string" },
+        "signature": { "type": "string" }
+      }
+    }
+  }
+}

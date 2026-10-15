@@ -1,0 +1,35 @@
+{
+  "$id": "https://KATA.org/schemas/institution-keys.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "KATA institution keys",
+  "description": "Key document an institution publishes at https://<domain>/.well-known/kata-keys.json. KATA also keeps an allowlist. A rotated key stays trusted until not_after plus the grace period. The default grace is 7 days. Status: Concept / Open Design — not production ready.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["keys"],
+  "properties": {
+    "keys": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/keyRecord" }
+    }
+  },
+  "$defs": {
+    "keyRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["public_key"],
+      "properties": {
+        "public_key": { "$ref": "intent-mandate.json#/$defs/publicJwk" },
+        "domain": {
+          "type": "string",
+          "description": "Host that publishes this document. Optional on a record inside the document itself."
+        },
+        "not_before": { "type": "string", "format": "date-time" },
+        "not_after": {
+          "type": "string",
+          "format": "date-time",
+          "description": "End of the key's validity. Trust continues through the grace period after this instant."
+        }
+      }
+    }
+  }
+}

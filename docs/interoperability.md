@@ -1,6 +1,6 @@
 # Interoperability
 
-**Status: Concept / Open Design — not production ready.**
+**Status: framework note.** The Global Agent Bureau service is live. This page is the design note, not a customer or performance claim.
 
 KATA does not replace the protocols below. A verified mandate or credential is evidence for one or more of the four KATA questions. It is not a KATA decision. KATA still has to score behavior, compare price integrity, and return one of seven decisions.
 
@@ -266,6 +266,12 @@ Commit `8f7c1b5`, package `v1alpha1`. README: a unique id, ResolverMetadata, and
 | `controller` | A KATA `developer` or `provider` only when the deployment documents that meaning. The proto says the controller may change the metadata. It does not say "operator". |
 
 No purchase constraints, no price fields, no seven-level decision.
+
+## KATA intent agreement
+
+The objects above are evidence. The signed agreement the principal actually confirms is specified in [intent-agreement.md](intent-agreement.md): one or more intent mandates (`schemas/intent-mandate.json`) inside an agreement record (`schemas/agreement.json`), stored on the delegation. That specification is authoritative for KATA. A verified AP2 or Verifiable Intent mandate can populate the intent fields, using the tables in this document, and it does not replace the KATA signature or the `ALLOW` / `STEP_UP` / `DENY` check. The principal signs the KATA mandate.
+
+The reference library signs with Ed25519 and ES256. It does not parse an AP2 JWS or an SD-JWT. Amounts in the KATA mandate stay major units.
 
 ## Shared rules
 

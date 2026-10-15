@@ -1,6 +1,6 @@
 # KATA Threat Model
 
-**Status: Concept / Open Design — not production ready.**
+**Status: framework note.** The Global Agent Bureau service is live. This page is the design note, not a customer or performance claim.
 
 This is a conceptual threat model for KATA as an evaluation framework. It identifies what must be protected, who might attack it, and how the framework's layers map to mitigations. It is not a product security review.
 
@@ -97,7 +97,7 @@ Across all three, a passed verification is not a passed outcome. The decision re
 
 ## AgentCommerceBench class mapping
 
-[AgentCommerceBench](https://github.com/BuildWithGordonAI/agentcommercebench) (BuildWithGordonAI, Apache-2.0; README and the attack catalogue in `benchmark/config.py`) is a public benchmark for fraud in agent payments: twenty classes in four families, generated per agent from production-shaped parameters. The sampled release is [dpaul93/agentcommercebench](https://huggingface.co/datasets/dpaul93/agentcommercebench). This table is a design comparison. KATA has no reference implementation and no measured recall against that set.
+[AgentCommerceBench](https://github.com/BuildWithGordonAI/agentcommercebench) (BuildWithGordonAI, Apache-2.0; README and the attack catalogue in `benchmark/config.py`) is a public benchmark for fraud in agent payments: twenty classes in four families, generated per agent from production-shaped parameters. The sampled release is [dpaul93/agentcommercebench](https://huggingface.co/datasets/dpaul93/agentcommercebench). This table is a design comparison. The intent-agreement library checks a signed mandate against one action. It is not a measured recall against that set, and it does not see the classes that need behavior history or delivery evidence.
 
 Figures cited from that README and catalogue:
 
@@ -112,8 +112,8 @@ Figures cited from that README and catalogue:
 | S1 `over_limit` | Structural | Amount over **this agent's** own limit | 3 — WHAT | **Partial.** `maximum_amount` is the user's ceiling. The relative baseline is a second signal, now carried as `agent_spend_baseline`. |
 | S2 `velocity` | Structural | More purchases, or faster, than this agent's norm | 4 — BEHAVING | **Covered.** Action velocity is already a behavior signal. |
 | S3 `out_of_domain` | Structural | Category outside the agent's domain | 3 — WHAT | **Covered.** `category` and `merchant_constraints`. |
-| S4 `payee_substitution` | Structural | Settlement address differs from the registered payee | 3 — WHAT | **Partial.** `counterparty.settlement_address` vs. `registered_settlement_address` can express it. No policy evaluates it yet. |
-| S5 `idempotency_replay` | Structural | An idempotency key that already settled is reused | 4 — BEHAVING | **Partial.** `settlement.idempotency_key` can carry it. Replay policy is not specified. |
+| S4 `payee_substitution` | Structural | Settlement address differs from the registered payee | 3 — WHAT | **Checked when both addresses are present.** The intent-agreement evaluator denies `SETTLEMENT_ADDRESS_MISMATCH`. A rotation that never states the registered address is still unseen. |
+| S5 `idempotency_replay` | Structural | An idempotency key that already settled is reused | 4 — BEHAVING | **Partial.** The intent check denies `ACTION_REPLAY` when the ledger KATA holds on the agreement already has the key with a non-failed outcome, and `RETRY_FARMING` when `prior_attempt_status` is `settled`. A missing ledger is a deny. |
 | S6 `identity_mismatch` | Structural | The action's agent id is not the session's agent | 1 — WHO | **Covered.** Agent identity. |
 | E1 `ratchet` | Evasive | Amounts creep so a learned norm follows them | 4 — BEHAVING | **Partial.** Intent drift is defined. A spend-norm ratchet is not. |
 | E2 `structuring` | Evasive | One over-limit spend, split into in-policy parts | 3 and 4 | **Partial.** Cumulative drift is described. Split payments are not a rule. |
@@ -156,4 +156,4 @@ A signed delegation and a signed intent make the "I didn't authorize this" claim
 - Vulnerabilities in the underlying model (training data poisoning, weight theft) — handled by model security, consumed as identity/security-posture evidence by KATA.
 - Endpoint security of the principal's devices.
 - Assigning who pays when an authorized agent causes harm. The asymmetry is recorded above and in [KATA.md](../KATA.md#liability). KATA supplies the decision record. It does not write the dispute rule.
-- Specific cryptographic protocol design (left to future work and existing standards).
+- A wire protocol between institutions. The live service hosts the pull list, the signed push webhook, and the transparency log. Gossip between logs, and the full seven-outcome engine, are still open. The intent-agreement rules are in [intent-agreement.md](intent-agreement.md).
