@@ -405,7 +405,7 @@ def test_rate_limit_validation_and_migration_sql():
     assert second.status_code == 200
     assert third.status_code == 429
     statements = "\n".join(migration_statements())
-    for table in ("gab_organizations", "gab_api_keys", "gab_agents", "gab_reports", "gab_inquiries", "gab_disputes", "gab_audit", "gab_interactions", "gab_identity_links"):
+    for table in ("gab_organizations", "gab_api_keys", "gab_agents", "gab_reports", "gab_inquiries", "gab_disputes", "gab_audit", "gab_interactions", "gab_identity_links", "gab_proofings"):
         assert table in statements
     assert "credit bureau" not in statements.lower()
 
@@ -459,3 +459,7 @@ def test_admin_seed_is_idempotent_and_stays_off_unless_allowed():
     agent = client.get("/v1/agents/shopper-01", headers=_auth(DEMO_OPERATOR_KEY))
     assert agent.status_code == 200
     assert agent.json()["verification_level"] == "institution_attested"
+    assert agent.json()["assurance_level"] == "institution_attested"
+    assert agent.json()["score"] == 724
+    methods = {item["method"] for item in agent.json()["proofings"]}
+    assert {"key_binding", "operator_review", "institution_attestation"} <= methods

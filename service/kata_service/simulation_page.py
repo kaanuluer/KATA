@@ -135,11 +135,12 @@ def _body(data: dict) -> str:
     <li><strong>Re-registration friction.</strong> A new agent run by the same operator, or carrying the same optional device or key signal, inherits a penalty from a recently denied agent. The default penalty is 80 points, capped at 200. The service does not collect a government identifier.</li>
     <li><strong>Ring detection.</strong> Settled reports on a reciprocal pair or a closed loop of up to four organizations do not add settled credit.</li>
     <li><strong>Faster dispute path.</strong> An open dispute against a young reporter holds that report's negative points until an admin resolves it. Uphold still removes the report. This is a score hold, not a staffed review clock.</li>
+    <li><strong>Identity proofing.</strong> Registration records a key binding. operator_verified counts only with an operator evidence hash, and institution_attested counts only with a wallet or bank evidence hash. The service checks the hash format. It does not collect a government identifier.</li>
   </ol>
   <h3>Still open</h3>
   <ul>
     <li>Merchant-segment velocity caps, and a delay before a cluster is flagged, are not in the product. The synthetic column assumed both.</li>
-    <li>Stronger proofing for operator-verified and institution-attested agents is not in this version. Those levels still add 120 and 200 points.</li>
+    <li>An outside issuer check for those evidence hashes is not in this version.</li>
     <li>Cross-currency velocity is not converted. Only the action's own currency adds toward the amount window.</li>
     <li>The synthetic run's false-positive cluster rate is not what this ring rule measures.</li>
   </ul>

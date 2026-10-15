@@ -34,6 +34,7 @@ from kata_service.defenses import (
     ScorePolicy,
     agent_is_denied,
     cap_settled_points,
+    effective_assurance,
     inheritance_penalty,
     report_is_linked,
     reporter_is_young,
@@ -68,6 +69,7 @@ VERIFICATION_LEVELS = ("unverified", "key_bound", "operator_verified", "institut
 OPERATOR_LEVELS = ("unverified", "key_bound", "operator_verified")
 DISPUTE_STATUSES = ("open", "under_review", "resolved")
 DISPUTE_OUTCOMES = ("upheld", "rejected", "partial")
+PROOFING_METHODS = ("key_binding", "operator_review", "institution_attestation")
 _AGENT_ID = re.compile(r"^[A-Za-z0-9._-]{1,80}$")
 _EVIDENCE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _EMAIL = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,120}$")
@@ -314,6 +316,7 @@ class MemoryRepo:
         self.interactions: list[dict[str, Any]] = []
         self.identity_links: list[dict[str, Any]] = []
         self.agent_signals: list[dict[str, Any]] = []
+        self.proofings: list[dict[str, Any]] = []
         self.inquiries: list[dict[str, Any]] = []
         self.subscriptions: list[dict[str, Any]] = []
         self.alerts: list[dict[str, Any]] = []
@@ -321,7 +324,7 @@ class MemoryRepo:
         self._lock = threading.Lock()
 
     def migration_versions(self) -> list[str]:
-        return ["001_bureau.sql", "002_defenses.sql"]
+        return ["001_bureau.sql", "002_defenses.sql", "003_proofing.sql"]
 
     def create_org(self, record: dict[str, Any]) -> None:
         with self._lock:
@@ -549,6 +552,21 @@ class MemoryRepo:
     def links_for_agent(self, agent_id: str) -> list[dict[str, Any]]:
         with self._lock:
             return [dict(item) for item in self.identity_links if item["agent_id"] == agent_id]
+
+    def add_proofing(self, record: dict[str, Any]) -> None:
+        with self._lock:
+            for item in self.proofings:
+                if (
+                    item["agent_id"] == record["agent_id"]
+                    and item["method"] == record["method"]
+                    and item["evidence_hash"] == record["evidence_hash"]
+                ):
+                    return
+            self.proofings.append(dict(record))
+
+    def proofings_for_agent(self, agent_id: str) -> list[dict[str, Any]]:
+        with self._lock:
+            return [dict(item) for item in self.proofings if item["agent_id"] == agent_id]
 
     def add_inquiry(self, record: dict[str, Any]) -> None:
         with self._lock:
@@ -802,6 +820,12 @@ class BureauService:
             "principal_public_key": None,
         }
         links = self._link_denied_identity(record, body, at)
+        self._record_proof(record["agent_id"], org["org_id"], "key_binding", public.fingerprint, at)
+        review = str(body.get("proofing_evidence") or "").strip()
+        if review:
+            if not _EVIDENCE.match(review):
+                raise BureauError(400, "proofing_evidence must be sha256 and 64 hex characters")
+            self._record_proof(record["agent_id"], org["org_id"], "operator_review", review, at)
         self._rescore(record)
         self.repo.save_agent(record)
         self._log(
@@ -830,6 +854,27 @@ class BureauService:
         self._rescore(agent)
         self.repo.save_agent(agent)
         return self._agent_view(auth, agent)
+
+    def submit_proofing(self, auth: Auth, agent_id: str, body: dict[str, Any]) -> dict[str, Any]:
+        self._scope(auth, "registry:write")
+        org = self._caller_org(auth)
+        agent = self._agent(agent_id)
+        method = str(body.get("method") or "")
+        if method not in {"operator_review", "institution_attestation"}:
+            raise BureauError(400, "method is not operator_review or institution_attestation")
+        if method == "operator_review" and org["org_id"] != agent["operator_org_id"]:
+            raise BureauError(403, "only the operator can file an operator review")
+        if method == "institution_attestation" and org["org_type"] not in {"wallet", "bank_issuer"}:
+            raise BureauError(403, "only a wallet or bank can file an institution attestation")
+        evidence = str(body.get("evidence_hash") or "")
+        if not _EVIDENCE.match(evidence):
+            raise BureauError(400, "evidence_hash must be sha256 and 64 hex characters")
+        record = self._record_proof(agent_id, org["org_id"], method, evidence, self.stamp())
+        self._rescore(agent)
+        self.repo.save_agent(agent)
+        view = self._agent_view(auth, agent)
+        view["proofing"] = _public_proof(record)
+        return view
 
     def set_status(self, auth: Auth, agent_id: str, status: str) -> dict[str, Any]:
         if status not in AGENT_STATUSES:
@@ -1086,6 +1131,7 @@ class BureauService:
                 "agent_id": agent["agent_id"],
                 "status": agent["status"],
                 "verification_level": agent["verification_level"],
+                "assurance_level": self._assurance(agent),
                 "fingerprint": agent["fingerprint"],
                 "algorithm": agent["algorithm"],
                 "operator_name": org_name(self.repo, agent["operator_org_id"]),
@@ -1326,8 +1372,10 @@ class BureauService:
         operator = self.repo.get_org(agent["operator_org_id"])
         reports = self.repo.reports_for_agent(agent["agent_id"])
         disputes = [item for item in self.repo.list_disputes() if any(item["report_id"] == report["report_id"] for report in reports)]
+        assurance = self._assurance(agent)
+        agent["assurance_level"] = assurance
         scored = trust_score(
-            verification_level=agent["verification_level"],
+            verification_level=assurance,
             operator_status="active" if operator and operator["status"] == "active" else "inactive",
             operator_org_id=agent["operator_org_id"],
             reports=reports,
@@ -1591,6 +1639,7 @@ class BureauService:
             "agent_id": agent["agent_id"],
             "status": agent["status"],
             "verification_level": agent["verification_level"],
+            "assurance_level": agent.get("assurance_level") or self._assurance(agent),
             "algorithm": agent["algorithm"],
             "fingerprint": agent["fingerprint"],
             "public_key": agent["public_key"],
@@ -1603,7 +1652,33 @@ class BureauService:
         }
         if auth.admin or auth.org_id == agent["operator_org_id"] or auth.principal_id == agent["principal_id"]:
             view["principal_id"] = agent["principal_id"]
+            view["proofings"] = [_public_proof(item) for item in self.repo.proofings_for_agent(agent["agent_id"])]
         return view
+
+    def _assurance(self, agent: dict[str, Any]) -> str:
+        methods = {item["method"] for item in self.repo.proofings_for_agent(agent["agent_id"])}
+        return effective_assurance(
+            agent["verification_level"],
+            methods,
+            require_proofing=self.policy.require_proofing,
+        )
+
+    def _record_proof(self, agent_id: str, org_id: str, method: str, evidence: str, at: str) -> dict[str, Any]:
+        if method not in PROOFING_METHODS:
+            raise BureauError(400, "method is not a proofing method")
+        for item in self.repo.proofings_for_agent(agent_id):
+            if item["method"] == method and item["evidence_hash"] == evidence:
+                return item
+        record = {
+            "proofing_id": _id("prf"),
+            "agent_id": agent_id,
+            "org_id": org_id,
+            "method": method,
+            "evidence_hash": evidence,
+            "created_at": at,
+        }
+        self.repo.add_proofing(record)
+        return record
 
 
 def org_name(repo: MemoryRepo, org_id: str) -> str:
@@ -1647,6 +1722,15 @@ def _agreement_summary(record: dict[str, Any]) -> dict[str, Any]:
         "updated_at": record["updated_at"],
         "parent_cumulative_maximum": parent.get("cumulative_maximum"),
         "intents": intents,
+    }
+
+
+def _public_proof(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "proofing_id": record["proofing_id"],
+        "method": record["method"],
+        "evidence_hash": record["evidence_hash"],
+        "created_at": record["created_at"],
     }
 
 

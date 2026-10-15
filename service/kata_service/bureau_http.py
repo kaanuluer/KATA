@@ -55,6 +55,11 @@ def build_router() -> APIRouter:
     async def lookup_agent(request: Request, fingerprint: str):
         return await _run(request, lambda auth, body: _bureau(request).lookup_fingerprint(auth, fingerprint), read_body=False)
 
+    @router.post("/v1/agents/{agent_id}/proofing", summary="File identity evidence for an agent")
+    async def submit_proofing(request: Request, agent_id: str):
+        request.state.agent_id = agent_id
+        return await _run(request, lambda auth, body: _bureau(request).submit_proofing(auth, agent_id, body))
+
     @router.post("/v1/agents/{agent_id}/attest", summary="Attest an agent")
     async def attest_agent(request: Request, agent_id: str):
         request.state.agent_id = agent_id

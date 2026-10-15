@@ -38,6 +38,7 @@ class ScorePolicy:
     deny_score: int = 500
     dispute_hold: bool = True
     probation_days: int = 14
+    require_proofing: bool = True
     ring_max_cycle: int = 4
     ring_search_limit: int = 20000
 
@@ -66,6 +67,27 @@ class ScoreContext:
     ring_edges: set[tuple[str, str]] = field(default_factory=set)
     open_dispute_ids: set[str] = field(default_factory=set)
     identity_penalty: int = 0
+
+
+def effective_assurance(claimed: str, methods: set[str], *, require_proofing: bool) -> str:
+    """Cap a claimed verification level at the proofs on file.
+
+    key_binding supports key_bound. operator_review supports operator_verified.
+    institution_attestation supports institution_attested. With the gate off,
+    the claim is used as-is.
+    """
+
+    if not require_proofing:
+        return claimed
+    if claimed == "institution_attested" and "institution_attestation" in methods:
+        return "institution_attested"
+    if claimed in {"institution_attested", "operator_verified"} and "operator_review" in methods:
+        return "operator_verified"
+    if "key_binding" in methods or claimed == "key_bound":
+        return "key_bound" if claimed != "unverified" else "unverified"
+    if claimed == "unverified":
+        return "unverified"
+    return "unverified"
 
 
 def reputation_multiplier(org_id: str, policy: ScorePolicy, context: ScoreContext) -> float:

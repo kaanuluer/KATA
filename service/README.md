@@ -57,6 +57,7 @@ Set these on the Vercel project. Generate the secret values on your machine and 
 | `GAB_DEFENSES` | no | no | Default on. `0` turns off transaction links, reporter reputation, the settled-credit cap, ring detection, velocity step-up, re-registration penalties, and the dispute hold. Individual `GAB_REQUIRE_REPORT_LINK`, `GAB_REPORTER_REPUTATION`, `GAB_POSITIVE_CAP`, `GAB_RING_DETECTION`, `GAB_VELOCITY`, `GAB_REREG_LINK`, and `GAB_DISPUTE_HOLD` flags override that default. |
 | `GAB_VELOCITY_DAILY_COUNT` | no | no | Default 25 allowed verifies per UTC day. |
 | `GAB_VELOCITY_DAILY_AMOUNT` | no | no | Default 15000 in the action currency per UTC day. |
+| `GAB_REQUIRE_PROOFING` | no | no | Default on, including when `GAB_DEFENSES=0`. `0` scores the claimed verification level. `POST /v1/agents/{id}/proofing` files an operator review or an institution attestation hash. |
 
 Generate a log seed, a push notifier, and an append token:
 

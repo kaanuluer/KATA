@@ -726,10 +726,18 @@ _ENDPOINTS: tuple[dict[str, str], ...] = (
     {
         "method": "POST",
         "path": "/v1/agents",
-        "summary": "An agent operator registers an agent. public_key is an Ed25519 or P-256 JWK with no private d. principal_id is a pseudonymous id. Optional device_signal and key_signal link the agent to a recently denied agent and inherit a penalty.",
-        "request": '{\n  "agent_id": "shopper-01",\n  "principal_id": "prn_demo",\n  "verification_level": "operator_verified",\n  "public_key": {"kty": "OKP", "crv": "Ed25519", "x": "…"}\n}',
-        "response": '{\n  "agent_id": "shopper-01",\n  "status": "active",\n  "verification_level": "operator_verified",\n  "fingerprint": "sha256:…",\n  "score": 700\n}',
-        "errors": "Other tenants do not receive principal_id. 409 when the agent id or key is already registered.",
+        "summary": "An agent operator registers an agent. public_key is an Ed25519 or P-256 JWK with no private d. principal_id is a pseudonymous id. Optional device_signal and key_signal link the agent to a recently denied agent and inherit a penalty. proofing_evidence is sha256 and 64 hex characters. With proofing on, operator_verified adds 120 points only when that hash is present. Without it the score uses key_bound.",
+        "request": '{\n  "agent_id": "shopper-01",\n  "principal_id": "prn_demo",\n  "verification_level": "operator_verified",\n  "proofing_evidence": "sha256:…",\n  "public_key": {"kty": "OKP", "crv": "Ed25519", "x": "…"}\n}',
+        "response": '{\n  "agent_id": "shopper-01",\n  "status": "active",\n  "verification_level": "operator_verified",\n  "assurance_level": "operator_verified",\n  "fingerprint": "sha256:…",\n  "score": 700\n}',
+        "errors": "Other tenants do not receive principal_id. 409 when the agent id or key is already registered. 400 when proofing_evidence is not sha256 and 64 hex characters.",
+    },
+    {
+        "method": "POST",
+        "path": "/v1/agents/{agent_id}/proofing",
+        "summary": "Files operator_review from the agent's operator, or institution_attestation from a wallet or bank. evidence_hash is sha256 and 64 hex characters. The claim in verification_level stays as set. assurance_level is what the score uses. key_binding is written at registration and is not accepted here. The operator, the admin, and the principal can list the rows. Other tenants see assurance_level only.",
+        "request": '{\n  "method": "institution_attestation",\n  "evidence_hash": "sha256:…"\n}',
+        "response": '{\n  "agent_id": "shopper-01",\n  "verification_level": "institution_attested",\n  "assurance_level": "institution_attested",\n  "score": 780\n}',
+        "errors": "403 when the caller cannot file that method. 400 for an unknown method or a bad hash.",
     },
     {
         "method": "POST",
@@ -744,7 +752,7 @@ _ENDPOINTS: tuple[dict[str, str], ...] = (
         "path": "/v1/inquiries",
         "summary": "Purpose-coded inquiry. Returns identity, verification, active authorizations, revocations, incident counts, and the trust score. Contributors also receive recent evidence hashes.",
         "request": '{\n  "agent_id": "shopper-01",\n  "purpose_code": "payment_authorization"\n}',
-        "response": '{\n  "inquiry_id": "inq_…",\n  "agent": {"agent_id": "shopper-01", "status": "active", "verification_level": "institution_attested"},\n  "trust_score": {"score": 724, "cold_start": false, "reasons": [{"code": "CHARGEBACK", "points": -56}]}\n}',
+        "response": '{\n  "inquiry_id": "inq_…",\n  "agent": {"agent_id": "shopper-01", "status": "active", "verification_level": "institution_attested", "assurance_level": "institution_attested"},\n  "trust_score": {"score": 724, "cold_start": false, "reasons": [{"code": "CHARGEBACK", "points": -56}]}\n}',
         "errors": "400 when purpose_code is missing. The body does not include an email address or principal_id.",
     },
     {

@@ -103,6 +103,8 @@ Acceptance: a missing purpose is 400; a completed inquiry appears on `GET /v1/po
 
 Acceptance: the unit test keeps the bank's fraud impact over a duplicate merchant report, and an upheld dispute removes `FRAUD_INCIDENT`.
 
+The service does not pass the raw claim into that formula when proofing is on. It passes `assurance_level` from section 2.6.2.
+
 ### 2.6.1 Defenses around the score
 
 These rules are on unless `GAB_DEFENSES=0` or the matching flag is `0`.
@@ -117,6 +119,23 @@ These rules are on unless `GAB_DEFENSES=0` or the matching flag is `0`.
 The synthetic stress test on `/simulation` is a separate model. Its "proposed defenses" column is not a measurement of these rules.
 
 Acceptance: an unlinked chargeback leaves the score unchanged; a linked chargeback from a young reporter is held while the dispute is open; a second allowed verify past a count cap of 1 is `STEP_UP` / `VELOCITY_COUNT`; a new agent after a revocation carries `IDENTITY_LINK`.
+
+### 2.6.2 Identity proofing
+
+`GAB_REQUIRE_PROOFING` defaults on. It does not follow `GAB_DEFENSES`.
+
+- `verification_level` stays the claim the operator or the wallet set.
+- `assurance_level` is the level the score uses.
+- Registration writes `key_binding`. The evidence hash is the key fingerprint.
+- Optional `proofing_evidence` on registration is `sha256:` and 64 hex characters. It writes `operator_review` in the same call.
+- `POST /v1/agents/{agent_id}/proofing` accepts `operator_review` from that agent's operator and `institution_attestation` from a wallet or bank. `key_binding` is not accepted on that route.
+- With the gate on, `institution_attested` needs `institution_attestation`. Otherwise `operator_review` supports `operator_verified`. Otherwise a registered key supports `key_bound`. `unverified` stays `unverified`.
+- With the gate off, the claim is the assurance level.
+- A proof row stores the hash, the method, the filing organization, and the time. It does not store a government identifier or a free-text statement. This version checks the hash format and does not ask an outside issuer to confirm it.
+- The operator, the admin, and the principal can list those rows. Other tenants see `assurance_level` and not the hashes. The filing response includes the one row just written.
+- The demo seed files an operator review and an institution attestation, so `shopper-01` stays `institution_attested` and the sample chargeback still lands at 724.
+
+Acceptance: an `operator_verified` registration without `proofing_evidence` has `assurance_level` `key_bound` and score 620. An operator review raises that to `operator_verified` and 700. A wallet attestation without `institution_attestation` does not add the institution points. An operator cannot file `institution_attestation`.
 
 ### 2.7 Alerts
 
@@ -170,8 +189,8 @@ Acceptance: an upheld policy-violation dispute leaves the score greater than or 
 - Public demo credentials, which must not be used in production: admin `gab-demo-admin`, operator `gab_demo_operator_public`, wallet `gab_demo_wallet_public`, merchant `gab_demo_merchant_public`, portal `principal@example.com`, organization email `ops@harbor.example`.
 - `python3 -m kata_service.seed` applies the SQL migration to `DATABASE_URL`. `--demo` also inserts that data. Without `DATABASE_URL` the script exits and tells the operator to use `GAB_DEMO=1` for a local demo.
 - `POST /v1/admin/seed-demo` inserts the same public demo rows into whatever repository the process is using, including Neon, without `GAB_DEMO`. The caller must send the `GAB_ADMIN_TOKEN` bearer. The route returns 403 `demo seed is disabled` unless `GAB_ALLOW_DEMO_SEED=1`. A second call keeps the same organizations, agent, agreement, chargeback, and subscription. The response lists the public demo keys and does not echo the admin token.
-- The SQL files `kata_service/migrations/001_bureau.sql` and `002_defenses.sql` are package data, so an installed copy can apply the schema. `002` adds interactions, identity links, agent signals, and an optional `action_id` on reports. `GAB_DEMO` is not required for that route and must stay unset on Vercel, because demo mode ignores `DATABASE_URL`.
-- The public demo merchant is dated `2026-01-01T00:00:00Z`, and the seed records interaction `act_demo_laptop` before the sample chargeback, so that chargeback still counts at the merchant weight.
+- The SQL files `kata_service/migrations/001_bureau.sql`, `002_defenses.sql`, and `003_proofing.sql` are package data, so an installed copy can apply the schema. `002` adds interactions, identity links, agent signals, and an optional `action_id` on reports. `003` adds `gab_proofings`. `GAB_DEMO` is not required for that route and must stay unset on Vercel, because demo mode ignores `DATABASE_URL`.
+- The public demo merchant is dated `2026-01-01T00:00:00Z`, and the seed records interaction `act_demo_laptop` before the sample chargeback, so that chargeback still counts at the merchant weight. The seed also records `operator_review` and `institution_attestation` for `shopper-01`.
 
 ## 3. Non-functional requirements
 
@@ -197,6 +216,7 @@ Acceptance: an upheld policy-violation dispute leaves the score greater than or 
 - Purpose limitation: an inquiry without a purpose code is rejected, and the purpose is stored on the inquiry the principal can see.
 - Data minimization: evidence in the log is a hash. The principal id is a pseudonym. Email exists only on the login tables.
 - The score covers agents and the operator's activity. It is not a score of a person and it is not a consumer credit report.
+- Proofing evidence is a hash. The service does not collect a government identifier.
 - Product and interface copy does not describe GAB as a consumer credit reporting agency and does not use credit-bureau wording.
 - Reciprocity limits full incident text to organizations that contribute reports, plus the operating organization and the principal.
 
@@ -247,6 +267,7 @@ Set secrets in the host. Do not commit values.
 | `GAB_VELOCITY_DAILY_AMOUNT` | No | no | Default 15,000 in the action currency per UTC day. |
 | `GAB_REREG_LINK` | No | no | Default follows `GAB_DEFENSES`. |
 | `GAB_DISPUTE_HOLD` | No | no | Default follows `GAB_DEFENSES`. |
+| `GAB_REQUIRE_PROOFING` | No | no | Default on, including when `GAB_DEFENSES=0`. `0` scores the claimed verification level without the evidence gate. |
 
 Supabase is not part of this deployment. There is no `SUPABASE_URL`, anon key, or service-role key.
 
@@ -255,6 +276,6 @@ Supabase is not part of this deployment. There is no `SUPABASE_URL`, anon key, o
 - Mail delivery is a plug-in. The default mailer writes the link to the process log. There is no bundled SMTP or hosted mailbox.
 - The development mailbox is in memory and is not shared across serverless instances.
 - A person who already has a principal id must have that email registered against it. A brand-new magic link creates a new principal id and will not see another principal's agents.
-- Anti-gaming now adds a transaction link, reporter age and upheld-dispute weight, a settled-credit cap, a short-cycle ring discount, daily velocity step-up, and a re-registration penalty. It is not a segment-specific velocity model, and it does not convert currencies. The synthetic "proposed defenses" column on `/simulation` is not a measurement of these rules.
+- Anti-gaming now adds a transaction link, reporter age and upheld-dispute weight, a settled-credit cap, a short-cycle ring discount, daily velocity step-up, a re-registration penalty, and an evidence gate on operator and institution claims. It is not a segment-specific velocity model, and it does not convert currencies. The evidence hash is not confirmed by an outside issuer. The synthetic "proposed defenses" column on `/simulation` is not a measurement of these rules.
 - Score-drop alerting uses a 50-point threshold and does not page a human.
 - `GAB_DEMO=1` must stay off in production because it bypasses Neon.

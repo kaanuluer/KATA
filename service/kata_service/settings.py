@@ -113,7 +113,15 @@ def _score_policy(env: dict[str, str]) -> ScorePolicy:
         rereg_lookback_days=_positive_int(env.get("GAB_REREG_LOOKBACK_DAYS"), 14),
         rereg_penalty=_positive_int(env.get("GAB_REREG_PENALTY"), 80),
         dispute_hold=flag("GAB_DISPUTE_HOLD"),
+        require_proofing=_optional_flag(env, "GAB_REQUIRE_PROOFING", True),
     )
+
+
+def _optional_flag(env: dict[str, str], name: str, default: bool) -> bool:
+    raw = _blank(env.get(name))
+    if raw is None:
+        return default
+    return raw.lower() in {"1", "true", "yes"}
 
 
 def _flag(value: str | None) -> bool:

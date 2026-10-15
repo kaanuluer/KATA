@@ -23,6 +23,8 @@ DEMO_OPERATOR_KEY = "gab_demo_operator_public"
 DEMO_MERCHANT_KEY = "gab_demo_merchant_public"
 DEMO_PORTAL_EMAIL = "principal@example.com"
 DEMO_ORG_EMAIL = "ops@harbor.example"
+DEMO_OPERATOR_REVIEW = "sha256:" + "d1" * 32
+DEMO_INSTITUTION_PROOF = "sha256:" + "d2" * 32
 
 
 def demo_settings(settings: Settings) -> Settings:
@@ -85,6 +87,7 @@ def seed_demo(service: BureauService) -> dict[str, str]:
                 "principal_id": "prn_demo",
                 "public_key": agent_key.public.to_jwk(),
                 "verification_level": "operator_verified",
+                "proofing_evidence": DEMO_OPERATOR_REVIEW,
             },
         )
     service.repo.upsert_login(DEMO_PORTAL_EMAIL, "prn_demo", service.stamp())
@@ -115,8 +118,10 @@ def seed_demo(service: BureauService) -> dict[str, str]:
         service.store_intent(operator_auth, "shopper-01", agreement.to_dict())
     current = service.repo.get_agent("shopper-01") or agent
     wallet_auth = service.authenticate(DEMO_WALLET_KEY, admin_token=None)
+    _ensure_proof(service, operator_auth, "shopper-01", "operator_review", DEMO_OPERATOR_REVIEW)
     if current.get("verification_level") != "institution_attested":
         service.attest_agent(wallet_auth, "shopper-01")
+    _ensure_proof(service, wallet_auth, "shopper-01", "institution_attestation", DEMO_INSTITUTION_PROOF)
     merchant_auth = service.authenticate(DEMO_MERCHANT_KEY, admin_token=None)
     hook = "http://127.0.0.1:8765/demo-hook"
     subscribed = any(
@@ -176,6 +181,13 @@ def seed_demo(service: BureauService) -> dict[str, str]:
         "principal_fingerprint": principal_key.public.fingerprint,
         "already_present": "true" if already else "false",
     }
+
+
+def _ensure_proof(service: BureauService, auth: Auth, agent_id: str, method: str, evidence: str) -> None:
+    existing = service.repo.proofings_for_agent(agent_id)
+    if any(item["method"] == method for item in existing):
+        return
+    service.submit_proofing(auth, agent_id, {"method": method, "evidence_hash": evidence})
 
 
 def _ensure_participant(service: BureauService, admin: Auth, name: str, org_type: str, key_name: str, token: str, scopes: list[str]) -> dict:

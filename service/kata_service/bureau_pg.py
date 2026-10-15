@@ -477,6 +477,43 @@ class PostgresRepo:
             for row in rows
         ]
 
+    def add_proofing(self, record: dict[str, Any]) -> None:
+        self._execute(
+            """
+            INSERT INTO gab_proofings (proofing_id, agent_id, org_id, method, evidence_hash, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (agent_id, method, evidence_hash) DO NOTHING
+            """,
+            (
+                record["proofing_id"],
+                record["agent_id"],
+                record["org_id"],
+                record["method"],
+                record["evidence_hash"],
+                record["created_at"],
+            ),
+        )
+
+    def proofings_for_agent(self, agent_id: str) -> list[dict[str, Any]]:
+        rows = self._all(
+            """
+            SELECT proofing_id, agent_id, org_id, method, evidence_hash, created_at
+            FROM gab_proofings WHERE agent_id = %s ORDER BY created_at
+            """,
+            (agent_id,),
+        )
+        return [
+            {
+                "proofing_id": row[0],
+                "agent_id": row[1],
+                "org_id": row[2],
+                "method": row[3],
+                "evidence_hash": row[4],
+                "created_at": row[5],
+            }
+            for row in rows
+        ]
+
     def add_inquiry(self, record: dict[str, Any]) -> None:
         self._execute(
             """

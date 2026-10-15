@@ -87,6 +87,7 @@ def test_re_registration_inherits_a_penalty_from_a_revoked_agent():
             "principal_id": "prn_next",
             "public_key": fresh.public.to_jwk(),
             "verification_level": "operator_verified",
+            "proofing_evidence": "sha256:" + "ee" * 32,
             "device_signal": "desk-east",
         },
     )
@@ -94,6 +95,7 @@ def test_re_registration_inherits_a_penalty_from_a_revoked_agent():
     body = created.json()
     assert body["identity_link"]["linked_agent_ids"] == ["shopper-01"]
     assert body["identity_link"]["penalty"] == 80
+    assert body["assurance_level"] == "operator_verified"
     assert body["score"] == 620
     assert any(item["code"] == "IDENTITY_LINK" for item in body["score_reasons"])
 
