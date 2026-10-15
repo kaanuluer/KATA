@@ -147,8 +147,8 @@ def _body(data: dict) -> str:
   <div class="table-scroll"><table class="sim">
     <thead><tr><th>Adaptive-attacker setting</th><th>Executed fraud</th><th>Stopped</th><th>Ring theft</th><th>Victims ever below 500</th><th>Re-registrations linked</th></tr></thead>
     <tbody>
-      {_ablation_row("Base case", None, data, adaptive)}
-      {"".join(_ablation_row(label, key, data, adaptive) for label, key in _SENSITIVITY)}
+      {_ablation_row("Base case", None, data, adaptive, step_up=False)}
+      {"".join(_ablation_row(label, key, data, adaptive, step_up=False) for label, key in _SENSITIVITY)}
     </tbody>
   </table></div>
   <p>Learn more at <a href="https://globalagentbureau.com">globalagentbureau.com</a>.</p>
@@ -183,17 +183,18 @@ def _tier_row(label: str, key: str, unaware: dict, adaptive: dict) -> str:
     )
 
 
-def _ablation_row(label: str, key: str | None, data: dict, baseline: dict) -> str:
+def _ablation_row(label: str, key: str | None, data: dict, baseline: dict, *, step_up: bool = True) -> str:
     row = baseline if key is None else data["defense_off"].get(key) or data["sensitivity"][key]
-    return _row(
-        label,
+    cells = [
         _usd(row["fraud_loss_usd"]),
         _pct(row["fraud_prevented_share_usd"]),
         _usd(row["ring_theft_usd"]),
         _pct(row["targets_ever_below500"]),
-        _pct(row["legit_final"]["step_up"]),
-        _linked(row),
-    )
+    ]
+    if step_up:
+        cells.append(_pct(row["legit_final"]["step_up"]))
+    cells.append(_linked(row))
+    return _row(label, *cells)
 
 
 def _linked(row: dict) -> str:

@@ -212,6 +212,12 @@ def test_simulation_page_labels_every_figure_as_synthetic():
     assert "open-source" not in body.lower()
     assert "credit bureau" not in body.lower()
     assert "book a call" not in body.lower()
+    for table in body.split("<table")[1:]:
+        header, _, rest = table.partition("</tr>")
+        width = header.count("<th>")
+        for row in rest.split("<tr>")[1:]:
+            cells = row.split("</tr>", 1)[0]
+            assert cells.count("<th>") + cells.count("<td>") == width
     home = client.get("/")
     assert 'href="/simulation"' in home.text
 
