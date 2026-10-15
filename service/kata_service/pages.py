@@ -708,6 +708,14 @@ _ENDPOINTS: tuple[dict[str, str], ...] = (
         ),
     },
     {
+        "method": "GET",
+        "path": "/v1/score-model",
+        "summary": "Publishes the agent score weights. No credential is required. risk is 1000 minus the score. Individuals are not scored. GAB_SCORE_WEIGHTS can replace a weight for calibration.",
+        "request": "",
+        "response": '{\n  "model_version": "gab-score-1",\n  "subjects": "agents",\n  "individuals_scored": false,\n  "risk": "1000 - score",\n  "reports": {"fraud_incident": -120}\n}',
+        "errors": "500 when GAB_SCORE_WEIGHTS is not usable JSON or a weight is outside its range.",
+    },
+    {
         "method": "POST",
         "path": "/v1/orgs",
         "summary": "Admin bootstrap. Creates a participant organization. org_type is agent_operator, wallet, bank_issuer, processor_psp, or merchant.",
@@ -728,7 +736,7 @@ _ENDPOINTS: tuple[dict[str, str], ...] = (
         "path": "/v1/agents",
         "summary": "An agent operator registers an agent. public_key is an Ed25519 or P-256 JWK with no private d. principal_id is a pseudonymous id. Optional device_signal and key_signal link the agent to a recently denied agent and inherit a penalty. proofing_evidence is sha256 and 64 hex characters. With proofing on, operator_verified adds 120 points only when that hash is present. Without it the score uses key_bound.",
         "request": '{\n  "agent_id": "shopper-01",\n  "principal_id": "prn_demo",\n  "verification_level": "operator_verified",\n  "proofing_evidence": "sha256:…",\n  "public_key": {"kty": "OKP", "crv": "Ed25519", "x": "…"}\n}',
-        "response": '{\n  "agent_id": "shopper-01",\n  "status": "active",\n  "verification_level": "operator_verified",\n  "assurance_level": "operator_verified",\n  "fingerprint": "sha256:…",\n  "score": 700\n}',
+        "response": '{\n  "agent_id": "shopper-01",\n  "status": "active",\n  "verification_level": "operator_verified",\n  "assurance_level": "operator_verified",\n  "fingerprint": "sha256:…",\n  "score": 700,\n  "risk": 300,\n  "model_version": "gab-score-1"\n}',
         "errors": "Other tenants do not receive principal_id. 409 when the agent id or key is already registered. 400 when proofing_evidence is not sha256 and 64 hex characters.",
     },
     {
@@ -752,7 +760,7 @@ _ENDPOINTS: tuple[dict[str, str], ...] = (
         "path": "/v1/inquiries",
         "summary": "Purpose-coded inquiry. Returns identity, verification, active authorizations, revocations, incident counts, and the trust score. Contributors also receive recent evidence hashes.",
         "request": '{\n  "agent_id": "shopper-01",\n  "purpose_code": "payment_authorization"\n}',
-        "response": '{\n  "inquiry_id": "inq_…",\n  "agent": {"agent_id": "shopper-01", "status": "active", "verification_level": "institution_attested", "assurance_level": "institution_attested"},\n  "trust_score": {"score": 724, "cold_start": false, "reasons": [{"code": "CHARGEBACK", "points": -56}]}\n}',
+        "response": '{\n  "inquiry_id": "inq_…",\n  "agent": {"agent_id": "shopper-01", "status": "active", "verification_level": "institution_attested", "assurance_level": "institution_attested"},\n  "trust_score": {"score": 724, "risk": 276, "model_version": "gab-score-1", "cold_start": false, "reasons": [{"code": "CHARGEBACK", "points": -56}]}\n}',
         "errors": "400 when purpose_code is missing. The body does not include an email address or principal_id.",
     },
     {

@@ -2,6 +2,8 @@
 
 ## 2026-10-15
 
+`GET /v1/score-model` publishes the agent score weights as `gab-score-1`. `risk` on an agent is `1000 - score`. Individuals are not scored. `GAB_SCORE_WEIGHTS` can replace a weight for calibration. Invalid JSON or an out-of-range value is a configuration error. This version does not fit the weights from outcomes.
+
 Identity proofing caps the points for a verification claim. Registration records a key binding. `operator_verified` counts only with an operator evidence hash, and `institution_attested` counts only with a wallet or bank evidence hash. `assurance_level` is the level the score uses. `verification_level` stays the claim. `POST /v1/agents/{agent_id}/proofing` files the hash. `GAB_REQUIRE_PROOFING` defaults on and does not follow `GAB_DEFENSES`. `003_proofing.sql` stores the rows. The demo seed files both higher proofs so `shopper-01` remains institution-attested at 724 after the sample chargeback. The hash is not confirmed by an outside issuer, and the service does not collect a government identifier.
 
 `/simulation` publishes the synthetic stress test of the trust score. Every figure on that page is simulated test data, read from `service/kata_service/static/simulation-results.json`, with the charts shipped beside it.

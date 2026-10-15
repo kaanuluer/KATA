@@ -13,6 +13,7 @@ from kata_intent.errors import KataError
 from kata_intent.keys import PrivateKey, public_key_from_jwk
 
 from kata_service.defenses import ScorePolicy
+from kata_service.score_model import ScoreWeights, weights_from_json
 
 DEFAULT_FX_SOURCE_URL = "https://api.frankfurter.dev/v1"
 REVOCATION_MAX_AGE_SECONDS = 300
@@ -54,10 +55,12 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
     seed = None
     notifier = None
     published: tuple[dict, ...] = ()
+    weights = ScoreWeights()
     try:
         seed = _seed(env.get("KATA_LOG_SIGNING_SEED"))
         notifier = _notifier(env.get("KATA_PUSH_NOTIFIER_JWK"))
         published = _published(env.get("KATA_PUBLISHED_KEYS"))
+        weights = weights_from_json(_blank(env.get("GAB_SCORE_WEIGHTS")))
     except (KataError, ValueError, json.JSONDecodeError) as exc:
         error = str(exc)
     return Settings(
@@ -77,11 +80,11 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
         session_ttl_seconds=_positive_int(env.get("GAB_SESSION_TTL_SECONDS"), 43200),
         report_daily_cap=_positive_int(env.get("GAB_REPORT_DAILY_CAP"), 20),
         allow_demo_seed=_flag(env.get("GAB_ALLOW_DEMO_SEED")),
-        score_policy=_score_policy(env),
+        score_policy=_score_policy(env, weights),
     )
 
 
-def _score_policy(env: dict[str, str]) -> ScorePolicy:
+def _score_policy(env: dict[str, str], weights: ScoreWeights | None = None) -> ScorePolicy:
     master = _blank(env.get("GAB_DEFENSES"))
     default_on = True if master is None else master.lower() in {"1", "true", "yes"}
 
@@ -114,6 +117,7 @@ def _score_policy(env: dict[str, str]) -> ScorePolicy:
         rereg_penalty=_positive_int(env.get("GAB_REREG_PENALTY"), 80),
         dispute_hold=flag("GAB_DISPUTE_HOLD"),
         require_proofing=_optional_flag(env, "GAB_REQUIRE_PROOFING", True),
+        weights=weights or ScoreWeights(),
     )
 
 

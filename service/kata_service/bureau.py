@@ -29,6 +29,7 @@ from kata_intent.jws import sign_jws
 from kata_intent.keys import PrivateKey, public_key_from_jwk
 from kata_intent.values import hash_document
 
+from kata_service.score_model import ScoreWeights
 from kata_service.defenses import (
     ScoreContext,
     ScorePolicy,
@@ -74,20 +75,6 @@ _AGENT_ID = re.compile(r"^[A-Za-z0-9._-]{1,80}$")
 _EVIDENCE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _EMAIL = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,120}$")
 ALERT_TYP = "kata-bureau-alert+jws"
-
-_VERIFY_POINTS = {
-    "unverified": 0,
-    "key_bound": 40,
-    "operator_verified": 120,
-    "institution_attested": 200,
-}
-_REPORTER_WEIGHT = {
-    "bank_issuer": 1.0,
-    "processor_psp": 1.0,
-    "wallet": 0.8,
-    "merchant": 0.7,
-    "agent_operator": 0.4,
-}
 
 
 class BureauError(Exception):
@@ -185,13 +172,14 @@ def trust_score(
 
     policy = policy or ScorePolicy.legacy()
     context = context or ScoreContext()
+    weights = policy.weights
     parts: list[tuple[str, int, str]] = []
-    identity = _VERIFY_POINTS.get(verification_level, 0)
+    identity = weights.identity_points(verification_level)
     parts.append(("IDENTITY_ASSURANCE", identity, verification_level))
     if operator_status == "active":
-        parts.append(("OPERATOR_VERIFICATION", 80, "operator active"))
+        parts.append(("OPERATOR_VERIFICATION", weights.operator_active, "operator active"))
     else:
-        parts.append(("OPERATOR_INACTIVE", -40, operator_status))
+        parts.append(("OPERATOR_INACTIVE", weights.operator_inactive, operator_status))
     if context.identity_penalty:
         parts.append(("IDENTITY_LINK", -int(context.identity_penalty), "recently denied agent"))
 
@@ -206,9 +194,9 @@ def trust_score(
             continue
         if policy.require_transaction_link and not report_is_linked(report, context):
             continue
-        weight = _REPORTER_WEIGHT.get(reporter_types.get(report["reporter_org_id"], ""), 0.5)
+        weight = weights.reporter_weight(reporter_types.get(report["reporter_org_id"], ""))
         if report["reporter_org_id"] == operator_org_id:
-            weight *= 0.25
+            weight *= weights.self_operator
         weight *= reputation_multiplier(report["reporter_org_id"], policy, context)
         dispute = resolved.get(report["report_id"])
         if dispute and dispute["outcome"] == "upheld":
@@ -225,7 +213,7 @@ def trust_score(
     held = False
     ring_discount = False
     for (_key, (weight, report)) in best.items():
-        negative = _report_points(report, 1)[0] < 0
+        negative = _report_points(report, 1, weights)[0] < 0
         if (
             policy.dispute_hold
             and report["report_id"] in context.open_dispute_ids
@@ -242,7 +230,7 @@ def trust_score(
         ):
             ring_discount = True
             continue
-        points, code = _report_points(report, weight)
+        points, code = _report_points(report, weight, weights)
         if code == "SETTLED_ACTIVITY" and policy.positive_cap:
             settled_grants.append((points, report["reporter_org_id"]))
             continue
@@ -257,7 +245,7 @@ def trust_score(
         if granted:
             parts.append(("SETTLED_ACTIVITY", granted, "capped settled credit"))
 
-    raw = 500 + sum(points for _code, points, _detail in parts)
+    raw = weights.baseline + sum(points for _code, points, _detail in parts)
     score = max(0, min(1000, int(raw)))
     ranked = sorted(parts, key=lambda item: abs(item[1]), reverse=True)
     reasons = [
@@ -276,23 +264,20 @@ def trust_score(
     cold = not best
     if cold:
         reasons = [{"code": "COLD_START", "points": 0, "detail": "no contributing reports"}, *reasons][:4]
-    return {"score": score, "reasons": reasons, "cold_start": cold}
+    return {
+        "score": score,
+        "risk": weights.risk(score),
+        "model_version": weights.model_version,
+        "reasons": reasons,
+        "cold_start": cold,
+    }
 
 
-def _report_points(report: dict[str, Any], weight: float) -> tuple[int, str]:
-    kind = report["kind"]
-    outcome = report.get("outcome") or ""
-    if kind == "fraud_incident":
-        return (int(round(-120 * weight)), "FRAUD_INCIDENT")
-    if kind == "chargeback":
-        return (int(round(-80 * weight)), "CHARGEBACK")
-    if kind == "policy_violation":
-        return (int(round(-40 * weight)), "POLICY_VIOLATION")
-    if kind == "transaction_outcome" and outcome == "settled":
-        return (int(round(8 * weight)), "SETTLED_ACTIVITY")
-    if kind == "transaction_outcome" and outcome == "loss":
-        return (int(round(-30 * weight)), "LOSS_ACTIVITY")
-    return (0, "REPORT")
+def _report_points(report: dict[str, Any], weight: float, weights: ScoreWeights) -> tuple[int, str]:
+    base, code = weights.report_base(report["kind"], report.get("outcome") or "")
+    if code == "REPORT":
+        return (0, code)
+    return (int(round(base * weight)), code)
 
 
 class MemoryRepo:
@@ -779,6 +764,9 @@ class BureauService:
         self.repo.upsert_org_login(address, org_id, self.stamp())
         return {"registered": "true", "org_id": org_id}
 
+    def score_model(self) -> dict[str, Any]:
+        return self.policy.weights.public()
+
     def register_agent(self, auth: Auth, body: dict[str, Any]) -> dict[str, Any]:
         self._scope(auth, "registry:write")
         org = self._caller_org(auth)
@@ -1142,6 +1130,8 @@ class BureauService:
             "incidents": {"counts": counts},
             "trust_score": {
                 "score": agent["score"],
+                "risk": self.policy.weights.risk(int(agent.get("score") or 0)),
+                "model_version": self.policy.weights.model_version,
                 "reasons": agent["score_reasons"],
                 "cold_start": agent["cold_start"],
             },
@@ -1645,6 +1635,8 @@ class BureauService:
             "public_key": agent["public_key"],
             "operator_org_id": agent["operator_org_id"],
             "score": agent.get("score", 0),
+            "risk": self.policy.weights.risk(int(agent.get("score") or 0)),
+            "model_version": self.policy.weights.model_version,
             "score_reasons": agent.get("score_reasons", []),
             "cold_start": agent.get("cold_start", True),
             "created_at": agent["created_at"],

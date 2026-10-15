@@ -16,6 +16,10 @@ from kata_service.bureau import Auth, BureauError
 def build_router() -> APIRouter:
     router = APIRouter()
 
+    @router.get("/v1/score-model", summary="Published agent score weights")
+    async def score_model(request: Request):
+        return await _run(request, lambda auth, body: _bureau(request).score_model(), read_body=False, anonymous=True)
+
     @router.post("/v1/orgs", summary="Create a participant organization")
     async def create_org(request: Request):
         return await _run(request, lambda auth, body: _bureau(request).create_org(auth, str(body.get("name") or ""), str(body.get("org_type") or "")))

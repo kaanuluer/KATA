@@ -14,6 +14,8 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
+from kata_service.score_model import ScoreWeights
+
 
 @dataclass(frozen=True)
 class ScorePolicy:
@@ -39,6 +41,7 @@ class ScorePolicy:
     dispute_hold: bool = True
     probation_days: int = 14
     require_proofing: bool = True
+    weights: ScoreWeights = field(default_factory=ScoreWeights)
     ring_max_cycle: int = 4
     ring_search_limit: int = 20000
 

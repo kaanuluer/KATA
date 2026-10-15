@@ -91,7 +91,7 @@ Acceptance: a missing purpose is 400; a completed inquiry appears on `GET /v1/po
 
 ### 2.6 Trust score v1
 
-- The score is an integer from 0 to 1000 for an agent. There is no score endpoint for a person.
+- The score is an integer from 0 to 1000 for an agent. There is no score endpoint for a person. `risk` on an agent is `1000 - score`. It is the same model, read from the other end.
 - Cold start, with no contributing report, starts at 500 and adds identity points: unverified 0, key_bound 40, operator_verified 120, institution_attested 200, plus 80 when the operator is active and minus 40 when the operator is not. The first reason code is `COLD_START` when nothing has been reported.
 - Report weights: bank_issuer and processor_psp 1.0, wallet 0.8, merchant 0.7, agent_operator 0.4. A report filed by the agent's own operator is multiplied by 0.25.
 - The same `(kind, evidence_hash)` keeps the highest weight.
@@ -136,6 +136,16 @@ Acceptance: an unlinked chargeback leaves the score unchanged; a linked chargeba
 - The demo seed files an operator review and an institution attestation, so `shopper-01` stays `institution_attested` and the sample chargeback still lands at 724.
 
 Acceptance: an `operator_verified` registration without `proofing_evidence` has `assurance_level` `key_bound` and score 620. An operator review raises that to `operator_verified` and 700. A wallet attestation without `institution_attestation` does not add the institution points. An operator cannot file `institution_attestation`.
+
+### 2.6.3 Score model and calibration
+
+`GET /v1/score-model` needs no credential. It publishes model version `gab-score-1`, the baseline, identity points, operator points, report points, and reporter weights. The body says subjects are agents, `individuals_scored` is false, and `risk` is `1000 - score`.
+
+`GAB_SCORE_WEIGHTS` is optional JSON. It can replace those numbers and the model version. A value outside the documented range, or JSON that does not parse, sets the process configuration error and `/v1` returns 500, the same way a bad signing key does. Unknown JSON keys are ignored. Nested `identity` and `reporter_weights` objects override those tables. Report points use the names `fraud_incident`, `chargeback`, `policy_violation`, `settled`, and `loss`.
+
+The hook is for calibration. This version does not fit weights from outcomes, and it does not store a labeled dataset for that fit.
+
+Acceptance: `GET /v1/score-model` returns `gab-score-1` and fraud impact `-120` with no environment override. A policy whose fraud impact is `-100` makes one bank fraud report worth `-100` points. An agent response includes `risk` equal to `1000 - score`.
 
 ### 2.7 Alerts
 
@@ -268,6 +278,7 @@ Set secrets in the host. Do not commit values.
 | `GAB_REREG_LINK` | No | no | Default follows `GAB_DEFENSES`. |
 | `GAB_DISPUTE_HOLD` | No | no | Default follows `GAB_DEFENSES`. |
 | `GAB_REQUIRE_PROOFING` | No | no | Default on, including when `GAB_DEFENSES=0`. `0` scores the claimed verification level without the evidence gate. |
+| `GAB_SCORE_WEIGHTS` | No | no | Optional JSON override of the `gab-score-1` weights published at `GET /v1/score-model`. Invalid JSON or an out-of-range value is a configuration error. |
 
 Supabase is not part of this deployment. There is no `SUPABASE_URL`, anon key, or service-role key.
 
@@ -278,4 +289,5 @@ Supabase is not part of this deployment. There is no `SUPABASE_URL`, anon key, o
 - A person who already has a principal id must have that email registered against it. A brand-new magic link creates a new principal id and will not see another principal's agents.
 - Anti-gaming now adds a transaction link, reporter age and upheld-dispute weight, a settled-credit cap, a short-cycle ring discount, daily velocity step-up, a re-registration penalty, and an evidence gate on operator and institution claims. It is not a segment-specific velocity model, and it does not convert currencies. The evidence hash is not confirmed by an outside issuer. The synthetic "proposed defenses" column on `/simulation` is not a measurement of these rules.
 - Score-drop alerting uses a 50-point threshold and does not page a human.
+- `GET /v1/score-model` publishes the rule weights. It does not fit them from outcomes. `risk` is `1000 - score`.
 - `GAB_DEMO=1` must stay off in production because it bypasses Neon.
