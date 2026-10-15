@@ -48,6 +48,12 @@ DOCUMENTS: tuple[tuple[str, str, str, str], ...] = (
         "Assets, actors, and the threats the framework's layers are meant to see.",
     ),
     (
+        "trust-score-abuse",
+        "trust-score-abuse.md",
+        "Trust-score abuse",
+        "How the live agent score can be pushed, and which controls already limit that.",
+    ),
+    (
         "architecture",
         "architecture.md",
         "Architecture",
