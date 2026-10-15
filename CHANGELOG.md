@@ -2,6 +2,8 @@
 
 ## 2026-10-15
 
+Velocity limits now follow the action's segment and the agent's own history. Shopping, travel, treasury, and assistant use tighter daily windows, a day that jumps past three times the agent's median steps up, and so does a cash-out after a quiet week or a recent settled-credit rise.
+
 Ring detection now discounts settled credit inside a strongly connected component of any length, when organizations share a signal, and when a cluster of at least three organizations keeps 80% of its transaction volume inside the cluster.
 
 Re-registration links a denied agent across a new operator organization when a device, key, payment-instrument, timing, or evidence-hash signal matches, and a revoked, suspended, or fraud-reported agent stays linkable for 180 days. The new agent inherits that negative history with a 30-day half-life (`INHERITED_HISTORY`), in addition to the flat penalty while the 14-day window is still open.

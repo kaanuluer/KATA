@@ -36,6 +36,7 @@ from kata_service.defenses import (
     agent_is_denied,
     cap_settled_points,
     cluster_edges,
+    age_days,
     decay_factor,
     effective_assurance,
     inheritance_penalty,
@@ -1636,7 +1637,12 @@ class BureauService:
             currency=currency,
         )
         probation = self._on_probation(agent, at)
-        for count, total in ((agent_count, agent_amount), (operator_count, operator_amount)):
+        priors, quiet_days, score_rose = self._velocity_history(agent, at, currency)
+        segment = str(action.get("segment") or action.get("category") or "").strip().lower() or None
+        for count, total, history in (
+            (agent_count, agent_amount, True),
+            (operator_count, operator_amount, False),
+        ):
             reason = velocity_reason(
                 existing_count=count,
                 existing_amount=total,
@@ -1644,10 +1650,39 @@ class BureauService:
                 score=int(agent.get("score") or 0),
                 probation=probation,
                 policy=self.policy,
+                segment=segment,
+                prior_daily_amounts=priors if history else None,
+                quiet_days=quiet_days if history else None,
+                score_rose=score_rose if history else False,
             )
             if reason:
                 return reason
         return None
+
+    def _velocity_history(self, agent: dict[str, Any], at: str, currency: str) -> tuple[list[Decimal], float | None, bool]:
+        by_day: dict[str, Decimal] = {}
+        latest: str | None = None
+        for row in self.repo.interactions_for_agent(agent["agent_id"]):
+            stamp = str(row.get("at") or "")
+            if len(stamp) < 10 or stamp[:10] == at[:10]:
+                continue
+            if currency and row.get("currency") not in (None, "", currency):
+                continue
+            raw = row.get("amount")
+            amount = Decimal(0) if raw in (None, "") else Decimal(str(raw))
+            by_day[stamp[:10]] = by_day.get(stamp[:10], Decimal(0)) + amount
+            if latest is None or stamp > latest:
+                latest = stamp
+        quiet = None if latest is None else age_days(latest, at)
+        rose = False
+        for report in self.repo.reports_for_agent(agent["agent_id"]):
+            if report.get("excluded") or report.get("outcome") != "settled":
+                continue
+            age = age_days(str(report.get("created_at") or ""), at)
+            if age is not None and 0 <= age <= self.policy.velocity_score_rise_days:
+                rose = True
+                break
+        return list(by_day.values()), quiet, rose
 
     def _on_probation(self, agent: dict[str, Any], at: str) -> bool:
         for link in self.repo.links_for_agent(agent["agent_id"]):

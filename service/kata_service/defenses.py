@@ -28,11 +28,17 @@ class ScorePolicy:
     new_reporter_weight: float = 0.3
     ring_detection: bool = True
     velocity: bool = True
+    velocity_adaptive: bool = True
     velocity_daily_count: int = 25
     velocity_daily_amount: int = 15000
     velocity_high_score: int = 750
     velocity_high_multiplier: int = 3
     velocity_probation_multiplier: float = 0.5
+    velocity_burst_multiple: float = 3
+    velocity_burst_min_days: int = 3
+    velocity_quiet_days: int = 7
+    velocity_cashout_amount: int = 500
+    velocity_score_rise_days: int = 7
     rereg_link: bool = True
     rereg_lookback_days: int = 14
     rereg_signal_lookback_days: int = 90
@@ -352,6 +358,14 @@ def _strongly_connected(directed: dict[str, set[str]]) -> list[set[str]]:
     return components
 
 
+SEGMENT_WINDOWS = {
+    "shopping": (8, 1000),
+    "travel": (6, 2500),
+    "treasury": (4, 5000),
+    "assistant": (10, 800),
+}
+
+
 def velocity_reason(
     *,
     existing_count: int,
@@ -360,8 +374,18 @@ def velocity_reason(
     score: int,
     probation: bool,
     policy: ScorePolicy,
+    segment: str | None = None,
+    prior_daily_amounts: list[Decimal] | None = None,
+    quiet_days: float | None = None,
+    score_rose: bool = False,
 ) -> str | None:
-    """Return VELOCITY_COUNT or VELOCITY_AMOUNT when this allow should step up."""
+    """Return a velocity reason when this allow should step up.
+
+    The static daily caps still apply. A named segment uses the tighter of
+    that cap and the segment window. A burst is today's amount against the
+    agent's own earlier days. A cash-out is a large amount after a quiet
+    stretch, or after settled credit landed recently.
+    """
 
     if not policy.velocity:
         return None
@@ -370,11 +394,34 @@ def velocity_reason(
         multiplier *= policy.velocity_probation_multiplier
     count_cap = policy.velocity_daily_count * multiplier
     amount_cap = Decimal(policy.velocity_daily_amount) * Decimal(str(multiplier))
+    if policy.velocity_adaptive and segment in SEGMENT_WINDOWS:
+        segment_count, segment_amount = SEGMENT_WINDOWS[segment]
+        count_cap = min(count_cap, segment_count * multiplier)
+        amount_cap = min(amount_cap, Decimal(segment_amount) * Decimal(str(multiplier)))
     if existing_count >= count_cap:
         return "VELOCITY_COUNT"
     if amount is not None and existing_amount + amount > amount_cap:
         return "VELOCITY_AMOUNT"
+    if not policy.velocity_adaptive or amount is None:
+        return None
+    priors = [item for item in (prior_daily_amounts or []) if item > 0]
+    median = _median(priors)
+    today = existing_amount + amount
+    if median is not None and len(priors) >= policy.velocity_burst_min_days and today > median * Decimal(str(policy.velocity_burst_multiple)):
+        return "VELOCITY_BURST"
+    if quiet_days is not None and quiet_days >= policy.velocity_quiet_days and amount >= Decimal(policy.velocity_cashout_amount):
+        return "VELOCITY_CASHOUT"
+    if score_rose and amount >= Decimal(policy.velocity_cashout_amount):
+        if median is None or today > median * Decimal(str(policy.velocity_burst_multiple)):
+            return "VELOCITY_CASHOUT"
     return None
+
+
+def _median(values: list[Decimal]) -> Decimal | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    return ordered[len(ordered) // 2]
 
 
 def window_totals(rows: list[dict[str, Any]], *, day: str, currency: str) -> tuple[int, Decimal]:
