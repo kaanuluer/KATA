@@ -18,6 +18,7 @@ import secrets
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Any, Protocol
 from urllib.parse import urlparse
 
@@ -27,6 +28,21 @@ from kata_intent.errors import KataError
 from kata_intent.jws import sign_jws
 from kata_intent.keys import PrivateKey, public_key_from_jwk
 from kata_intent.values import hash_document
+
+from kata_service.defenses import (
+    ScoreContext,
+    ScorePolicy,
+    agent_is_denied,
+    cap_settled_points,
+    inheritance_penalty,
+    report_is_linked,
+    reporter_is_young,
+    reputation_multiplier,
+    ring_edges,
+    velocity_reason,
+    window_totals,
+    within_days,
+)
 
 ORG_TYPES = ("agent_operator", "wallet", "bank_issuer", "processor_psp", "merchant")
 SCOPES = (
@@ -155,9 +171,18 @@ def trust_score(
     reports: list[dict[str, Any]],
     disputes: list[dict[str, Any]],
     reporter_types: dict[str, str],
+    policy: ScorePolicy | None = None,
+    context: ScoreContext | None = None,
 ) -> dict[str, Any]:
-    """Explainable 0–1000 score for an agent. Individuals are not scored."""
+    """Explainable 0–1000 score for an agent. Individuals are not scored.
 
+    Omitting policy uses ScorePolicy.legacy(), the formula from before the
+    transaction link, reputation weight, positive cap, ring discount, and
+    dispute hold. The service passes the configured policy.
+    """
+
+    policy = policy or ScorePolicy.legacy()
+    context = context or ScoreContext()
     parts: list[tuple[str, int, str]] = []
     identity = _VERIFY_POINTS.get(verification_level, 0)
     parts.append(("IDENTITY_ASSURANCE", identity, verification_level))
@@ -165,6 +190,8 @@ def trust_score(
         parts.append(("OPERATOR_VERIFICATION", 80, "operator active"))
     else:
         parts.append(("OPERATOR_INACTIVE", -40, operator_status))
+    if context.identity_penalty:
+        parts.append(("IDENTITY_LINK", -int(context.identity_penalty), "recently denied agent"))
 
     resolved = {
         item["report_id"]: item
@@ -175,9 +202,12 @@ def trust_score(
     for report in reports:
         if report.get("excluded"):
             continue
+        if policy.require_transaction_link and not report_is_linked(report, context):
+            continue
         weight = _REPORTER_WEIGHT.get(reporter_types.get(report["reporter_org_id"], ""), 0.5)
         if report["reporter_org_id"] == operator_org_id:
             weight *= 0.25
+        weight *= reputation_multiplier(report["reporter_org_id"], policy, context)
         dispute = resolved.get(report["report_id"])
         if dispute and dispute["outcome"] == "upheld":
             parts.append(("DISPUTE_UPHELD", 0, report["report_id"]))
@@ -189,10 +219,41 @@ def trust_score(
         if current is None or weight > current[0]:
             best[key] = (weight, report)
 
+    settled_grants: list[tuple[int, str]] = []
+    held = False
+    ring_discount = False
     for (_key, (weight, report)) in best.items():
+        negative = _report_points(report, 1)[0] < 0
+        if (
+            policy.dispute_hold
+            and report["report_id"] in context.open_dispute_ids
+            and negative
+            and reporter_is_young(report["reporter_org_id"], policy, context)
+        ):
+            held = True
+            continue
+        if (
+            policy.ring_detection
+            and report.get("kind") == "transaction_outcome"
+            and report.get("outcome") == "settled"
+            and (report["reporter_org_id"], operator_org_id) in context.ring_edges
+        ):
+            ring_discount = True
+            continue
         points, code = _report_points(report, weight)
+        if code == "SETTLED_ACTIVITY" and policy.positive_cap:
+            settled_grants.append((points, report["reporter_org_id"]))
+            continue
         if points:
             parts.append((code, points, report["kind"]))
+    if settled_grants:
+        granted = cap_settled_points(
+            settled_grants,
+            per_reporter=policy.settled_cap_per_reporter,
+            total=policy.settled_cap_total,
+        )
+        if granted:
+            parts.append(("SETTLED_ACTIVITY", granted, "capped settled credit"))
 
     raw = 500 + sum(points for _code, points, _detail in parts)
     score = max(0, min(1000, int(raw)))
@@ -202,6 +263,14 @@ def trust_score(
         for code, points, detail in ranked
         if points != 0
     ][:4]
+    extras = []
+    if held:
+        extras.append({"code": "DISPUTE_HOLD", "points": 0, "detail": "open dispute against a young reporter"})
+    if ring_discount:
+        extras.append({"code": "RING_DISCOUNTED", "points": 0, "detail": "settled reports in a closed cluster"})
+    for extra in extras:
+        if len(reasons) < 4:
+            reasons.append(extra)
     cold = not best
     if cold:
         reasons = [{"code": "COLD_START", "points": 0, "detail": "no contributing reports"}, *reasons][:4]
@@ -242,6 +311,9 @@ class MemoryRepo:
         self.by_fingerprint: dict[str, str] = {}
         self.agreements: dict[str, dict[str, Any]] = {}
         self.reports: list[dict[str, Any]] = []
+        self.interactions: list[dict[str, Any]] = []
+        self.identity_links: list[dict[str, Any]] = []
+        self.agent_signals: list[dict[str, Any]] = []
         self.inquiries: list[dict[str, Any]] = []
         self.subscriptions: list[dict[str, Any]] = []
         self.alerts: list[dict[str, Any]] = []
@@ -249,7 +321,7 @@ class MemoryRepo:
         self._lock = threading.Lock()
 
     def migration_versions(self) -> list[str]:
-        return ["001_bureau.sql"]
+        return ["001_bureau.sql", "002_defenses.sql"]
 
     def create_org(self, record: dict[str, Any]) -> None:
         with self._lock:
@@ -259,6 +331,11 @@ class MemoryRepo:
         with self._lock:
             item = self.orgs.get(org_id)
             return dict(item) if item else None
+
+    def set_org_created_at(self, org_id: str, created_at: str) -> None:
+        with self._lock:
+            if org_id in self.orgs:
+                self.orgs[org_id]["created_at"] = created_at
 
     def create_key(self, record: dict[str, Any]) -> None:
         with self._lock:
@@ -434,6 +511,45 @@ class MemoryRepo:
                 if item["report_id"] == report_id:
                     item["excluded"] = excluded
 
+    def all_reports(self) -> list[dict[str, Any]]:
+        with self._lock:
+            return [dict(item) for item in self.reports]
+
+    def org_directory(self) -> dict[str, dict[str, str]]:
+        with self._lock:
+            return {
+                org_id: {"org_type": item["org_type"], "created_at": item["created_at"], "status": item["status"]}
+                for org_id, item in self.orgs.items()
+            }
+
+    def add_interaction(self, record: dict[str, Any]) -> None:
+        with self._lock:
+            self.interactions.append(dict(record))
+
+    def interactions_for_agent(self, agent_id: str) -> list[dict[str, Any]]:
+        with self._lock:
+            return [dict(item) for item in self.interactions if item["agent_id"] == agent_id]
+
+    def interactions_for_operator(self, operator_org_id: str) -> list[dict[str, Any]]:
+        with self._lock:
+            return [dict(item) for item in self.interactions if item["operator_org_id"] == operator_org_id]
+
+    def add_signal(self, record: dict[str, Any]) -> None:
+        with self._lock:
+            self.agent_signals.append(dict(record))
+
+    def agent_ids_for_signal(self, kind: str, value: str) -> list[str]:
+        with self._lock:
+            return [item["agent_id"] for item in self.agent_signals if item["kind"] == kind and item["value"] == value]
+
+    def add_identity_link(self, record: dict[str, Any]) -> None:
+        with self._lock:
+            self.identity_links.append(dict(record))
+
+    def links_for_agent(self, agent_id: str) -> list[dict[str, Any]]:
+        with self._lock:
+            return [dict(item) for item in self.identity_links if item["agent_id"] == agent_id]
+
     def add_inquiry(self, record: dict[str, Any]) -> None:
         with self._lock:
             self.inquiries.append(dict(record))
@@ -519,6 +635,7 @@ class BureauService:
         report_daily_cap: int = 20,
         dev_mailbox: bool = False,
         public_base_url: str = "http://127.0.0.1:8765",
+        policy: ScorePolicy | None = None,
     ) -> None:
         self.repo = repo
         self._now = now or (lambda: datetime.now(timezone.utc))
@@ -531,6 +648,7 @@ class BureauService:
         self.report_daily_cap = report_daily_cap
         self.dev_mailbox_enabled = dev_mailbox
         self.public_base_url = public_base_url.rstrip("/")
+        self.policy = policy or ScorePolicy()
         self.dev_mailbox: list[dict[str, str]] = []
 
     def now(self) -> datetime:
@@ -683,6 +801,7 @@ class BureauService:
             "cold_start": True,
             "principal_public_key": None,
         }
+        links = self._link_denied_identity(record, body, at)
         self._rescore(record)
         self.repo.save_agent(record)
         self._log(
@@ -694,7 +813,11 @@ class BureauService:
                 "status": "active",
             },
         )
-        return self._agent_view(auth, record)
+        view = self._agent_view(auth, record)
+        if links:
+            applied = next((item["points"] for item in record.get("score_reasons") or [] if item["code"] == "IDENTITY_LINK"), 0)
+            view["identity_link"] = {"linked_agent_ids": links, "penalty": abs(int(applied))}
+        return view
 
     def attest_agent(self, auth: Auth, agent_id: str) -> dict[str, Any]:
         self._scope(auth, "registry:write")
@@ -834,6 +957,19 @@ class BureauService:
         except KataError as exc:
             raise BureauError(400, str(exc)) from exc
         if result.verdict == "ALLOW":
+            reason = self._velocity_reason(agent, action, at)
+            if reason:
+                payload = result.to_dict()
+                payload["verdict"] = "STEP_UP"
+                payload["kata_decision"] = "STEP_UP"
+                payload["reasons"] = [*list(payload.get("reasons") or []), reason]
+                payload["messages"] = [
+                    *list(payload.get("messages") or []),
+                    "The bureau velocity window for this agent or operator is exceeded.",
+                ]
+                payload["agent_id"] = agent_id
+                payload["agreement_id"] = record["agreement_id"]
+                return payload
             try:
                 agreement.record_allowed(action, at=at, intent_id=body.get("intent_id"))
             except KataError as exc:
@@ -841,6 +977,7 @@ class BureauService:
             record["document"] = agreement.to_dict()
             record["updated_at"] = at
             self.repo.save_agreement(record)
+            self._record_interaction(agent, auth, body, action, record["agreement_id"], at)
         payload = result.to_dict()
         payload["agent_id"] = agent_id
         payload["agreement_id"] = record["agreement_id"]
@@ -863,6 +1000,9 @@ class BureauService:
         day = self.stamp()[:10]
         if self.repo.reports_by_org_on_day(org["org_id"], day) >= self.report_daily_cap:
             raise BureauError(429, "daily report cap reached")
+        action_id = str(body.get("action_id") or "").strip() or None
+        if action_id and not _AGENT_ID.match(action_id):
+            raise BureauError(400, "action_id is invalid")
         record = {
             "report_id": _id("rpt"),
             "agent_id": agent["agent_id"],
@@ -871,9 +1011,11 @@ class BureauService:
             "evidence_hash": evidence,
             "summary": summary,
             "outcome": outcome,
+            "action_id": action_id,
             "created_at": self.stamp(),
             "excluded": False,
         }
+        record["counts"] = self._report_counts(agent, record)
         self.repo.add_report(record)
         self._log(
             "incident",
@@ -891,6 +1033,8 @@ class BureauService:
         self._alert(agent, "incident", {"report_id": record["report_id"], "kind": kind, "evidence_hash": evidence})
         if before - agent["score"] >= 50:
             self._alert(agent, "score_drop", {"previous_score": before, "score": agent["score"]})
+        if kind == "transaction_outcome" and outcome == "settled" and self.policy.ring_detection:
+            self._rescore_ring_peers(agent, org["org_id"])
         return _public_report(record, full=True)
 
     def list_reports(self, auth: Auth, agent_id: str) -> dict[str, Any]:
@@ -904,7 +1048,7 @@ class BureauService:
                 counts[item["kind"]] = counts.get(item["kind"], 0) + 1
         body: dict[str, Any] = {"agent_id": agent_id, "counts": counts, "contributor": full}
         if full:
-            body["reports"] = [_public_report(item, full=True) for item in reports]
+            body["reports"] = [_public_report(self._annotate(agent, item), full=True) for item in reports]
         return body
 
     def inquire(self, auth: Auth, body: dict[str, Any]) -> dict[str, Any]:
@@ -1043,7 +1187,7 @@ class BureauService:
     def portal_reports(self, auth: Auth, agent_id: str) -> list[dict[str, Any]]:
         self._portal(auth)
         agent = self._owned(auth, agent_id)
-        return [_public_report(item, full=True) for item in self.repo.reports_for_agent(agent["agent_id"])]
+        return [_public_report(self._annotate(agent, item), full=True) for item in self.repo.reports_for_agent(agent["agent_id"])]
 
     def portal_inquiries(self, auth: Auth) -> list[dict[str, Any]]:
         self._portal(auth)
@@ -1099,6 +1243,11 @@ class BureauService:
             "updated_at": self.stamp(),
         }
         self.repo.add_dispute(record)
+        report = self.repo.get_report(report_id)
+        if report is not None:
+            agent = self._agent(report["agent_id"])
+            self._rescore(agent)
+            self.repo.save_agent(agent)
         return record
 
     def portal_disputes(self, auth: Auth) -> list[dict[str, Any]]:
@@ -1156,6 +1305,23 @@ class BureauService:
         self.repo.put_session({"token_hash": token_hash(token), "kind": kind, "subject_id": subject_id, "expires_at": expires})
         return token
 
+    def _rescore_ring_peers(self, agent: dict[str, Any], reporter_org_id: str) -> None:
+        involved = {reporter_org_id, agent["operator_org_id"]}
+        seen = {agent["agent_id"]}
+        for report in self.repo.all_reports():
+            if report.get("kind") != "transaction_outcome" or report.get("outcome") != "settled":
+                continue
+            other = self.repo.get_agent(report["agent_id"])
+            if other is None or other["agent_id"] in seen:
+                continue
+            if report["reporter_org_id"] in involved or other["operator_org_id"] in involved:
+                seen.add(other["agent_id"])
+                previous = other.get("score", 0)
+                self._rescore(other)
+                self.repo.save_agent(other)
+                if previous - other["score"] >= 50:
+                    self._alert(other, "score_drop", {"previous_score": previous, "score": other["score"]})
+
     def _rescore(self, agent: dict[str, Any]) -> None:
         operator = self.repo.get_org(agent["operator_org_id"])
         reports = self.repo.reports_for_agent(agent["agent_id"])
@@ -1167,10 +1333,184 @@ class BureauService:
             reports=reports,
             disputes=disputes,
             reporter_types=self.repo.reporter_types(),
+            policy=self.policy,
+            context=self._score_context(agent),
         )
         agent["score"] = scored["score"]
         agent["score_reasons"] = scored["reasons"]
         agent["cold_start"] = scored["cold_start"]
+
+    def _score_context(self, agent: dict[str, Any]) -> ScoreContext:
+        directory = self.repo.org_directory()
+        all_reports = self.repo.all_reports()
+        report_by_id = {item["report_id"]: item for item in all_reports}
+        upheld: dict[str, int] = {}
+        open_ids: set[str] = set()
+        for item in self.repo.list_disputes():
+            source = report_by_id.get(item["report_id"])
+            if source is None:
+                continue
+            if item.get("status") == "resolved" and item.get("outcome") == "upheld":
+                upheld[source["reporter_org_id"]] = upheld.get(source["reporter_org_id"], 0) + 1
+            elif item.get("status") in {"open", "under_review"}:
+                open_ids.add(item["report_id"])
+        interactions = self.repo.interactions_for_agent(agent["agent_id"])
+        linked: set[str] = set()
+        actions: dict[str, set[str]] = {}
+        for item in interactions:
+            linked.add(item["counterparty_org_id"])
+            actions.setdefault(item["counterparty_org_id"], set()).add(item["action_id"])
+        operators = {item["agent_id"]: item["operator_org_id"] for item in self.repo.list_agents()}
+        edges = {
+            (item["reporter_org_id"], operators[item["agent_id"]])
+            for item in all_reports
+            if item.get("kind") == "transaction_outcome"
+            and item.get("outcome") == "settled"
+            and not item.get("excluded")
+            and item["agent_id"] in operators
+        }
+        penalty = 0
+        if self.policy.rereg_link:
+            linked_agents = []
+            for link in self.repo.links_for_agent(agent["agent_id"]):
+                other = self.repo.get_agent(link["linked_agent_id"])
+                if other is not None:
+                    linked_agents.append(other)
+            penalty = inheritance_penalty(linked_agents, now=self.stamp(), policy=self.policy)
+        return ScoreContext(
+            now=self.stamp(),
+            reporter_created_at={org_id: item["created_at"] for org_id, item in directory.items()},
+            upheld_by_reporter=upheld,
+            linked_reporters=linked,
+            linked_actions=actions,
+            ring_edges=ring_edges(edges, max_cycle=self.policy.ring_max_cycle, search_limit=self.policy.ring_search_limit)
+            if self.policy.ring_detection
+            else set(),
+            open_dispute_ids=open_ids,
+            identity_penalty=penalty,
+        )
+
+    def _report_counts(self, agent: dict[str, Any], report: dict[str, Any]) -> bool:
+        if not self.policy.require_transaction_link:
+            return True
+        interactions = self.repo.interactions_for_agent(agent["agent_id"])
+        linked = {item["counterparty_org_id"] for item in interactions}
+        actions = {}
+        for item in interactions:
+            actions.setdefault(item["counterparty_org_id"], set()).add(item["action_id"])
+        return report_is_linked(report, ScoreContext(linked_reporters=linked, linked_actions=actions))
+
+    def _annotate(self, agent: dict[str, Any], report: dict[str, Any]) -> dict[str, Any]:
+        view = dict(report)
+        view["counts"] = self._report_counts(agent, report)
+        return view
+
+    def _link_denied_identity(self, record: dict[str, Any], body: dict[str, Any], at: str) -> list[str]:
+        signals: list[tuple[str, str]] = []
+        for kind in ("device", "key"):
+            raw = body.get(f"{kind}_signal")
+            if raw:
+                signals.append((kind, _short(str(raw), f"{kind}_signal", 128)))
+        for kind, value in signals:
+            self.repo.add_signal({"agent_id": record["agent_id"], "kind": kind, "value": value, "created_at": at})
+        if not self.policy.rereg_link:
+            return []
+        denied: dict[str, dict[str, Any]] = {}
+        for other in self.repo.list_agents(operator_org_id=record["operator_org_id"]):
+            if other["agent_id"] == record["agent_id"]:
+                continue
+            if agent_is_denied(other, self.policy) and within_days(str(other.get("updated_at") or ""), at, self.policy.rereg_lookback_days):
+                denied[other["agent_id"]] = other
+        for kind, value in signals:
+            for agent_id in self.repo.agent_ids_for_signal(kind, value):
+                if agent_id == record["agent_id"] or agent_id in denied:
+                    continue
+                other = self.repo.get_agent(agent_id)
+                if other and agent_is_denied(other, self.policy) and within_days(str(other.get("updated_at") or ""), at, self.policy.rereg_lookback_days):
+                    denied[agent_id] = other
+        linked_ids = []
+        for agent_id in denied:
+            self.repo.add_identity_link(
+                {
+                    "link_id": _id("lnk"),
+                    "agent_id": record["agent_id"],
+                    "linked_agent_id": agent_id,
+                    "signal": "denied-agent",
+                    "created_at": at,
+                }
+            )
+            linked_ids.append(agent_id)
+        return linked_ids
+
+    def _velocity_reason(self, agent: dict[str, Any], action: dict[str, Any], at: str) -> str | None:
+        if not self.policy.velocity:
+            return None
+        day = at[:10]
+        currency = str(action.get("currency") or "")
+        amount = None if action.get("amount") is None else Decimal(str(action["amount"]))
+        agent_count, agent_amount = window_totals(self.repo.interactions_for_agent(agent["agent_id"]), day=day, currency=currency)
+        operator_count, operator_amount = window_totals(
+            self.repo.interactions_for_operator(agent["operator_org_id"]),
+            day=day,
+            currency=currency,
+        )
+        probation = self._on_probation(agent, at)
+        for count, total in ((agent_count, agent_amount), (operator_count, operator_amount)):
+            reason = velocity_reason(
+                existing_count=count,
+                existing_amount=total,
+                amount=amount,
+                score=int(agent.get("score") or 0),
+                probation=probation,
+                policy=self.policy,
+            )
+            if reason:
+                return reason
+        return None
+
+    def _on_probation(self, agent: dict[str, Any], at: str) -> bool:
+        for link in self.repo.links_for_agent(agent["agent_id"]):
+            if within_days(str(link.get("created_at") or ""), at, self.policy.probation_days):
+                return True
+        return False
+
+    def _record_interaction(
+        self,
+        agent: dict[str, Any],
+        auth: Auth,
+        body: dict[str, Any],
+        action: dict[str, Any],
+        agreement_id: str,
+        at: str,
+    ) -> None:
+        counterparty = self._counterparty(auth, body)
+        if counterparty is None:
+            return
+        action_id = str(action.get("action_id") or "")
+        if not action_id:
+            return
+        self.repo.add_interaction(
+            {
+                "interaction_id": _id("ixn"),
+                "agent_id": agent["agent_id"],
+                "operator_org_id": agent["operator_org_id"],
+                "counterparty_org_id": counterparty,
+                "action_id": action_id,
+                "amount": None if action.get("amount") is None else str(action["amount"]),
+                "currency": action.get("currency"),
+                "agreement_id": agreement_id,
+                "at": at,
+            }
+        )
+
+    def _counterparty(self, auth: Auth, body: dict[str, Any]) -> str | None:
+        explicit = body.get("counterparty_org_id")
+        org_id = str(explicit).strip() if explicit else (auth.org_id or "")
+        if not org_id:
+            return None
+        if self.repo.get_org(org_id) is None:
+            raise BureauError(400, "counterparty_org_id was not found")
+        return org_id
 
     def _alert(self, agent: dict[str, Any], kind: str, detail: dict[str, Any]) -> None:
         at = self.stamp()
@@ -1318,7 +1658,10 @@ def _public_report(record: dict[str, Any], *, full: bool) -> dict[str, Any]:
         "evidence_hash": record["evidence_hash"],
         "created_at": record["created_at"],
         "excluded": bool(record.get("excluded")),
+        "counts": bool(record.get("counts")),
     }
+    if record.get("action_id"):
+        view["action_id"] = record["action_id"]
     if full:
         view["summary"] = record["summary"]
         view["outcome"] = record.get("outcome")

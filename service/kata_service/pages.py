@@ -296,7 +296,7 @@ def shell(title: str, description: str, body: str, *, current: str, script: bool
       {body}
     </main>
     <footer class="site">
-      <p>Global Agent Bureau. Powered by <img class="mark" src="/assets/kata-logo.svg" alt="KATA">. Copyright 2026 Kaan Uluer. PolyForm Noncommercial License. <a href="{GITHUB}">GitHub</a>.</p>
+      <p>Global Agent Bureau. Powered by <img class="mark" src="/assets/kata-logo.svg" alt="KATA">. Copyright 2026 Kaan Uluer. PolyForm Noncommercial License. <a href="/simulation">Simulation</a>. <a href="{GITHUB}">GitHub</a>.</p>
       <p><img src="/assets/kata-icon.svg" alt="" width="28" height="28"> The demo seed is public and is not a production signing key. Verdicts here are allow, deny, or step-up. Deny means block the action. It does not revoke the grant.</p>
     </footer>
   </div>
@@ -313,6 +313,7 @@ def _nav(current: str) -> str:
         ("/dashboard", "Dashboard", "/dashboard"),
         ("/portal", "Portal", "/portal"),
         ("/history", "History", "/history"),
+        ("/simulation", "Simulation", "/simulation"),
         ("/docs", "Docs", "/docs"),
         ("/#operations", "Live status", ""),
         (GITHUB, "GitHub", "github"),
@@ -725,7 +726,7 @@ _ENDPOINTS: tuple[dict[str, str], ...] = (
     {
         "method": "POST",
         "path": "/v1/agents",
-        "summary": "An agent operator registers an agent. public_key is an Ed25519 or P-256 JWK with no private d. principal_id is a pseudonymous id.",
+        "summary": "An agent operator registers an agent. public_key is an Ed25519 or P-256 JWK with no private d. principal_id is a pseudonymous id. Optional device_signal and key_signal link the agent to a recently denied agent and inherit a penalty.",
         "request": '{\n  "agent_id": "shopper-01",\n  "principal_id": "prn_demo",\n  "verification_level": "operator_verified",\n  "public_key": {"kty": "OKP", "crv": "Ed25519", "x": "…"}\n}',
         "response": '{\n  "agent_id": "shopper-01",\n  "status": "active",\n  "verification_level": "operator_verified",\n  "fingerprint": "sha256:…",\n  "score": 700\n}',
         "errors": "Other tenants do not receive principal_id. 409 when the agent id or key is already registered.",
@@ -733,7 +734,7 @@ _ENDPOINTS: tuple[dict[str, str], ...] = (
     {
         "method": "POST",
         "path": "/v1/verify",
-        "summary": "Checks a payment action against the agent's active stored agreement. ALLOW records the spend. DENY maps to kata_decision BLOCK.",
+        "summary": "Checks a payment action against the agent's active stored agreement. ALLOW records the spend and the caller's organization as a transaction counterparty, unless counterparty_org_id names another organization. A daily count or amount window above the configured cap returns STEP_UP with VELOCITY_COUNT or VELOCITY_AMOUNT and does not record the spend. DENY maps to kata_decision BLOCK.",
         "request": '{\n  "agent_id": "shopper-01",\n  "action": {"action_id": "act_1", "action_type": "purchase", "amount": 1300, "currency": "CAD", "proposed_at": "2026-10-04T13:55:00Z"}\n}',
         "response": '{\n  "verdict": "ALLOW",\n  "kata_decision": "ALLOW",\n  "reasons": [],\n  "agent_id": "shopper-01",\n  "agreement_id": "agr_demo"\n}',
         "errors": "AGENT_NOT_ACTIVE, NO_ACTIVE_AGREEMENT, and AGREEMENT_NOT_SELECTED are bureau reasons. Library reasons such as AMOUNT_ABOVE_INTENT_CEILING are passed through.",
@@ -749,9 +750,9 @@ _ENDPOINTS: tuple[dict[str, str], ...] = (
     {
         "method": "POST",
         "path": "/v1/reports",
-        "summary": "Files a transaction outcome, fraud incident, chargeback, or policy violation. evidence_hash is sha256 and 64 hex characters. The same reporter, agent, kind, and hash is a duplicate.",
-        "request": '{\n  "agent_id": "shopper-01",\n  "kind": "chargeback",\n  "evidence_hash": "sha256:…",\n  "summary": "Disputed purchase."\n}',
-        "response": '{\n  "report_id": "rpt_…",\n  "kind": "chargeback"\n}',
+        "summary": "Files a transaction outcome, fraud incident, chargeback, or policy violation. evidence_hash is sha256 and 64 hex characters. The same reporter, agent, kind, and hash is a duplicate. counts is true only when this organization has an allowed verify with the agent. An unlinked report is stored and does not change the score.",
+        "request": '{\n  "agent_id": "shopper-01",\n  "kind": "chargeback",\n  "evidence_hash": "sha256:…",\n  "summary": "Disputed purchase.",\n  "action_id": "act_1"\n}',
+        "response": '{\n  "report_id": "rpt_…",\n  "kind": "chargeback",\n  "counts": false\n}',
         "errors": "409 duplicate report. 429 when the organization exceeds the daily cap.",
     },
     {

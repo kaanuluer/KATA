@@ -7,10 +7,12 @@ from __future__ import annotations
 import base64
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from kata_intent.errors import KataError
 from kata_intent.keys import PrivateKey, public_key_from_jwk
+
+from kata_service.defenses import ScorePolicy
 
 DEFAULT_FX_SOURCE_URL = "https://api.frankfurter.dev/v1"
 REVOCATION_MAX_AGE_SECONDS = 300
@@ -34,6 +36,7 @@ class Settings:
     session_ttl_seconds: int = 43200
     report_daily_cap: int = 20
     allow_demo_seed: bool = False
+    score_policy: ScorePolicy = field(default_factory=ScorePolicy)
 
     def log_key(self) -> PrivateKey | None:
         if self.log_signing_seed is None:
@@ -74,6 +77,42 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
         session_ttl_seconds=_positive_int(env.get("GAB_SESSION_TTL_SECONDS"), 43200),
         report_daily_cap=_positive_int(env.get("GAB_REPORT_DAILY_CAP"), 20),
         allow_demo_seed=_flag(env.get("GAB_ALLOW_DEMO_SEED")),
+        score_policy=_score_policy(env),
+    )
+
+
+def _score_policy(env: dict[str, str]) -> ScorePolicy:
+    master = _blank(env.get("GAB_DEFENSES"))
+    default_on = True if master is None else master.lower() in {"1", "true", "yes"}
+
+    def flag(name: str) -> bool:
+        raw = _blank(env.get(name))
+        if raw is None:
+            return default_on
+        return raw.lower() in {"1", "true", "yes"}
+
+    weight = _blank(env.get("GAB_NEW_REPORTER_WEIGHT"))
+    try:
+        new_weight = float(weight) if weight is not None else 0.3
+    except ValueError:
+        new_weight = 0.3
+    return ScorePolicy(
+        require_transaction_link=flag("GAB_REQUIRE_REPORT_LINK"),
+        reporter_reputation=flag("GAB_REPORTER_REPUTATION"),
+        positive_cap=flag("GAB_POSITIVE_CAP"),
+        settled_cap_total=_positive_int(env.get("GAB_SETTLED_CAP_TOTAL"), 25),
+        settled_cap_per_reporter=_positive_int(env.get("GAB_SETTLED_CAP_PER_REPORTER"), 16),
+        new_reporter_days=_positive_int(env.get("GAB_NEW_REPORTER_DAYS"), 30),
+        new_reporter_weight=new_weight,
+        ring_detection=flag("GAB_RING_DETECTION"),
+        velocity=flag("GAB_VELOCITY"),
+        velocity_daily_count=_positive_int(env.get("GAB_VELOCITY_DAILY_COUNT"), 25),
+        velocity_daily_amount=_positive_int(env.get("GAB_VELOCITY_DAILY_AMOUNT"), 15000),
+        velocity_high_score=_positive_int(env.get("GAB_VELOCITY_HIGH_SCORE"), 750),
+        rereg_link=flag("GAB_REREG_LINK"),
+        rereg_lookback_days=_positive_int(env.get("GAB_REREG_LOOKBACK_DAYS"), 14),
+        rereg_penalty=_positive_int(env.get("GAB_REREG_PENALTY"), 80),
+        dispute_hold=flag("GAB_DISPUTE_HOLD"),
     )
 
 

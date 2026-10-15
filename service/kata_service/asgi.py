@@ -72,6 +72,12 @@ def create_app(
     def history():
         return HTMLResponse(history_page())
 
+    @app.get("/simulation")
+    def simulation():
+        from kata_service.simulation_page import simulation_page
+
+        return HTMLResponse(simulation_page())
+
     @app.get("/dashboard")
     def dashboard():
         return HTMLResponse(dashboard_page())
@@ -173,6 +179,13 @@ def create_app(
             "favicon-32.png": "image/png",
             "kata-icon.svg": "image/svg+xml",
             "kata-logo.svg": "image/svg+xml",
+            "simulation-results.json": "application/json",
+            "sim-fraud-dollars.png": "image/png",
+            "sim-collusion-scores.png": "image/png",
+            "sim-fake-reports.png": "image/png",
+            "sim-weekly-loss.png": "image/png",
+            "sim-loss-by-attacker.png": "image/png",
+            "sim-threshold-tradeoff.png": "image/png",
         }.get(name)
         if media is None:
             return _error(404, "asset was not found")
@@ -371,6 +384,7 @@ def ensure_bureau(app: FastAPI):
             session_ttl_seconds=settings.session_ttl_seconds,
             report_daily_cap=settings.report_daily_cap,
             dev_mailbox=settings.dev_mailbox or settings.demo,
+            policy=settings.score_policy,
         )
         if settings.demo:
             from kata_service.seed import seed_demo
@@ -397,6 +411,7 @@ def ensure_bureau(app: FastAPI):
         session_ttl_seconds=settings.session_ttl_seconds,
         report_daily_cap=settings.report_daily_cap,
         dev_mailbox=settings.dev_mailbox,
+        policy=settings.score_policy,
     )
     app.state.bureau = service
     return service

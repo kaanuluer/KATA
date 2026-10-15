@@ -130,6 +130,24 @@ def seed_demo(service: BureauService) -> dict[str, str]:
         item["kind"] == "chargeback" and item["evidence_hash"] == evidence and item["reporter_org_id"] == merchant["org_id"]
         for item in service.repo.reports_for_agent("shopper-01")
     )
+    service.repo.set_org_created_at(merchant["org_id"], "2026-01-01T00:00:00Z")
+    linked = any(
+        item["counterparty_org_id"] == merchant["org_id"] for item in service.repo.interactions_for_agent("shopper-01")
+    )
+    if not linked:
+        service.repo.add_interaction(
+            {
+                "interaction_id": "ixn_demo_laptop",
+                "agent_id": "shopper-01",
+                "operator_org_id": operator["org_id"],
+                "counterparty_org_id": merchant["org_id"],
+                "action_id": "act_demo_laptop",
+                "amount": "1300",
+                "currency": "CAD",
+                "agreement_id": "agr_demo",
+                "at": at,
+            }
+        )
     if not reported:
         service.report(
             merchant_auth,
@@ -138,8 +156,14 @@ def seed_demo(service: BureauService) -> dict[str, str]:
                 "kind": "chargeback",
                 "evidence_hash": evidence,
                 "summary": "Cardholder disputed the laptop purchase.",
+                "action_id": "act_demo_laptop",
             },
         )
+    else:
+        scored = service.repo.get_agent("shopper-01")
+        if scored is not None:
+            service._rescore(scored)
+            service.repo.save_agent(scored)
     return {
         "admin_token": DEMO_ADMIN_TOKEN,
         "operator_key": DEMO_OPERATOR_KEY,

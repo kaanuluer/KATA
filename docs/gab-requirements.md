@@ -56,6 +56,8 @@ Acceptance: a merchant lookup omits `principal_id`, a fingerprint lookup returns
 - The agreement must be active, name that agent, name the registered principal, and carry the registered agent key.
 - The principal public key inside the signed mandate is bound on first store. A later agreement signed by a different principal key is rejected.
 - `POST /v1/verify` evaluates the payment with the reference library, including cumulative limits and the named intent when `intent_id` is set. Several mandates inside one agreement are the sub-intents.
+- An allowed verify records an interaction for the caller's organization, or for `counterparty_org_id` when that field names an organization. That interaction is what lets a later report affect the score.
+- When velocity limits are on, an allow that would exceed the UTC-day count (default 25) or the same-currency amount (default 15,000) becomes `STEP_UP` with `VELOCITY_COUNT` or `VELOCITY_AMOUNT` and does not append the ledger. A score of 750 or more triples both windows. A re-registration link halves them for 14 days.
 - An inactive agent is `DENY` / `BLOCK` / `AGENT_NOT_ACTIVE`.
 - No active agreement is `DENY` / `NO_ACTIVE_AGREEMENT`.
 - More than one active agreement and no `agreement_id` is `STEP_UP` / `AGREEMENT_NOT_SELECTED`.
@@ -71,6 +73,7 @@ Acceptance: 1300 CAD against a 1500 ceiling and a 2000 cumulative cap is `ALLOW`
 - Optional outcome is `settled`, `loss`, or `cleared`.
 - The same reporter, agent, kind, and evidence hash is 409.
 - Each organization has a daily cap (default 20). Over the cap is 429 `daily report cap reached`.
+- With the default defenses, the report changes the score only when that reporter has a recorded allowed verify with the agent. Optional `action_id` must be one of those verifies. The stored report carries `counts: false` otherwise. The filing is still accepted.
 - The operator of the agent, and any organization that has filed at least one report, receives full report bodies. Everyone else with `report` scope receives counts only.
 - A new incident appends a transparency-log entry of hashes and ids, not the free-text summary, and notifies subscribers.
 
@@ -94,9 +97,26 @@ Acceptance: a missing purpose is 400; a completed inquiry appears on `GET /v1/po
 - The same `(kind, evidence_hash)` keeps the highest weight.
 - Impacts, times weight, rounded: fraud −120, chargeback −80, policy −40, settled +8, loss −30.
 - A resolved dispute with outcome `upheld` drops that report from the score (`DISPUTE_UPHELD`). Outcome `partial` halves the weight.
-- At most four reason codes are returned, ordered by absolute points, skipping zeros.
+- At most four reason codes are returned, ordered by absolute points, skipping zeros. `COLD_START`, `DISPUTE_HOLD`, and `RING_DISCOUNTED` may appear with zero points.
+- `trust_score` without a policy still uses that v1 formula, which is what the original unit test calls.
+- The service passes `ScorePolicy` from settings. `GAB_DEFENSES=0` turns the extra rules off. Each rule has its own flag, listed in the environment table.
 
 Acceptance: the unit test keeps the bank's fraud impact over a duplicate merchant report, and an upheld dispute removes `FRAUD_INCIDENT`.
+
+### 2.6.1 Defenses around the score
+
+These rules are on unless `GAB_DEFENSES=0` or the matching flag is `0`.
+
+- Transaction link (`GAB_REQUIRE_REPORT_LINK`): an unlinked report does not enter the score.
+- Reporter reputation (`GAB_REPORTER_REPUTATION`): an organization younger than `GAB_NEW_REPORTER_DAYS` (30), or with no creation time, is multiplied by `GAB_NEW_REPORTER_WEIGHT` (0.3). Each upheld dispute against that reporter halves the weight again, up to eight times.
+- Positive cap (`GAB_POSITIVE_CAP`): settled points diminish for repeat reports from the same reporter, then stop at `GAB_SETTLED_CAP_PER_REPORTER` (16) and `GAB_SETTLED_CAP_TOTAL` (25).
+- Ring detection (`GAB_RING_DETECTION`): settled credit is dropped when the reporter and the agent's operator sit on a reciprocal pair or a closed loop of up to four organizations. Filing the report that closes the loop rescores the other agents in that loop. Reason code `RING_DISCOUNTED`.
+- Re-registration (`GAB_REREG_LINK`): a new agent inherits `IDENTITY_LINK` when the same operator, or the same optional `device_signal` or `key_signal`, matches an agent that was revoked, suspended, or scored under 500 within `GAB_REREG_LOOKBACK_DAYS` (14). The penalty is `GAB_REREG_PENALTY` (80), or the linked agent's deficit below 500 when that is larger, and it is capped at 200.
+- Dispute hold (`GAB_DISPUTE_HOLD`): while a dispute is open or under review, a negative report from a young reporter does not reduce the score. Reason code `DISPUTE_HOLD`. Resolving the dispute removes the hold.
+
+The synthetic stress test on `/simulation` is a separate model. Its "proposed defenses" column is not a measurement of these rules.
+
+Acceptance: an unlinked chargeback leaves the score unchanged; a linked chargeback from a young reporter is held while the dispute is open; a second allowed verify past a count cap of 1 is `STEP_UP` / `VELOCITY_COUNT`; a new agent after a revocation carries `IDENTITY_LINK`.
 
 ### 2.7 Alerts
 
@@ -125,6 +145,7 @@ Acceptance: after the login row is bound to the registered principal, the portal
 - A principal files a dispute against a report on their agent. Status starts at `open`.
 - Admin review sets `under_review` or `resolved`. A resolved dispute requires outcome `upheld`, `rejected`, or `partial`.
 - `upheld` excludes the report from the score and rescores the agent.
+- Filing the dispute rescores the agent. With the dispute hold on, an open dispute against a young reporter pauses that report's negative points until review.
 
 Acceptance: an upheld policy-violation dispute leaves the score greater than or equal to the score before review.
 
@@ -135,7 +156,8 @@ Acceptance: an upheld policy-violation dispute leaves the score greater than or 
 
 ### 2.11 Web UI
 
-- `/` is the Global Agent Bureau home. It keeps the four KATA questions, the sample sign-and-check, the live revocation list, published keys, and the tree head, and it links to the dashboard, portal, history, docs, and GitHub.
+- `/` is the Global Agent Bureau home. It keeps the four KATA questions, the sample sign-and-check, the live revocation list, published keys, and the tree head, and it links to the dashboard, portal, history, simulation, docs, and GitHub.
+- `/simulation` publishes the October 15, 2026 synthetic stress test. Every table and chart on that page is labeled simulated test data. The numbers are read from `service/kata_service/static/simulation-results.json`. The charts are the PNGs shipped beside that file.
 - The header mark is the single file `service/kata_service/static/gab-logo.svg`. Replacing that file replaces the mark.
 - `/dashboard` signs in with an API key or an organization email and can register an agent, run an inquiry, file an incident, list alerts, manage keys, and, with the admin token, review disputes.
 - `/portal` signs in with a magic link and shows agents, authorizations, inquiries, and incidents.
@@ -148,7 +170,8 @@ Acceptance: an upheld policy-violation dispute leaves the score greater than or 
 - Public demo credentials, which must not be used in production: admin `gab-demo-admin`, operator `gab_demo_operator_public`, wallet `gab_demo_wallet_public`, merchant `gab_demo_merchant_public`, portal `principal@example.com`, organization email `ops@harbor.example`.
 - `python3 -m kata_service.seed` applies the SQL migration to `DATABASE_URL`. `--demo` also inserts that data. Without `DATABASE_URL` the script exits and tells the operator to use `GAB_DEMO=1` for a local demo.
 - `POST /v1/admin/seed-demo` inserts the same public demo rows into whatever repository the process is using, including Neon, without `GAB_DEMO`. The caller must send the `GAB_ADMIN_TOKEN` bearer. The route returns 403 `demo seed is disabled` unless `GAB_ALLOW_DEMO_SEED=1`. A second call keeps the same organizations, agent, agreement, chargeback, and subscription. The response lists the public demo keys and does not echo the admin token.
-- The SQL file `kata_service/migrations/001_bureau.sql` is package data, so an installed copy can apply the schema. `GAB_DEMO` is not required for that route and must stay unset on Vercel, because demo mode ignores `DATABASE_URL`.
+- The SQL files `kata_service/migrations/001_bureau.sql` and `002_defenses.sql` are package data, so an installed copy can apply the schema. `002` adds interactions, identity links, agent signals, and an optional `action_id` on reports. `GAB_DEMO` is not required for that route and must stay unset on Vercel, because demo mode ignores `DATABASE_URL`.
+- The public demo merchant is dated `2026-01-01T00:00:00Z`, and the seed records interaction `act_demo_laptop` before the sample chargeback, so that chargeback still counts at the merchant weight.
 
 ## 3. Non-functional requirements
 
@@ -214,6 +237,16 @@ Set secrets in the host. Do not commit values.
 | `GAB_DEV_MAILBOX` | No | no | `1` keeps the latest magic link in memory. |
 | `GAB_DEMO` | No | no | `1` seeds memory and ignores Postgres. Local only. |
 | `GAB_ALLOW_DEMO_SEED` | No | no | `1` allows `POST /v1/admin/seed-demo` to write the public demo rows into the live database. Leave unset except while loading a demo. |
+| `GAB_DEFENSES` | No | no | Default on. `0` turns off the link, reputation, positive cap, ring, velocity, re-registration, and dispute-hold rules together. |
+| `GAB_REQUIRE_REPORT_LINK` | No | no | Default follows `GAB_DEFENSES`. `0` scores reports that have no recorded verify. |
+| `GAB_REPORTER_REPUTATION` | No | no | Default follows `GAB_DEFENSES`. |
+| `GAB_POSITIVE_CAP` | No | no | Default follows `GAB_DEFENSES`. |
+| `GAB_RING_DETECTION` | No | no | Default follows `GAB_DEFENSES`. |
+| `GAB_VELOCITY` | No | no | Default follows `GAB_DEFENSES`. |
+| `GAB_VELOCITY_DAILY_COUNT` | No | no | Default 25 allowed verifies per UTC day per agent and per operator. |
+| `GAB_VELOCITY_DAILY_AMOUNT` | No | no | Default 15,000 in the action currency per UTC day. |
+| `GAB_REREG_LINK` | No | no | Default follows `GAB_DEFENSES`. |
+| `GAB_DISPUTE_HOLD` | No | no | Default follows `GAB_DEFENSES`. |
 
 Supabase is not part of this deployment. There is no `SUPABASE_URL`, anon key, or service-role key.
 
@@ -222,6 +255,6 @@ Supabase is not part of this deployment. There is no `SUPABASE_URL`, anon key, o
 - Mail delivery is a plug-in. The default mailer writes the link to the process log. There is no bundled SMTP or hosted mailbox.
 - The development mailbox is in memory and is not shared across serverless instances.
 - A person who already has a principal id must have that email registered against it. A brand-new magic link creates a new principal id and will not see another principal's agents.
-- Anti-gaming is deduplication, reporter weight, a self-report discount, and the daily cap. It is not a graph or a velocity model.
+- Anti-gaming now adds a transaction link, reporter age and upheld-dispute weight, a settled-credit cap, a short-cycle ring discount, daily velocity step-up, and a re-registration penalty. It is not a segment-specific velocity model, and it does not convert currencies. The synthetic "proposed defenses" column on `/simulation` is not a measurement of these rules.
 - Score-drop alerting uses a 50-point threshold and does not page a human.
 - `GAB_DEMO=1` must stay off in production because it bypasses Neon.

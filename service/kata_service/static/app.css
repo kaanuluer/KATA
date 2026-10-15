@@ -452,6 +452,50 @@ main > h1 { max-width: none; }
 }
 .doc-body th { color: var(--teal); }
 
+.sim-banner {
+  display: inline-block;
+  margin: 8px 0 16px;
+  padding: 8px 12px;
+  background: var(--step-bg);
+  color: var(--step);
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+table.sim {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  background: var(--card);
+}
+
+table.sim th, table.sim td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+table.sim th { color: var(--teal-deep); }
+
+figure.sim-chart {
+  margin: 18px 0 28px;
+}
+
+figure.sim-chart img {
+  width: 100%;
+  height: auto;
+  background: var(--card);
+  border-radius: 12px;
+}
+
+figure.sim-chart figcaption {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
 .endpoint { padding-top: 8px; }
 .method {
   display: inline-block;

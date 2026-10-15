@@ -11,11 +11,12 @@ from typing import Any
 from kata_service.bureau import BureauError, email_hash
 from kata_service.store import dump_doc, load_doc
 
-_MIGRATION = Path(__file__).resolve().parent / "migrations" / "001_bureau.sql"
+_MIGRATIONS = Path(__file__).resolve().parent / "migrations"
+_MIGRATION = _MIGRATIONS / "001_bureau.sql"
 
 
 def migration_sql() -> str:
-    return _MIGRATION.read_text(encoding="utf-8")
+    return "\n".join(path.read_text(encoding="utf-8") for path in sorted(_MIGRATIONS.glob("*.sql")))
 
 
 def migration_statements() -> list[str]:
@@ -45,6 +46,9 @@ class PostgresRepo:
             "INSERT INTO gab_organizations (org_id, name, org_type, status, created_at) VALUES (%s, %s, %s, %s, %s)",
             (record["org_id"], record["name"], record["org_type"], record["status"], record["created_at"]),
         )
+
+    def set_org_created_at(self, org_id: str, created_at: str) -> None:
+        self._execute("UPDATE gab_organizations SET created_at = %s WHERE org_id = %s", (created_at, org_id))
 
     def get_org(self, org_id: str) -> dict[str, Any] | None:
         row = self._one("SELECT org_id, name, org_type, status, created_at FROM gab_organizations WHERE org_id = %s", (org_id,))
@@ -326,8 +330,8 @@ class PostgresRepo:
                 conn.execute(
                     """
                     INSERT INTO gab_reports (
-                      report_id, agent_id, reporter_org_id, kind, evidence_hash, summary, outcome, created_at, excluded
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                      report_id, agent_id, reporter_org_id, kind, evidence_hash, summary, outcome, created_at, excluded, action_id
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         record["report_id"],
@@ -339,6 +343,7 @@ class PostgresRepo:
                         record.get("outcome"),
                         record["created_at"],
                         1 if record.get("excluded") else 0,
+                        record.get("action_id"),
                     ),
                 )
         except Exception as exc:
@@ -349,7 +354,7 @@ class PostgresRepo:
     def reports_for_agent(self, agent_id: str) -> list[dict[str, Any]]:
         rows = self._all(
             """
-            SELECT report_id, agent_id, reporter_org_id, kind, evidence_hash, summary, outcome, created_at, excluded
+            SELECT report_id, agent_id, reporter_org_id, kind, evidence_hash, summary, outcome, created_at, excluded, action_id
             FROM gab_reports WHERE agent_id = %s ORDER BY created_at
             """,
             (agent_id,),
@@ -370,7 +375,7 @@ class PostgresRepo:
     def get_report(self, report_id: str) -> dict[str, Any] | None:
         row = self._one(
             """
-            SELECT report_id, agent_id, reporter_org_id, kind, evidence_hash, summary, outcome, created_at, excluded
+            SELECT report_id, agent_id, reporter_org_id, kind, evidence_hash, summary, outcome, created_at, excluded, action_id
             FROM gab_reports WHERE report_id = %s
             """,
             (report_id,),
@@ -379,6 +384,98 @@ class PostgresRepo:
 
     def set_report_excluded(self, report_id: str, excluded: bool) -> None:
         self._execute("UPDATE gab_reports SET excluded = %s WHERE report_id = %s", (1 if excluded else 0, report_id))
+
+    def all_reports(self) -> list[dict[str, Any]]:
+        rows = self._all(
+            """
+            SELECT report_id, agent_id, reporter_org_id, kind, evidence_hash, summary, outcome, created_at, excluded, action_id
+            FROM gab_reports ORDER BY created_at
+            """,
+            (),
+        )
+        return [_report_row(row) for row in rows]
+
+    def org_directory(self) -> dict[str, dict[str, str]]:
+        rows = self._all("SELECT org_id, org_type, created_at, status FROM gab_organizations", ())
+        return {row[0]: {"org_type": row[1], "created_at": row[2], "status": row[3]} for row in rows}
+
+    def add_interaction(self, record: dict[str, Any]) -> None:
+        self._execute(
+            """
+            INSERT INTO gab_interactions (
+              interaction_id, agent_id, operator_org_id, counterparty_org_id, action_id, amount, currency, agreement_id, at
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                record["interaction_id"],
+                record["agent_id"],
+                record["operator_org_id"],
+                record["counterparty_org_id"],
+                record["action_id"],
+                record.get("amount"),
+                record.get("currency"),
+                record.get("agreement_id"),
+                record["at"],
+            ),
+        )
+
+    def interactions_for_agent(self, agent_id: str) -> list[dict[str, Any]]:
+        rows = self._all(
+            """
+            SELECT interaction_id, agent_id, operator_org_id, counterparty_org_id, action_id, amount, currency, agreement_id, at
+            FROM gab_interactions WHERE agent_id = %s
+            """,
+            (agent_id,),
+        )
+        return [_interaction_row(row) for row in rows]
+
+    def interactions_for_operator(self, operator_org_id: str) -> list[dict[str, Any]]:
+        rows = self._all(
+            """
+            SELECT interaction_id, agent_id, operator_org_id, counterparty_org_id, action_id, amount, currency, agreement_id, at
+            FROM gab_interactions WHERE operator_org_id = %s
+            """,
+            (operator_org_id,),
+        )
+        return [_interaction_row(row) for row in rows]
+
+    def add_signal(self, record: dict[str, Any]) -> None:
+        self._execute(
+            """
+            INSERT INTO gab_agent_signals (agent_id, kind, value, created_at) VALUES (%s, %s, %s, %s)
+            ON CONFLICT (agent_id, kind, value) DO NOTHING
+            """,
+            (record["agent_id"], record["kind"], record["value"], record["created_at"]),
+        )
+
+    def agent_ids_for_signal(self, kind: str, value: str) -> list[str]:
+        rows = self._all("SELECT agent_id FROM gab_agent_signals WHERE kind = %s AND value = %s", (kind, value))
+        return [row[0] for row in rows]
+
+    def add_identity_link(self, record: dict[str, Any]) -> None:
+        self._execute(
+            """
+            INSERT INTO gab_identity_links (link_id, agent_id, linked_agent_id, signal, created_at)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (record["link_id"], record["agent_id"], record["linked_agent_id"], record["signal"], record["created_at"]),
+        )
+
+    def links_for_agent(self, agent_id: str) -> list[dict[str, Any]]:
+        rows = self._all(
+            "SELECT link_id, agent_id, linked_agent_id, signal, created_at FROM gab_identity_links WHERE agent_id = %s",
+            (agent_id,),
+        )
+        return [
+            {
+                "link_id": row[0],
+                "agent_id": row[1],
+                "linked_agent_id": row[2],
+                "signal": row[3],
+                "created_at": row[4],
+            }
+            for row in rows
+        ]
 
     def add_inquiry(self, record: dict[str, Any]) -> None:
         self._execute(
@@ -544,10 +641,11 @@ class PostgresRepo:
         with psycopg.connect(self.schema_url, autocommit=True) as conn:
             for statement in migration_statements():
                 conn.execute(statement)
-            conn.execute(
-                "INSERT INTO gab_schema_migrations (version, applied_at) VALUES (%s, %s) ON CONFLICT (version) DO NOTHING",
-                ("001_bureau.sql", "applied"),
-            )
+            for path in sorted(_MIGRATIONS.glob("*.sql")):
+                conn.execute(
+                    "INSERT INTO gab_schema_migrations (version, applied_at) VALUES (%s, %s) ON CONFLICT (version) DO NOTHING",
+                    (path.name, "applied"),
+                )
         self._ready = True
 
     def _connect(self):
@@ -625,6 +723,21 @@ def _report_row(row) -> dict[str, Any]:
         "outcome": row[6],
         "created_at": row[7],
         "excluded": bool(row[8]),
+        "action_id": row[9] if len(row) > 9 else None,
+    }
+
+
+def _interaction_row(row) -> dict[str, Any]:
+    return {
+        "interaction_id": row[0],
+        "agent_id": row[1],
+        "operator_org_id": row[2],
+        "counterparty_org_id": row[3],
+        "action_id": row[4],
+        "amount": row[5],
+        "currency": row[6],
+        "agreement_id": row[7],
+        "at": row[8],
     }
 
 

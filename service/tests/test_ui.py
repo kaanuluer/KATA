@@ -37,6 +37,7 @@ def test_home_page_explains_kata_in_english():
     assert "Global Agent Bureau" in body
     assert 'href="/dashboard"' in body
     assert 'href="/portal"' in body
+    assert 'href="/simulation"' in body
     assert '/assets/kata-logo.svg' in body
     assert '/assets/kata-icon.svg' in body
     assert "credit bureau" not in body.lower()
@@ -178,6 +179,39 @@ def test_static_assets_are_served():
     assert gab.status_code == 200
     assert "Global Agent Bureau" in gab.text
     assert client.get("/assets/secret.txt").status_code == 404
+
+
+def test_simulation_page_labels_every_figure_as_synthetic():
+    client = _client()
+    page = client.get("/simulation")
+    assert page.status_code == 200
+    body = page.text
+    assert "SIMULATED / synthetic test data, not real customers" in body
+    assert body.count("SIMULATED / synthetic test data, not real customers") >= 8
+    for name in (
+        "sim-fraud-dollars.png",
+        "sim-collusion-scores.png",
+        "sim-fake-reports.png",
+        "sim-weekly-loss.png",
+        "sim-loss-by-attacker.png",
+        "sim-threshold-tradeoff.png",
+    ):
+        assert f"/assets/{name}" in body
+        asset = client.get(f"/assets/{name}")
+        assert asset.status_code == 200
+        assert asset.headers["content-type"].startswith("image/png")
+    assert "$1,764,170.85" in body
+    assert "76.9%" in body
+    assert "98.0%" in body
+    assert "What we learned" in body
+    assert "Roadmap" in body
+    assert "PolyForm Noncommercial" in body
+    assert "open source" not in body.lower()
+    assert "open-source" not in body.lower()
+    assert "credit bureau" not in body.lower()
+    assert "book a call" not in body.lower()
+    home = client.get("/")
+    assert 'href="/simulation"' in home.text
 
 
 def test_dashboard_and_portal_pages():

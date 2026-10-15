@@ -54,6 +54,9 @@ Set these on the Vercel project. Generate the secret values on your machine and 
 | `GAB_DEV_MAILBOX` | no | no | `1` keeps the latest magic link in memory at `GET /v1/dev/mailbox`. Leave unset in production. |
 | `GAB_DEMO` | no | no | `1` seeds a memory bureau and ignores `DATABASE_URL`. Local demos only. |
 | `GAB_ALLOW_DEMO_SEED` | no | no | `1` allows `POST /v1/admin/seed-demo`. The bearer is `GAB_ADMIN_TOKEN`. The call writes the public demo into the live database and can be repeated. |
+| `GAB_DEFENSES` | no | no | Default on. `0` turns off transaction links, reporter reputation, the settled-credit cap, ring detection, velocity step-up, re-registration penalties, and the dispute hold. Individual `GAB_REQUIRE_REPORT_LINK`, `GAB_REPORTER_REPUTATION`, `GAB_POSITIVE_CAP`, `GAB_RING_DETECTION`, `GAB_VELOCITY`, `GAB_REREG_LINK`, and `GAB_DISPUTE_HOLD` flags override that default. |
+| `GAB_VELOCITY_DAILY_COUNT` | no | no | Default 25 allowed verifies per UTC day. |
+| `GAB_VELOCITY_DAILY_AMOUNT` | no | no | Default 15000 in the action currency per UTC day. |
 
 Generate a log seed, a push notifier, and an append token:
 
