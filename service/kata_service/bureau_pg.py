@@ -514,6 +514,52 @@ class PostgresRepo:
             for row in rows
         ]
 
+    def add_consortium_member(self, record: dict[str, Any]) -> None:
+        self._execute(
+            """
+            INSERT INTO gab_consortium_members (member_id, org_id, status, created_at)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (org_id) DO NOTHING
+            """,
+            (record["member_id"], record["org_id"], record["status"], record["created_at"]),
+        )
+
+    def consortium_member_for_org(self, org_id: str) -> dict[str, Any] | None:
+        row = self._one(
+            "SELECT member_id, org_id, status, created_at FROM gab_consortium_members WHERE org_id = %s",
+            (org_id,),
+        )
+        if row is None:
+            return None
+        return {"member_id": row[0], "org_id": row[1], "status": row[2], "created_at": row[3]}
+
+    def add_sighting(self, record: dict[str, Any]) -> dict[str, Any]:
+        self._execute(
+            """
+            INSERT INTO gab_consortium_sightings (sighting_id, member_id, fingerprint, seen_at)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (member_id, fingerprint) DO NOTHING
+            """,
+            (record["sighting_id"], record["member_id"], record["fingerprint"], record["seen_at"]),
+        )
+        row = self._one(
+            """
+            SELECT sighting_id, member_id, fingerprint, seen_at
+            FROM gab_consortium_sightings WHERE member_id = %s AND fingerprint = %s
+            """,
+            (record["member_id"], record["fingerprint"]),
+        )
+        if row is None:
+            raise BureauError(500, "sighting was not stored")
+        return {"sighting_id": row[0], "member_id": row[1], "fingerprint": row[2], "seen_at": row[3]}
+
+    def sighting_member_ids(self, fingerprint: str) -> list[str]:
+        rows = self._all(
+            "SELECT member_id FROM gab_consortium_sightings WHERE fingerprint = %s",
+            (fingerprint,),
+        )
+        return [row[0] for row in rows]
+
     def add_inquiry(self, record: dict[str, Any]) -> None:
         self._execute(
             """

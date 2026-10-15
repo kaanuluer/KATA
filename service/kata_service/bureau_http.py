@@ -203,6 +203,18 @@ def build_router() -> APIRouter:
 
         return await _run(request, action, read_body=False)
 
+    @router.post("/v1/admin/consortium/members", summary="Add a consortium member")
+    async def add_consortium_member(request: Request):
+        return await _run(request, lambda auth, body: _bureau(request).add_consortium_member(auth, str(body.get("org_id") or "")))
+
+    @router.post("/v1/consortium/sightings", summary="Record a fingerprint sighting")
+    async def record_sighting(request: Request):
+        return await _run(request, lambda auth, body: _bureau(request).record_sighting(auth, str(body.get("fingerprint") or "")))
+
+    @router.post("/v1/consortium/match", summary="Match a fingerprint across members")
+    async def match_sightings(request: Request):
+        return await _run(request, lambda auth, body: _bureau(request).match_sightings(auth, str(body.get("fingerprint") or "")))
+
     @router.get("/v1/admin/disputes", summary="Admin dispute queue")
     async def admin_disputes(request: Request):
         return await _run(request, lambda auth, body: _bureau(request).admin_disputes(auth), read_body=False)

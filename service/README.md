@@ -59,6 +59,7 @@ Set these on the Vercel project. Generate the secret values on your machine and 
 | `GAB_VELOCITY_DAILY_AMOUNT` | no | no | Default 15000 in the action currency per UTC day. |
 | `GAB_REQUIRE_PROOFING` | no | no | Default on, including when `GAB_DEFENSES=0`. `0` scores the claimed verification level. `POST /v1/agents/{id}/proofing` files an operator review or an institution attestation hash. |
 | `GAB_SCORE_WEIGHTS` | no | no | Optional JSON override of the weights at `GET /v1/score-model`. Invalid JSON or an out-of-range value makes `/v1` return 500. |
+| `GAB_CONSORTIUM_MATCH_THRESHOLD` | no | no | Default 2 other members. Below that, `POST /v1/consortium/match` returns `matched: false` and omits the count. |
 
 Generate a log seed, a push notifier, and an append token:
 

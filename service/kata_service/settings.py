@@ -38,6 +38,7 @@ class Settings:
     report_daily_cap: int = 20
     allow_demo_seed: bool = False
     score_policy: ScorePolicy = field(default_factory=ScorePolicy)
+    consortium_match_threshold: int = 2
 
     def log_key(self) -> PrivateKey | None:
         if self.log_signing_seed is None:
@@ -81,6 +82,7 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
         report_daily_cap=_positive_int(env.get("GAB_REPORT_DAILY_CAP"), 20),
         allow_demo_seed=_flag(env.get("GAB_ALLOW_DEMO_SEED")),
         score_policy=_score_policy(env, weights),
+        consortium_match_threshold=_positive_int(env.get("GAB_CONSORTIUM_MATCH_THRESHOLD"), 2),
     )
 
 

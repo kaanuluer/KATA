@@ -302,6 +302,8 @@ class MemoryRepo:
         self.identity_links: list[dict[str, Any]] = []
         self.agent_signals: list[dict[str, Any]] = []
         self.proofings: list[dict[str, Any]] = []
+        self.consortium_members: dict[str, dict[str, Any]] = {}
+        self.consortium_sightings: list[dict[str, Any]] = []
         self.inquiries: list[dict[str, Any]] = []
         self.subscriptions: list[dict[str, Any]] = []
         self.alerts: list[dict[str, Any]] = []
@@ -309,7 +311,7 @@ class MemoryRepo:
         self._lock = threading.Lock()
 
     def migration_versions(self) -> list[str]:
-        return ["001_bureau.sql", "002_defenses.sql", "003_proofing.sql"]
+        return ["001_bureau.sql", "002_defenses.sql", "003_proofing.sql", "004_consortium.sql"]
 
     def create_org(self, record: dict[str, Any]) -> None:
         with self._lock:
@@ -553,6 +555,27 @@ class MemoryRepo:
         with self._lock:
             return [dict(item) for item in self.proofings if item["agent_id"] == agent_id]
 
+    def add_consortium_member(self, record: dict[str, Any]) -> None:
+        with self._lock:
+            self.consortium_members[record["org_id"]] = dict(record)
+
+    def consortium_member_for_org(self, org_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            item = self.consortium_members.get(org_id)
+            return dict(item) if item else None
+
+    def add_sighting(self, record: dict[str, Any]) -> dict[str, Any]:
+        with self._lock:
+            for item in self.consortium_sightings:
+                if item["member_id"] == record["member_id"] and item["fingerprint"] == record["fingerprint"]:
+                    return dict(item)
+            self.consortium_sightings.append(dict(record))
+            return dict(record)
+
+    def sighting_member_ids(self, fingerprint: str) -> list[str]:
+        with self._lock:
+            return [item["member_id"] for item in self.consortium_sightings if item["fingerprint"] == fingerprint]
+
     def add_inquiry(self, record: dict[str, Any]) -> None:
         with self._lock:
             self.inquiries.append(dict(record))
@@ -639,6 +662,7 @@ class BureauService:
         dev_mailbox: bool = False,
         public_base_url: str = "http://127.0.0.1:8765",
         policy: ScorePolicy | None = None,
+        consortium_match_threshold: int = 2,
     ) -> None:
         self.repo = repo
         self._now = now or (lambda: datetime.now(timezone.utc))
@@ -652,6 +676,7 @@ class BureauService:
         self.dev_mailbox_enabled = dev_mailbox
         self.public_base_url = public_base_url.rstrip("/")
         self.policy = policy or ScorePolicy()
+        self.consortium_match_threshold = consortium_match_threshold
         self.dev_mailbox: list[dict[str, str]] = []
 
     def now(self) -> datetime:
@@ -766,6 +791,42 @@ class BureauService:
 
     def score_model(self) -> dict[str, Any]:
         return self.policy.weights.public()
+
+    def add_consortium_member(self, auth: Auth, org_id: str) -> dict[str, Any]:
+        self._admin(auth)
+        self._org(org_id)
+        existing = self.repo.consortium_member_for_org(org_id)
+        if existing is not None:
+            return _public_member(existing)
+        record = {
+            "member_id": _id("cmb"),
+            "org_id": org_id,
+            "status": "active",
+            "created_at": self.stamp(),
+        }
+        self.repo.add_consortium_member(record)
+        return _public_member(record)
+
+    def record_sighting(self, auth: Auth, fingerprint: str) -> dict[str, Any]:
+        member = self._consortium_member(auth)
+        fingerprint = _fingerprint(fingerprint)
+        record = self.repo.add_sighting(
+            {
+                "sighting_id": _id("sgt"),
+                "member_id": member["member_id"],
+                "fingerprint": fingerprint,
+                "seen_at": self.stamp(),
+            }
+        )
+        return {"sighting_id": record["sighting_id"], "fingerprint": fingerprint, "seen_at": record["seen_at"]}
+
+    def match_sightings(self, auth: Auth, fingerprint: str) -> dict[str, Any]:
+        member = self._consortium_member(auth)
+        fingerprint = _fingerprint(fingerprint)
+        others = {item for item in self.repo.sighting_member_ids(fingerprint) if item != member["member_id"]}
+        if len(others) >= self.consortium_match_threshold:
+            return {"matched": True, "other_member_count": len(others)}
+        return {"matched": False}
 
     def register_agent(self, auth: Auth, body: dict[str, Any]) -> dict[str, Any]:
         self._scope(auth, "registry:write")
@@ -1599,6 +1660,15 @@ class BureauService:
             raise BureauError(404, "organization was not found")
         return org
 
+    def _consortium_member(self, auth: Auth) -> dict[str, Any]:
+        self._scope(auth, "registry:read")
+        if not auth.org_id:
+            raise BureauError(403, "consortium membership is required")
+        member = self.repo.consortium_member_for_org(auth.org_id)
+        if member is None or member.get("status") != "active":
+            raise BureauError(403, "consortium membership is required")
+        return member
+
     def _caller_org(self, auth: Auth) -> dict[str, Any]:
         if not auth.org_id:
             raise BureauError(403, "an organization credential is required")
@@ -1714,6 +1784,21 @@ def _agreement_summary(record: dict[str, Any]) -> dict[str, Any]:
         "updated_at": record["updated_at"],
         "parent_cumulative_maximum": parent.get("cumulative_maximum"),
         "intents": intents,
+    }
+
+
+def _fingerprint(value: str) -> str:
+    if not _EVIDENCE.match(value):
+        raise BureauError(400, "fingerprint must be sha256 and 64 hex characters")
+    return value
+
+
+def _public_member(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "member_id": record["member_id"],
+        "org_id": record["org_id"],
+        "status": record["status"],
+        "created_at": record["created_at"],
     }
 
 

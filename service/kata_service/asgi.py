@@ -385,6 +385,7 @@ def ensure_bureau(app: FastAPI):
             report_daily_cap=settings.report_daily_cap,
             dev_mailbox=settings.dev_mailbox or settings.demo,
             policy=settings.score_policy,
+            consortium_match_threshold=settings.consortium_match_threshold,
         )
         if settings.demo:
             from kata_service.seed import seed_demo
@@ -412,6 +413,7 @@ def ensure_bureau(app: FastAPI):
         report_daily_cap=settings.report_daily_cap,
         dev_mailbox=settings.dev_mailbox,
         policy=settings.score_policy,
+        consortium_match_threshold=settings.consortium_match_threshold,
     )
     app.state.bureau = service
     return service

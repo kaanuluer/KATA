@@ -202,6 +202,23 @@ Acceptance: an upheld policy-violation dispute leaves the score greater than or 
 - The SQL files `kata_service/migrations/001_bureau.sql`, `002_defenses.sql`, and `003_proofing.sql` are package data, so an installed copy can apply the schema. `002` adds interactions, identity links, agent signals, and an optional `action_id` on reports. `003` adds `gab_proofings`. `GAB_DEMO` is not required for that route and must stay unset on Vercel, because demo mode ignores `DATABASE_URL`.
 - The public demo merchant is dated `2026-01-01T00:00:00Z`, and the seed records interaction `act_demo_laptop` before the sample chargeback, so that chargeback still counts at the merchant weight. The seed also records `operator_review` and `institution_attestation` for `shopper-01`.
 
+### 2.13 Consortium sightings
+
+Members can record that they have seen an agent key fingerprint, and they can ask whether other members have seen it. This is a sighting bit. It is not a shared feed of reports, scores, or identities.
+
+- An admin adds a member with `POST /v1/admin/consortium/members` and an `org_id`. A second call returns the same membership.
+- A member with `registry:read` records `POST /v1/consortium/sightings`. The body is the fingerprint only, `sha256:` and 64 hex characters. The same member and fingerprint is stored once.
+- `POST /v1/consortium/match` counts other members who recorded that fingerprint. The caller is not counted.
+- When that count is at least `GAB_CONSORTIUM_MATCH_THRESHOLD` (default 2), the response is `matched: true` and `other_member_count`.
+- Below the threshold the response is `matched: false` and the count is omitted.
+- The sighting table stores `member_id`, the fingerprint, and the time. It does not store an agent id, a principal id, an email, an organization name, or report text. The match response does not name the other members.
+- A non-member receives 403. There is no route that lists every fingerprint.
+- `004_consortium.sql` creates the two tables.
+
+This version matches the exact fingerprint the caller already has. It does not run a private set intersection, and it does not hide the fact that a caller tested a particular fingerprint from that caller's own member record.
+
+Acceptance: one other sighting stays `matched: false` with no count. A third member's sighting, so two others, returns `matched: true` and `other_member_count` 2. The match body has no organization name and no agent id.
+
 ## 3. Non-functional requirements
 
 - The process is a FastAPI app. Vercel loads `app:app` from the repository-root `app.py`. Importing the module does not open Postgres. The bureau repository opens on the first `/v1` request.
@@ -227,6 +244,7 @@ Acceptance: an upheld policy-violation dispute leaves the score greater than or 
 - Data minimization: evidence in the log is a hash. The principal id is a pseudonym. Email exists only on the login tables.
 - The score covers agents and the operator's activity. It is not a score of a person and it is not a consumer credit report.
 - Proofing evidence is a hash. The service does not collect a government identifier.
+- Consortium sightings store a key fingerprint and a member id. Match results below the threshold omit the count and never name the other members.
 - Product and interface copy does not describe GAB as a consumer credit reporting agency and does not use credit-bureau wording.
 - Reciprocity limits full incident text to organizations that contribute reports, plus the operating organization and the principal.
 
@@ -279,6 +297,7 @@ Set secrets in the host. Do not commit values.
 | `GAB_DISPUTE_HOLD` | No | no | Default follows `GAB_DEFENSES`. |
 | `GAB_REQUIRE_PROOFING` | No | no | Default on, including when `GAB_DEFENSES=0`. `0` scores the claimed verification level without the evidence gate. |
 | `GAB_SCORE_WEIGHTS` | No | no | Optional JSON override of the `gab-score-1` weights published at `GET /v1/score-model`. Invalid JSON or an out-of-range value is a configuration error. |
+| `GAB_CONSORTIUM_MATCH_THRESHOLD` | No | no | Default 2. Other members who have sighted a fingerprint before a match response includes the count. |
 
 Supabase is not part of this deployment. There is no `SUPABASE_URL`, anon key, or service-role key.
 
@@ -290,4 +309,5 @@ Supabase is not part of this deployment. There is no `SUPABASE_URL`, anon key, o
 - Anti-gaming now adds a transaction link, reporter age and upheld-dispute weight, a settled-credit cap, a short-cycle ring discount, daily velocity step-up, a re-registration penalty, and an evidence gate on operator and institution claims. It is not a segment-specific velocity model, and it does not convert currencies. The evidence hash is not confirmed by an outside issuer. The synthetic "proposed defenses" column on `/simulation` is not a measurement of these rules.
 - Score-drop alerting uses a 50-point threshold and does not page a human.
 - `GET /v1/score-model` publishes the rule weights. It does not fit them from outcomes. `risk` is `1000 - score`.
+- Consortium matching is an exact fingerprint compare with a count threshold. It is not a private set intersection, and it does not share reports across institutions.
 - `GAB_DEMO=1` must stay off in production because it bypasses Neon.
