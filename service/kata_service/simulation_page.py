@@ -7,33 +7,48 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-LABEL = "SIMULATED / synthetic test data, not real customers"
+LABEL = "SYNTHETIC TEST DATA – not real customers"
 
 _CHARTS = (
-    (
-        "sim-fraud-dollars.png",
-        "Fraud dollars attempted, stopped, and executed across the synthetic runs.",
-    ),
-    (
-        "sim-collusion-scores.png",
-        "Peak scores of synthetic collusion-ring agents.",
-    ),
-    (
-        "sim-fake-reports.png",
-        "Scores of synthetic legitimate agents targeted by fake reports.",
-    ),
-    (
-        "sim-weekly-loss.png",
-        "Synthetic fraud loss by week.",
-    ),
-    (
-        "sim-loss-by-attacker.png",
-        "Synthetic fraud loss by attacker type.",
-    ),
-    (
-        "sim-threshold-tradeoff.png",
-        "v1 synthetic threshold tradeoff for the allow and deny lines.",
-    ),
+    ("chart-final-1-fraud-dollars.png", "Fraud dollars stopped and executed."),
+    ("chart-final-2-ring-scores.png", "Peak scores of synthetic collusion-ring agents."),
+    ("chart-final-3-fake-reports.png", "Synthetic legitimate agents targeted by fake reports."),
+    ("chart-final-4-loss-by-attacker.png", "Synthetic fraud loss by attacker type."),
+    ("chart-final-5-friction-sybils.png", "Friction on synthetic legitimate agents, and re-registration linking."),
+)
+
+_ABLATION = (
+    ("All defenses on", None),
+    ("Ring detection off", "adaptive_no_ring_detection"),
+    ("Positive-credit cap off", "adaptive_no_positive_cap"),
+    ("Volume-scaled cap off", "adaptive_no_scaled_cap"),
+    ("Transaction-link requirement off", "adaptive_no_transaction_link"),
+    ("Link quality off", "adaptive_no_link_quality"),
+    ("Reporter reputation off", "adaptive_no_reporter_reputation"),
+    ("Report consistency off", "adaptive_no_report_consistency"),
+    ("Re-registration linking off", "adaptive_no_rereg_linking"),
+    ("Inherited negative history off", "adaptive_no_inherited_history"),
+    ("Velocity limits off", "adaptive_no_velocity"),
+    ("Adaptive velocity off", "adaptive_no_adaptive_velocity"),
+    ("Proofing gate off", "adaptive_no_proofing_gate"),
+    ("Established-operator path off", "adaptive_no_established_operator_path"),
+)
+
+_SENSITIVITY = (
+    ("Link fabrication succeeds 0%", "adaptive_link0"),
+    ("Link fabrication succeeds 100%", "adaptive_link100"),
+    ("No reporter organizations pre-aged", "adaptive_noaged"),
+    ("All reporter organizations pre-aged", "adaptive_allaged"),
+    ("30% of re-registrations use fresh signals", "adaptive_fresh30"),
+    ("100% of re-registrations use fresh signals", "adaptive_fresh100"),
+)
+
+_TIERS = (
+    ("Static", "static"),
+    ("Sleeper", "sleeper"),
+    ("Smurf", "smurf"),
+    ("Collusion ring", "ring"),
+    ("Self-dealing", "selfdeal"),
 )
 
 
@@ -41,134 +56,103 @@ def simulation_page() -> str:
     from kata_service.pages import shell
 
     data = json.loads((Path(__file__).resolve().parent / "static" / "simulation-results.json").read_text(encoding="utf-8"))
-    body = _body(data)
     return shell(
         "Simulation — Global Agent Bureau",
-        "Synthetic stress test of the Global Agent Bureau trust score. Simulated test data, not real customers.",
-        body,
+        "Synthetic stress test of the Global Agent Bureau trust score. Synthetic test data, not real customers.",
+        _body(data),
         current="/simulation",
     )
 
 
 def _body(data: dict) -> str:
-    v1 = data["v1"]
-    naive = data["naive"]
-    realistic = data["realistic"]
-    defended = data["defended"]
-    v3 = data["v3"]
-    unaware = v3["unaware"]
-    adaptive = v3["adaptive"]
+    unaware = data["headline"]["unaware"]
+    adaptive = data["headline"]["adaptive"]
+    setup = data["setup"]
     return f"""
 <section class="hero">
   <p class="kicker">Global Agent Bureau</p>
   <h1>Simulation</h1>
-  <p class="sim-banner">{LABEL}</p>
-  <p class="lede">This page publishes a synthetic stress test of the trust score. Global Agent Bureau is an agent bureau and technology company. KATA is the framework underneath it, under the PolyForm Noncommercial License 1.0.0. The population is 10,000 synthetic agents and 100,000 synthetic transactions over 90 days, seed 20261015. The v1 and v2 columns were scored from the service at commit 2b280ce. The v3 column calls the scoring rules at commit 4281ffc. Nothing here is a customer, a transaction, or a performance claim.</p>
+  {_caption()}
+  <p class="lede">Global Agent Bureau is an agent bureau and technology company. It keeps trust records for AI agents. KATA is the framework underneath it, under the PolyForm Noncommercial License 1.0.0. This page is one synthetic stress test: {setup["agents"]:,} synthetic agents and {setup["transactions"]:,} synthetic transactions over {setup["days"]} days, seed {setup["seed"]}. The scoring code is the service at its default settings. The surrounding world is simulated. Nothing here is a customer, a transaction, or a performance claim.</p>
+  <p><a href="https://globalagentbureau.com">globalagentbureau.com</a></p>
 </section>
 <section>
   <h2>Side by side</h2>
   {_caption()}
   <div class="table-scroll"><table class="sim">
-    <thead><tr><th>Measure</th><th>v1 naive</th><th>v2 naive attackers</th><th>v2 realistic, current score</th><th>v2 plus proposed defenses</th></tr></thead>
+    <thead><tr><th>Measure</th><th>Attackers unaware of the rules</th><th>Adaptive attackers</th></tr></thead>
     <tbody>
-      {_row("Malicious actors flagged at end", _flagged_v1(v1), _pct(naive["mal_flagged_final"]), _pct(realistic["mal_flagged_final"]), _pct(defended["mal_flagged_final"]))}
-      {_row("Malicious actors denied at end", _pct(v1["malicious"]["final"]["deny"]), _pct(naive["mal_final_cur_identity"]["deny"]), _pct(realistic["mal_final_cur_identity"]["deny"]), _pct(defended["mal_final_cur_identity"]["deny"]))}
-      {_row("Fraud dollars attempted", "n/a", _usd(naive["attempted_fraud_usd"]), _usd(realistic["attempted_fraud_usd"]), _usd(defended["attempted_fraud_usd"]))}
-      {_row("Fraud dollars stopped", _txn_stop(v1), _pct(naive["fraud_prevented_share_usd"]), _pct(realistic["fraud_prevented_share_usd"]), _pct(defended["fraud_prevented_share_usd"]))}
-      {_row("Fraud dollars executed", "n/a", _usd(naive["fraud_loss_usd"]), _usd(realistic["fraud_loss_usd"]), _usd(defended["fraud_loss_usd"]))}
-      {_row("Legitimate agents denied at end", _pct(v1["legit"]["final"]["deny"]), _pct(naive["legit_final"]["deny"]), _pct(realistic["legit_final"]["deny"]), _pct(defended["legit_final"]["deny"]))}
-      {_row("Legitimate agents in step-up at end", _pct(v1["legit"]["final"]["step_up"]), _pct(naive["legit_final"]["step_up"]), _pct(realistic["legit_final"]["step_up"]), _pct(defended["legit_final"]["step_up"]))}
-      {_row("Legitimate dollars denied", "n/a", _usd(naive["legit_usd_denied"]), _usd(realistic["legit_usd_denied"]), _usd(defended["legit_usd_denied"]))}
-      {_row("Fake-report targets below 500", "not in this run", "not in this run", _target_share(realistic, "targets_final_below500"), _target_share(defended, "targets_final_below500"))}
-      {_row("Ring agents reaching 650", "not in this run", "not in this run", _pct(realistic["ring_peak_ge650"]), _pct(defended["ring_peak_ge650"]))}
-      {_row("Ring agents reaching 750", "not in this run", "not in this run", _pct(realistic["ring_peak_ge750"]), _pct(defended["ring_peak_ge750"]))}
-      {_row("Fresh identities after denial", "not in this run", str(naive["sybil_identities_created"]), str(realistic["sybil_identities_created"]), str(defended["sybil_identities_created"]))}
-      {_row("Attacker cost to fabricate positives", "n/a", _usd(naive["attacker_fab_cost_usd"]), _usd(realistic["attacker_fab_cost_usd"]), _usd(defended["attacker_fab_cost_usd"]))}
+      {_row("Fraud dollars attempted", _usd(unaware["attempted_fraud_usd"]), _usd(adaptive["attempted_fraud_usd"]))}
+      {_row("Fraud dollars denied outright", _usd(unaware["blocked_by_deny_usd"]), _usd(adaptive["blocked_by_deny_usd"]))}
+      {_row("Fraud dollars caught by step-up", _usd(unaware["caught_by_stepup_usd"]), _usd(adaptive["caught_by_stepup_usd"]))}
+      {_row("Fraud dollars executed", _usd(unaware["fraud_loss_usd"]), _usd(adaptive["fraud_loss_usd"]))}
+      {_row("Share of attempted dollars stopped", _pct(unaware["fraud_prevented_share_usd"]), _pct(adaptive["fraud_prevented_share_usd"]))}
+      {_row("Malicious actors denied at least once", _pct(unaware["mal_ever_denied"]), _pct(adaptive["mal_ever_denied"]))}
+      {_row("Malicious actors denied at day 90", _pct(unaware["mal_final_cur_identity"]["deny"]), _pct(adaptive["mal_final_cur_identity"]["deny"]))}
+      {_row("Malicious actors not allowed outright at day 90", _pct(unaware["mal_flagged_final"]), _pct(adaptive["mal_flagged_final"]))}
+      {_row("Legitimate agents denied at day 90", _pct(unaware["legit_final"]["deny"]), _pct(adaptive["legit_final"]["deny"]))}
+      {_row("Legitimate agents in step-up at day 90", _pct(unaware["legit_final"]["step_up"]), _pct(adaptive["legit_final"]["step_up"]))}
+      {_row("Legitimate transactions routed to step-up", _pct(unaware["legit_txn_share"]["step_up"]), _pct(adaptive["legit_txn_share"]["step_up"]))}
+      {_row("Ring theft executed", _usd(unaware["ring_theft_usd"]), _usd(adaptive["ring_theft_usd"]))}
+      {_row("Ring actors reaching 650", _pct(unaware["ring_peak_ge650"]), _pct(adaptive["ring_peak_ge650"]))}
+      {_row("Ring actors reaching 750", _pct(unaware["ring_peak_ge750"]), _pct(adaptive["ring_peak_ge750"]))}
+      {_row("Fake-report victims below 500 at day 90", _pct(unaware["targets_final_below500"]), _pct(adaptive["targets_final_below500"]))}
+      {_row("Fake-report victims ever below 500", _pct(unaware["targets_ever_below500"]), _pct(adaptive["targets_ever_below500"]))}
+      {_row("Fresh identities after denial", str(unaware["sybil_identities_created"]), str(adaptive["sybil_identities_created"]))}
+      {_row("Re-registrations linked to a denied identity", _linked(unaware), _linked(adaptive))}
     </tbody>
   </table></div>
-  {_figure(_CHARTS[0][0], _CHARTS[0][1])}
+  {_figure(*_CHARTS[0])}
 </section>
 <section>
-  <h2>v3, the scoring rules at commit 4281ffc</h2>
-  {_caption()}
-  <p>{v3["note"]} The same synthetic population is run twice: attackers who do not know the rules, and attackers who adapt to them. v3 has no separate chart files. The v1 and v2 charts above are from the earlier runs.</p>
-  <div class="table-scroll"><table class="sim">
-    <thead><tr><th>Measure</th><th>Unaware attackers</th><th>Adaptive attackers</th></tr></thead>
-    <tbody>
-      {_row("Fraud dollars attempted", unaware["fraud_attempted"], adaptive["fraud_attempted"])}
-      {_row("Fraud dollars stopped", unaware["fraud_stopped"], adaptive["fraud_stopped"])}
-      {_row("Fraud dollars executed", unaware["fraud_executed"], adaptive["fraud_executed"])}
-      {_row("Malicious actors denied at end", unaware["malicious_denied"], adaptive["malicious_denied"])}
-      {_row("Legitimate agents denied at end", unaware["legit_denied"], adaptive["legit_denied"])}
-      {_row("Legitimate agents in step-up at end", unaware["legit_step_up"], adaptive["legit_step_up"])}
-      {_row("Ring theft", unaware["ring_theft"], adaptive["ring_theft"])}
-      {_row("Fake-report victims below 500 at day 90", unaware["fake_below_500"], adaptive["fake_below_500"])}
-      {_row("Fake-report victims ever below 500", unaware["fake_ever_below_500"], adaptive["fake_ever_below_500"])}
-      {_row("Fresh identities after denial", unaware["sybils"], adaptive["sybils"])}
-    </tbody>
-  </table></div>
-  <p class="sim-banner">{LABEL}</p>
-</section>
-<section>
-  <h2>What we learned</h2>
+  <h2>What the run showed</h2>
   {_caption()}
   <ul>
-    <li>Against adaptive attackers, fraud dollars stopped fall from {_pct(naive["fraud_prevented_share_usd"])} (naive attackers, same engine) to {_pct(realistic["fraud_prevented_share_usd"])}. Executed fraud moves from {_usd(naive["fraud_loss_usd"])} to {_usd(realistic["fraud_loss_usd"])}.</li>
-    <li>Collusion is the largest hole in the unrevised score. {_pct(realistic["ring_peak_ge650"])} of ring agents reach 650 and {_pct(realistic["ring_peak_ge750"])} reach 750. Ring loss is {_usd(realistic["loss_by_tier"]["ring"])} of {_usd(realistic["attempt_by_tier"]["ring"])} attempted. Fabrication cost in that run is {_usd(realistic["attacker_fab_cost_usd"])}.</li>
-    <li>Fake reports hit {realistic["fake_report_targets"]} synthetic legitimate agents with {realistic["fake_reports_filed"]} reports. {_target_share(realistic, "targets_final_below500")} of those targets end below 500, and {_target_share(realistic, "targets_final_below650")} end below 650. Legitimate agents denied at the end rise to {_pct(realistic["legit_final"]["deny"])}.</li>
-    <li>The proposed-defense column raises fraud dollars stopped to {_pct(defended["fraud_prevented_share_usd"])}, cuts ring loss to {_usd(defended["loss_by_tier"]["ring"])}, and leaves {_target_share(defended, "targets_final_below500")} of fake-report targets below 500. Executed fraud in that column is still {_usd(defended["fraud_loss_usd"])}. Fresh identities rise from {realistic["sybil_identities_created"]} to {defended["sybil_identities_created"]}.</li>
+    <li>About three quarters of attempted fraud dollars are stopped. Executed fraud is {_usd(unaware["fraud_loss_usd"])} when attackers do not know the rules and {_usd(adaptive["fraud_loss_usd"])} when they do. {_pct(adaptive["mal_flagged_final"])} of adaptive malicious actors are not allowed outright at day 90.</li>
+    <li>Turning velocity limits off raises adaptive executed fraud from {_usd(adaptive["fraud_loss_usd"])} to {_usd(data["defense_off"]["adaptive_no_velocity"]["fraud_loss_usd"])}.</li>
+    <li>Ring theft is {_usd(unaware["ring_theft_usd"])} against unaware attackers and {_usd(adaptive["ring_theft_usd"])} against adaptive attackers. {_pct(adaptive["ring_peak_ge650"])} of adaptive ring actors reach 650, and {_pct(adaptive["ring_peak_ge750"])} reach 750.</li>
+    <li>No targeted legitimate agent is below 500 at day 90. {_pct(adaptive["targets_ever_below500"])} dip below 500 at some point against adaptive attackers. With reporter reputation off, that share is {_pct(data["defense_off"]["adaptive_no_reporter_reputation"]["targets_ever_below500"])}.</li>
+    <li>Unaware re-registrations are linked {_linked(unaware)}. Adaptive re-registrations are linked {_linked(adaptive)}. A fresh operator with fresh signals is not linked.</li>
+    <li>Legitimate agents in step-up at day 90 are {_pct(adaptive["legit_final"]["step_up"])}, and {_pct(adaptive["legit_txn_share"]["step_up"])} of legitimate transactions are routed to step-up. Legitimate agents denied at day 90 are {_pct(adaptive["legit_final"]["deny"])}. With the established-operator path off, legitimate step-up is {_pct(data["defense_off"]["adaptive_no_established_operator_path"]["legit_final"]["step_up"])}.</li>
   </ul>
-  {_figure(_CHARTS[1][0], _CHARTS[1][1])}
-  {_figure(_CHARTS[2][0], _CHARTS[2][1])}
+  {_figure(*_CHARTS[4])}
 </section>
 <section>
-  <h2>By attacker type and merchant context</h2>
+  <h2>By attacker type</h2>
   {_caption()}
   <div class="table-scroll"><table class="sim">
-    <thead><tr><th>Attacker type</th><th>Actors</th><th>Fraud dollars attempted</th><th>Lost, current score</th><th>Lost, plus defenses</th><th>Flagged at end, current</th></tr></thead>
+    <thead><tr><th>Attacker type</th><th>Actors</th><th>Attempted, unaware / adaptive</th><th>Executed, unaware / adaptive</th><th>Not allowed outright at day 90</th></tr></thead>
     <tbody>
-      {_tier_row("Static", "static", realistic, defended)}
-      {_tier_row("Sleeper", "sleeper", realistic, defended)}
-      {_tier_row("Smurf", "smurf", realistic, defended)}
-      {_tier_row("Collusion ring", "ring", realistic, defended)}
-      {_tier_row("Self-dealing", "selfdeal", realistic, defended)}
+      {"".join(_tier_row(label, key, unaware, adaptive) for label, key in _TIERS)}
     </tbody>
   </table></div>
-  <div class="table-scroll"><table class="sim">
-    <thead><tr><th>Merchant context</th><th>Fraud dollars attempted</th><th>Lost, current score</th><th>Lost, plus defenses</th></tr></thead>
-    <tbody>
-      {_segment_row("Shopping", "shopping", realistic, defended)}
-      {_segment_row("Travel", "travel", realistic, defended)}
-      {_segment_row("Treasury", "treasury", realistic, defended)}
-      {_segment_row("Assistant", "assistant", realistic, defended)}
-    </tbody>
-  </table></div>
-  {_figure(_CHARTS[3][0], _CHARTS[3][1])}
-  {_figure(_CHARTS[4][0], _CHARTS[4][1])}
-  {_figure(_CHARTS[5][0], _CHARTS[5][1])}
+  {_figure(*_CHARTS[3])}
+  {_figure(*_CHARTS[1])}
+  {_figure(*_CHARTS[2])}
 </section>
 <section>
-  <h2>Roadmap</h2>
+  <h2>What each defense holds back</h2>
   {_caption()}
-  <p>The proposed-defense column above is the synthetic model. It is not a measurement of the code. The service now has a first version of the following rules, on by default and switchable with <code>GAB_DEFENSES</code>. They are not the same parameters as that column.</p>
-  <ol>
-    <li><strong>Transaction-linked reports.</strong> A report changes the score only when the reporter has an allowed verify recorded with that agent. The report is still stored. <code>counts</code> is false when it does not affect the score.</li>
-    <li><strong>Reporter reputation.</strong> An organization younger than 30 days, or with no recorded creation time, weighs 0.3. Each upheld dispute against that reporter halves the weight again.</li>
-    <li><strong>Settled-activity cap.</strong> Settled-activity points diminish per reporter and stop at 16 points from one reporter and 25 points in total.</li>
-    <li><strong>Velocity windows.</strong> More than 25 allowed verifies in a UTC day, or more than 15,000 in one currency, steps up. At a score of 750 or more the windows triple. A linked re-registration halves them for 14 days. Shopping, travel, treasury, and assistant use a tighter window. A burst above the agent's own median, or a cash-out after a quiet week or a recent settled-credit rise, also steps up.</li>
-    <li><strong>Re-registration friction.</strong> A new agent can be linked by the same operator, or by a device, key, payment-instrument, timing, or evidence-hash signal, including a new operator organization. A revoked or fraud-reported agent stays linkable for 180 days. The new agent inherits that negative history with a 30-day half-life, plus the flat penalty while the 14-day window is open. The service does not collect a government identifier.</li>
-    <li><strong>Ring detection.</strong> Settled credit is dropped inside a strongly connected component of any length, when organizations share a signal, and when a cluster of at least three organizations keeps 80 percent of its transaction volume inside the cluster.</li>
-    <li><strong>Faster dispute path.</strong> An open dispute against a young reporter holds that report's negative points until an admin resolves it. Uphold still removes the report. This is a score hold, not a staffed review clock.</li>
-    <li><strong>Identity proofing.</strong> Registration records a key binding. operator_verified counts only with an operator evidence hash, and institution_attested counts only with a wallet or bank evidence hash. The service checks the hash format. It does not collect a government identifier.</li>
-  </ol>
-  <h3>Still open</h3>
-  <ul>
-    <li>The v3 column measures commit 4281ffc. It does not measure the signal lookback, inherited history, longer-cycle rings, segment velocity, established-operator path, cheap-link weight, or report-consistency checks added after that commit.</li>
-    <li>An outside issuer check for those evidence hashes is not in this version.</li>
-    <li>Cross-currency velocity is not converted. Only the action's own currency adds toward the amount window.</li>
-    <li>The synthetic run's false-positive cluster rate is not what this ring rule measures.</li>
-  </ul>
-  <p class="sim-banner">{LABEL}</p>
+  <p>Each row is the same synthetic population with one defense switched off. The controls overlap, so the row is what that control holds back in this run.</p>
+  <div class="table-scroll"><table class="sim">
+    <thead><tr><th>Adaptive attackers</th><th>Executed fraud</th><th>Stopped</th><th>Ring theft</th><th>Victims ever below 500</th><th>Legitimate agents in step-up</th><th>Re-registrations linked</th></tr></thead>
+    <tbody>
+      {"".join(_ablation_row(label, key, data, adaptive) for label, key in _ABLATION)}
+    </tbody>
+  </table></div>
+</section>
+<section>
+  <h2>Sensitivity</h2>
+  {_caption()}
+  <div class="table-scroll"><table class="sim">
+    <thead><tr><th>Adaptive-attacker setting</th><th>Executed fraud</th><th>Stopped</th><th>Ring theft</th><th>Victims ever below 500</th><th>Re-registrations linked</th></tr></thead>
+    <tbody>
+      {_ablation_row("Base case", None, data, adaptive)}
+      {"".join(_ablation_row(label, key, data, adaptive) for label, key in _SENSITIVITY)}
+    </tbody>
+  </table></div>
+  <p>Learn more at <a href="https://globalagentbureau.com">globalagentbureau.com</a>.</p>
+  {_caption()}
 </section>
 """
 
@@ -189,46 +173,43 @@ def _row(label: str, *cells: str) -> str:
     return f"<tr><th>{label}</th>{joined}</tr>"
 
 
-def _tier_row(label: str, key: str, realistic: dict, defended: dict) -> str:
-    attempted = realistic["attempt_by_tier"][key]
-    lost = realistic["loss_by_tier"][key]
-    share = 0 if attempted == 0 else lost / attempted
+def _tier_row(label: str, key: str, unaware: dict, adaptive: dict) -> str:
     return _row(
         label,
-        str(realistic["tier_counts"][key]),
-        _usd(attempted),
-        f"{_usd(lost)} ({_pct(share)} of attempted)",
-        _usd(defended["loss_by_tier"][key]),
-        _pct(realistic["tier_flagged"][key]),
+        str(adaptive["tier_counts"][key]),
+        f"{_usd(unaware['attempt_by_tier'][key])} / {_usd(adaptive['attempt_by_tier'][key])}",
+        f"{_usd(unaware['loss_by_tier'][key])} / {_usd(adaptive['loss_by_tier'][key])}",
+        f"{_pct(unaware['tier_flagged'][key])} / {_pct(adaptive['tier_flagged'][key])}",
     )
 
 
-def _segment_row(label: str, key: str, realistic: dict, defended: dict) -> str:
+def _ablation_row(label: str, key: str | None, data: dict, baseline: dict) -> str:
+    row = baseline if key is None else data["defense_off"].get(key) or data["sensitivity"][key]
     return _row(
         label,
-        _usd(realistic["attempt_by_segment"][key]),
-        _usd(realistic["loss_by_segment"][key]),
-        _usd(defended["loss_by_segment"][key]),
+        _usd(row["fraud_loss_usd"]),
+        _pct(row["fraud_prevented_share_usd"]),
+        _usd(row["ring_theft_usd"]),
+        _pct(row["targets_ever_below500"]),
+        _pct(row["legit_final"]["step_up"]),
+        _linked(row),
     )
+
+
+def _linked(row: dict) -> str:
+    return f"{row['rereg_linked']} of {row['rereg_total']}"
 
 
 def _pct(value: float) -> str:
-    return f"{value * 100:.1f}%"
+    percent = value * 100
+    if percent < 1:
+        return f"{percent:.2f}%"
+    if percent < 10:
+        return f"{percent:.1f}%"
+    return f"{round(percent):.0f}%"
 
 
 def _usd(value: float) -> str:
-    return f"${value:,.2f}"
-
-
-def _flagged_v1(v1: dict) -> str:
-    final = v1["malicious"]["final"]
-    return _pct(final["step_up"] + final["deny"])
-
-
-def _txn_stop(v1: dict) -> str:
-    fraud = v1["fraud_txns"]
-    return f"{_pct(fraud['not_allowed'] / fraud['total'])} of fraud transactions"
-
-
-def _target_share(scenario: dict, key: str) -> str:
-    return f"{_pct(scenario[key])} of {scenario['fake_report_targets']}"
+    if value >= 100_000:
+        return f"${value / 1_000_000:.2f}M"
+    return f"${value / 1_000:.0f}k"

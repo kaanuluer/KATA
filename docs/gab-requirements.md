@@ -57,7 +57,7 @@ Acceptance: a merchant lookup omits `principal_id`, a fingerprint lookup returns
 - The principal public key inside the signed mandate is bound on first store. A later agreement signed by a different principal key is rejected.
 - `POST /v1/verify` evaluates the payment with the reference library, including cumulative limits and the named intent when `intent_id` is set. Several mandates inside one agreement are the sub-intents.
 - An allowed verify records an interaction for the caller's organization, or for `counterparty_org_id` when that field names an organization. That interaction is what lets a later report affect the score.
-- When velocity limits are on, an allow that would exceed the UTC-day count (default 25) or the same-currency amount (default 15,000) becomes `STEP_UP` with `VELOCITY_COUNT` or `VELOCITY_AMOUNT` and does not append the ledger. A score of 750 or more triples both windows. A re-registration link halves them for 14 days. An action `segment` of shopping, travel, treasury, or assistant uses the tighter of that cap and its segment window. A burst above the agent's own history, or a cash-out after a quiet week or a recent settled-credit rise, is `VELOCITY_BURST` or `VELOCITY_CASHOUT`.
+- When velocity limits are on, an allow that would exceed the UTC-day count (default 25) or the same-currency amount (default 15,000) becomes `DENY` with `kata_decision` `BLOCK` and `VELOCITY_COUNT` or `VELOCITY_AMOUNT`, and does not append the ledger. A score of 750 or more triples both windows. A re-registration link halves them for 14 days. An action `segment` of shopping, travel, treasury, or assistant uses the tighter of that cap and its segment window. A burst above the agent's own history, or a cash-out after a quiet week or a recent settled-credit rise, is `DENY` with `VELOCITY_BURST` or `VELOCITY_CASHOUT`.
 - An inactive agent is `DENY` / `BLOCK` / `AGENT_NOT_ACTIVE`.
 - No active agreement is `DENY` / `NO_ACTIVE_AGREEMENT`.
 - More than one active agreement and no `agreement_id` is `STEP_UP` / `AGREEMENT_NOT_SELECTED`.
@@ -73,7 +73,7 @@ Acceptance: 1300 CAD against a 1500 ceiling and a 2000 cumulative cap is `ALLOW`
 - Optional outcome is `settled`, `loss`, or `cleared`.
 - The same reporter, agent, kind, and evidence hash is 409.
 - Each organization has a daily cap (default 20). Over the cap is 429 `daily report cap reached`.
-- With the default defenses, the report changes the score only when that reporter has a recorded allowed verify with the agent. Optional `action_id` must be one of those verifies. The stored report carries `counts: false` otherwise. The filing is still accepted.
+- With the default defenses, a report is rejected with 400 unless that reporter has a recorded allowed verify with the agent that meets the link minimum. The report is not stored. Optional `action_id` must be one of those verifies. A stored report has `counts: true`.
 - The operator of the agent, and any organization that has filed at least one report, receives full report bodies. Everyone else with `report` scope receives counts only.
 - A new incident appends a transparency-log entry of hashes and ids, not the free-text summary, and notifies subscribers.
 
@@ -109,17 +109,17 @@ The service does not pass the raw claim into that formula when proofing is on. I
 
 These rules are on unless `GAB_DEFENSES=0` or the matching flag is `0`.
 
-- Transaction link (`GAB_REQUIRE_REPORT_LINK`): an unlinked report does not enter the score. `GAB_LINK_QUALITY` further ignores a verify under `GAB_LINK_MIN_AMOUNT` (5). A verify of at least `GAB_LINK_FULL_AMOUNT` (100) counts in full. A smaller qualifying verify counts at `GAB_LINK_THIN_WEIGHT` (0.25) unless the agent has `GAB_LINK_MIN_COUNTERPARTIES` (2) counterparties and the link is at least `GAB_LINK_MIN_AGE_DAYS` (1) old.
+- Transaction link (`GAB_REQUIRE_REPORT_LINK`): a report with no allowed verify, or with a verify under `GAB_LINK_MIN_AMOUNT` (5), is rejected and not stored. A verify of at least `GAB_LINK_FULL_AMOUNT` (100) counts in full. A smaller qualifying verify counts at `GAB_LINK_THIN_WEIGHT` (0.25) unless the agent has `GAB_LINK_MIN_COUNTERPARTIES` (2) counterparties and the link is at least `GAB_LINK_MIN_AGE_DAYS` (1) old.
 - Reporter reputation (`GAB_REPORTER_REPUTATION`): an organization younger than `GAB_NEW_REPORTER_DAYS` (30), or with no creation time, is multiplied by `GAB_NEW_REPORTER_WEIGHT` (0.3). Each upheld dispute against that reporter halves the weight again, up to eight times. `GAB_REPORT_CONSISTENCY` keeps that weight and then multiplies a negative report by 0.5 when the same reporter also has settled activity for that agent, by 0.4 when that reporter has at least 3 negative reports aimed at 1 or 2 operators, and by 0.5 when at least 3 reporters reused the same evidence hash.
 - Positive cap (`GAB_POSITIVE_CAP`): settled points diminish for repeat reports from the same reporter, then stop at `GAB_SETTLED_CAP_PER_REPORTER` (16) and `GAB_SETTLED_CAP_TOTAL` (25). `GAB_SETTLED_CAP_SCALES` raises that total by 5, and the per-reporter cap by 2, for each 500 of external volume once the agent has at least 3 counterparties and 500 of external volume. Each of those counterparties must have at least 100 with the agent. The raise stops after 8 steps. A ring with no external volume keeps the base cap.
-- Velocity (`GAB_VELOCITY`, `GAB_VELOCITY_ADAPTIVE`): the static windows above still apply. Segment windows are shopping 8 / 1,000, travel 6 / 2,500, treasury 4 / 5,000, and assistant 10 / 800. `VELOCITY_BURST` fires when today exceeds `GAB_VELOCITY_BURST_MULTIPLE` (3) times the median of at least three earlier days. `VELOCITY_CASHOUT` fires at `GAB_VELOCITY_CASHOUT_AMOUNT` (500) after `GAB_VELOCITY_QUIET_DAYS` (7), or after settled credit in the last 7 days when today also clears that multiple.
+- Velocity (`GAB_VELOCITY`, `GAB_VELOCITY_ADAPTIVE`): the static windows above still apply, and exceeding one is `DENY`. Segment windows are shopping 8 / 1,000, travel 6 / 2,500, treasury 4 / 5,000, and assistant 10 / 800. `VELOCITY_BURST` denies when today exceeds `GAB_VELOCITY_BURST_MULTIPLE` (3) times the median of at least three earlier days. `VELOCITY_CASHOUT` denies at `GAB_VELOCITY_CASHOUT_AMOUNT` (500) after `GAB_VELOCITY_QUIET_DAYS` (7), or after settled credit in the last 7 days when today also clears that multiple.
 - Ring detection (`GAB_RING_DETECTION`): settled credit is dropped when the reporter and the agent's operator sit in the same strongly connected component, so a closed loop can be longer than four. Organizations that share a device, key, payment, timing, evidence, or `shared_signal` are treated as one node, which catches a one-way reporter. A group of at least `GAB_RING_MIN_CLUSTER` (3) organizations whose internal transaction volume is at least `GAB_RING_INTERNAL_RATIO` (0.8) of its total volume is discounted the same way. Filing the report rescores agents in that cluster. Reason code `RING_DISCOUNTED`. `005_org_signals.sql` stores the organization signals.
 - Re-registration (`GAB_REREG_LINK`): a new agent is linked to a denied agent in three ways. The same operator matches for `GAB_REREG_LOOKBACK_DAYS` (14). A shared `device_signal`, `key_signal`, `payment_instrument`, `timing_signal`, or `proofing_evidence` matches across operator organizations for `GAB_REREG_SIGNAL_LOOKBACK_DAYS` (90). A revoked, suspended, or fraud-reported agent matches for `GAB_REREG_MALICIOUS_LOOKBACK_DAYS` (180), including the same operator after the 14-day window. The flat `IDENTITY_LINK` penalty is still `GAB_REREG_PENALTY` (80), or the deficit below 500, capped at 200, and it still expires after 14 days. `GAB_INHERIT_HISTORY` also copies that agent's negative reports onto the new score as `INHERITED_HISTORY`, decaying by half every `GAB_INHERIT_HALF_LIFE_DAYS` (30). Positive reports are not copied. The service does not collect a government identifier. Callers should pass a hash for a payment instrument or a timing pattern.
 - Dispute hold (`GAB_DISPUTE_HOLD`): while a dispute is open or under review, a negative report from a young reporter does not reduce the score. Reason code `DISPUTE_HOLD`. Resolving the dispute removes the hold.
 
-The synthetic stress test on `/simulation` is a separate model. Its "proposed defenses" column is not a measurement of these rules.
+The synthetic stress test on `/simulation` reads `simulation-results.json`. Every figure on that page is synthetic test data.
 
-Acceptance: an unlinked chargeback leaves the score unchanged; a linked chargeback from a young reporter is held while the dispute is open; a second allowed verify past a count cap of 1 is `STEP_UP` / `VELOCITY_COUNT`; a new agent after a revocation carries `IDENTITY_LINK`.
+Acceptance: an unlinked chargeback is 400 and leaves the score unchanged; a linked chargeback from a young reporter is held while the dispute is open; a second allowed verify past a count cap of 1 is `DENY` / `VELOCITY_COUNT`; a new agent after a revocation carries `IDENTITY_LINK`.
 
 ### 2.6.2 Identity proofing
 
@@ -175,7 +175,7 @@ Acceptance: after the login row is bound to the registered principal, the portal
 - A principal files a dispute against a report on their agent. Status starts at `open`.
 - Admin review sets `under_review` or `resolved`. A resolved dispute requires outcome `upheld`, `rejected`, or `partial`.
 - `upheld` excludes the report from the score and rescores the agent.
-- Filing the dispute rescores the agent. With the dispute hold on, an open dispute against a young reporter pauses that report's negative points until review.
+- Filing the dispute rescores the agent. With the dispute hold on, an open dispute against a young reporter pauses that report's negative points until an admin resolves it. There is no review deadline.
 
 Acceptance: an upheld policy-violation dispute leaves the score greater than or equal to the score before review.
 
@@ -187,7 +187,7 @@ Acceptance: an upheld policy-violation dispute leaves the score greater than or 
 ### 2.11 Web UI
 
 - `/` is the Global Agent Bureau home. It keeps the four KATA questions, the sample sign-and-check, the live revocation list, published keys, and the tree head, and it links to the dashboard, portal, history, simulation, docs, and GitHub.
-- `/simulation` publishes the October 15, 2026 synthetic stress test, including v1, v2, and a v3 column measured against the scoring rules at commit 4281ffc. Every table and chart on that page is labeled simulated test data. The numbers are read from `service/kata_service/static/simulation-results.json`. The v1 and v2 charts are the PNGs shipped beside that file. v3 has no separate chart files. The v3 column is not a measurement of the rules added after 4281ffc.
+- `/simulation` publishes the latest synthetic stress test only. Every table and chart is labeled `SYNTHETIC TEST DATA – not real customers`. The numbers are read from `service/kata_service/static/simulation-results.json`. The five charts are the PNGs shipped beside that file. The page describes Global Agent Bureau as an agent bureau, names the PolyForm Noncommercial License 1.0.0, and links to globalagentbureau.com.
 - The header mark is the single file `service/kata_service/static/gab-logo.svg`. Replacing that file replaces the mark.
 - `/dashboard` signs in with an API key or an organization email and can register an agent, run an inquiry, file an incident, list alerts, manage keys, and, with the admin token, review disputes.
 - `/portal` signs in with a magic link and shows agents, assurance level, score, risk, authorizations, inquiries, incidents, and the disputes the principal has filed.
@@ -327,7 +327,7 @@ Supabase is not part of this deployment. There is no `SUPABASE_URL`, anon key, o
 - Mail delivery is a plug-in. The default mailer writes the link to the process log. There is no bundled SMTP or hosted mailbox.
 - The development mailbox is in memory and is not shared across serverless instances.
 - A person who already has a principal id must have that email registered against it. A brand-new magic link creates a new principal id and will not see another principal's agents.
-- Anti-gaming adds a transaction link, reporter reputation, a settled-credit cap, cluster ring detection, adaptive velocity step-up, re-registration history, and an evidence gate on operator and institution claims. It does not convert currencies. The evidence hash is not confirmed by an outside issuer. The synthetic "proposed defenses" column on `/simulation` is not a measurement of these rules.
+- Anti-gaming adds a transaction link, reporter reputation, a settled-credit cap, cluster ring detection, adaptive velocity denial, re-registration history, and an evidence gate on operator and institution claims. It does not convert currencies. The evidence hash is not confirmed by an outside issuer. `/simulation` publishes the latest synthetic stress test only.
 - Score-drop alerting uses a 50-point threshold and does not page a human.
 - `GET /v1/score-model` publishes the rule weights. It does not fit them from outcomes. `risk` is `1000 - score`.
 - Consortium matching is an exact fingerprint compare with a count threshold. It is not a private set intersection, and it does not share reports across institutions.

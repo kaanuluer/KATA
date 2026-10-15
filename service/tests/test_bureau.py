@@ -205,6 +205,14 @@ def test_reports_are_reciprocal_and_inquiries_are_visible_to_the_principal():
     merchant_key = _key(client, merchant["org_id"])
     wallet_key = _key(client, wallet["org_id"])
     _register(client, operator_key)
+    stored = client.post(
+        "/v1/agents/shopper-01/intents",
+        headers={**_auth(operator_key), "Content-Type": "application/json"},
+        content=_agreement().to_json(),
+    )
+    assert stored.status_code == 200, stored.text
+    allowed = client.post("/v1/verify", headers=_auth(merchant_key), json={"agent_id": "shopper-01", "action": _action(10, "act_report")})
+    assert allowed.json()["verdict"] == "ALLOW"
     evidence = "sha256:" + "ab" * 32
     filed = client.post(
         "/v1/reports",
@@ -306,6 +314,14 @@ def test_alerts_are_signed_and_disputes_change_the_score():
     assert body["signature"]["protected"]
     evidence = "sha256:" + "ef" * 32
     client.post("/v1/agents/shopper-01/status", headers=_auth("admin-test-token"), json={"status": "active"})
+    stored = client.post(
+        "/v1/agents/shopper-01/intents",
+        headers={**_auth(operator_key), "Content-Type": "application/json"},
+        content=_agreement().to_json(),
+    )
+    assert stored.status_code == 200, stored.text
+    allowed = client.post("/v1/verify", headers=_auth(merchant_key), json={"agent_id": "shopper-01", "action": _action(10, "act_cb")})
+    assert allowed.json()["verdict"] == "ALLOW"
     filed = client.post(
         "/v1/reports",
         headers=_auth(merchant_key),
@@ -339,6 +355,8 @@ def test_portal_revoke_and_admin_dispute_review():
         content=agreement.to_json(),
     )
     evidence = "sha256:" + "11" * 32
+    allowed = client.post("/v1/verify", headers=_auth(merchant_key), json={"agent_id": "shopper-01", "action": _action(10, "act_policy")})
+    assert allowed.json()["verdict"] == "ALLOW"
     filed = client.post(
         "/v1/reports",
         headers=_auth(merchant_key),

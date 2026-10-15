@@ -24,7 +24,7 @@ def test_synthetic_case_is_labeled_and_shows_the_gap():
     assert ("org-partner", "org-operator") in result["ring_edges"]
 
 
-def test_unlinked_report_is_stored_and_does_not_move_the_score():
+def test_unlinked_report_is_rejected_and_does_not_move_the_score():
     client = _client()
     operator = _org(client, "Harbor Agents", "agent_operator")
     merchant = _org(client, "Techstore", "merchant")
@@ -42,10 +42,12 @@ def test_unlinked_report_is_stored_and_does_not_move_the_score():
             "summary": "No recorded verify",
         },
     )
-    assert filed.status_code == 200, filed.text
-    assert filed.json()["counts"] is False
+    assert filed.status_code == 400, filed.text
+    assert "link minimum" in filed.json()["error"]
     after = client.get("/v1/agents/shopper-01", headers=_auth(operator_key)).json()["score"]
     assert after == before
+    listed = client.get("/v1/agents/shopper-01/reports", headers=_auth(merchant_key))
+    assert listed.json()["counts"]["chargeback"] == 0
 
 
 def test_velocity_count_steps_up_without_recording_the_second_spend():
@@ -67,7 +69,7 @@ def test_velocity_count_steps_up_without_recording_the_second_spend():
         json={"agent_id": "shopper-01", "action": _action(10, "act_velocity")},
     )
     assert second.status_code == 200, second.text
-    assert second.json()["verdict"] == "STEP_UP"
+    assert second.json()["verdict"] == "DENY"
     assert "VELOCITY_COUNT" in second.json()["reasons"]
 
 

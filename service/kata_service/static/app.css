@@ -438,7 +438,9 @@ main > h1 { max-width: none; }
   border-radius: 12px;
 }
 .doc-body pre code { background: transparent; padding: 0; }
-.table-scroll { overflow-x: auto; margin: 12px 0 18px; }
+.table-scroll { overflow-x: auto; margin: 12px 0 18px; -webkit-overflow-scrolling: touch; }
+.table-scroll table.sim { width: max-content; min-width: 100%; }
+.table-scroll table.sim th, .table-scroll table.sim td { white-space: nowrap; }
 .doc-body table {
   width: 100%;
   border-collapse: collapse;

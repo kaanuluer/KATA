@@ -14,7 +14,7 @@ def test_a_shopping_amount_uses_the_tighter_segment_window():
     action = _action(1200, "act_shop")
     action["segment"] = "shopping"
     result = client.post("/v1/verify", headers=_auth(key), json={"agent_id": "shopper-01", "action": action})
-    assert result.json()["verdict"] == "STEP_UP"
+    assert result.json()["verdict"] == "DENY"
     assert "VELOCITY_AMOUNT" in result.json()["reasons"]
 
 
@@ -24,7 +24,7 @@ def test_a_burst_above_the_agents_own_median_steps_up():
     for offset, day in enumerate((3, 2, 1)):
         service.repo.add_interaction(_row(f"old-{offset}", _days_ago(day), "100"))
     result = client.post("/v1/verify", headers=_auth(key), json={"agent_id": "shopper-01", "action": _action(400, "act_burst")})
-    assert result.json()["verdict"] == "STEP_UP"
+    assert result.json()["verdict"] == "DENY"
     assert "VELOCITY_BURST" in result.json()["reasons"]
 
 
@@ -32,7 +32,7 @@ def test_a_cash_out_after_a_quiet_week_steps_up():
     client, key = _ready()
     client.app.state.bureau.repo.add_interaction(_row("quiet", _days_ago(10), "20"))
     result = client.post("/v1/verify", headers=_auth(key), json={"agent_id": "shopper-01", "action": _action(600, "act_quiet")})
-    assert result.json()["verdict"] == "STEP_UP"
+    assert result.json()["verdict"] == "DENY"
     assert "VELOCITY_CASHOUT" in result.json()["reasons"]
 
 
@@ -61,7 +61,7 @@ def test_a_cash_out_after_settled_credit_steps_up():
     )
     assert filed.status_code == 200, filed.text
     result = client.post("/v1/verify", headers=_auth(key), json={"agent_id": "shopper-01", "action": _action(600, "act_cash")})
-    assert result.json()["verdict"] == "STEP_UP"
+    assert result.json()["verdict"] == "DENY"
     assert "VELOCITY_CASHOUT" in result.json()["reasons"]
 
 

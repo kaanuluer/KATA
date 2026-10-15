@@ -55,7 +55,8 @@ def test_a_two_dollar_verify_does_not_let_a_chargeback_count():
             "action_id": "act_cheap",
         },
     )
-    assert filed.status_code == 200, filed.text
-    assert filed.json()["counts"] is False
+    assert filed.status_code == 400, filed.text
     after = client.get("/v1/agents/shopper-01", headers=_auth(operator_key)).json()["score"]
     assert after == before
+    listed = client.get("/v1/agents/shopper-01/reports", headers=_auth(merchant_key))
+    assert listed.json()["counts"]["chargeback"] == 0

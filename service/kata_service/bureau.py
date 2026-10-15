@@ -1106,8 +1106,8 @@ class BureauService:
             reason = self._velocity_reason(agent, action, at)
             if reason:
                 payload = result.to_dict()
-                payload["verdict"] = "STEP_UP"
-                payload["kata_decision"] = "STEP_UP"
+                payload["verdict"] = "DENY"
+                payload["kata_decision"] = "BLOCK"
                 payload["reasons"] = [*list(payload.get("reasons") or []), reason]
                 payload["messages"] = [
                     *list(payload.get("messages") or []),
@@ -1161,7 +1161,9 @@ class BureauService:
             "created_at": self.stamp(),
             "excluded": False,
         }
-        record["counts"] = self._report_counts(agent, record)
+        if self.policy.require_transaction_link and not self._report_counts(agent, record):
+            raise BureauError(400, "a report requires an allowed verify with this agent that meets the link minimum")
+        record["counts"] = True
         shared = str(body.get("shared_signal") or "").strip()
         if shared:
             self.repo.add_org_signal(

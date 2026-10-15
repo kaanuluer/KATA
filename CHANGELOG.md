@@ -2,7 +2,9 @@
 
 ## 2026-10-15
 
-The simulation page adds the v3 synthetic column, measured at commit 4281ffc and labeled simulated. It is not a measurement of the rules added after that commit.
+An unlinked report, or a report whose verify is under the link minimum, is rejected and not stored. A velocity breach is `DENY` with `kata_decision` `BLOCK` and does not record the spend. An open dispute has no review deadline.
+
+`/simulation` shows only the latest synthetic stress test. Every figure is labeled SYNTHETIC TEST DATA – not real customers. Earlier test columns are not on the page.
 
 Negative reports now lose weight when they contradict a settled report from the same reporter, when one reporter concentrates negatives on one or two operators, or when several reporters reuse one evidence hash. Reporter reputation still applies.
 
@@ -10,7 +12,7 @@ A verify under 5 does not let a report affect the score. A verify under 100 weig
 
 An operator with 90 days of clean history can reach `operator_established` from a key binding alone, which sits between key-bound and operator-verified. The settled-credit cap stays 25 until an agent has three external counterparties and real external volume, and then it scales with that volume.
 
-Velocity limits now follow the action's segment and the agent's own history. Shopping, travel, treasury, and assistant use tighter daily windows, a day that jumps past three times the agent's median steps up, and so does a cash-out after a quiet week or a recent settled-credit rise.
+Velocity limits now follow the action's segment and the agent's own history. Shopping, travel, treasury, and assistant use tighter daily windows. A day that jumps past three times the agent's median is denied, and so is a cash-out after a quiet week or a recent settled-credit rise.
 
 Ring detection now discounts settled credit inside a strongly connected component of any length, when organizations share a signal, and when a cluster of at least three organizations keeps 80% of its transaction volume inside the cluster.
 

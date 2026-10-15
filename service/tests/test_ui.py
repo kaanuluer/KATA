@@ -186,26 +186,28 @@ def test_simulation_page_labels_every_figure_as_synthetic():
     page = client.get("/simulation")
     assert page.status_code == 200
     body = page.text
-    assert "SIMULATED / synthetic test data, not real customers" in body
-    assert body.count("SIMULATED / synthetic test data, not real customers") >= 8
+    assert "SYNTHETIC TEST DATA – not real customers" in body
+    assert body.count("SYNTHETIC TEST DATA – not real customers") >= 8
     for name in (
-        "sim-fraud-dollars.png",
-        "sim-collusion-scores.png",
-        "sim-fake-reports.png",
-        "sim-weekly-loss.png",
-        "sim-loss-by-attacker.png",
-        "sim-threshold-tradeoff.png",
+        "chart-final-1-fraud-dollars.png",
+        "chart-final-2-ring-scores.png",
+        "chart-final-3-fake-reports.png",
+        "chart-final-4-loss-by-attacker.png",
+        "chart-final-5-friction-sybils.png",
     ):
         assert f"/assets/{name}" in body
         asset = client.get(f"/assets/{name}")
         assert asset.status_code == 200
         assert asset.headers["content-type"].startswith("image/png")
-    assert "$1,764,170.85" in body
-    assert "76.9%" in body
-    assert "98.0%" in body
-    assert "What we learned" in body
-    assert "Roadmap" in body
+    assert "$0.71M" in body
+    assert "73%" in body
+    assert "370 of 371" in body
+    assert "agent bureau" in body.lower()
+    assert "https://globalagentbureau.com" in body
     assert "PolyForm Noncommercial" in body
+    assert "v1" not in body.lower()
+    assert "v2" not in body.lower()
+    assert "proposed defense" not in body.lower()
     assert "open source" not in body.lower()
     assert "open-source" not in body.lower()
     assert "credit bureau" not in body.lower()

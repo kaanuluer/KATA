@@ -774,7 +774,7 @@ _ENDPOINTS: tuple[dict[str, str], ...] = (
     {
         "method": "POST",
         "path": "/v1/verify",
-        "summary": "Checks a payment action against the agent's active stored agreement. ALLOW records the spend and the caller's organization as a transaction counterparty, unless counterparty_org_id names another organization. A daily count or amount window above the configured cap returns STEP_UP with VELOCITY_COUNT or VELOCITY_AMOUNT and does not record the spend. DENY maps to kata_decision BLOCK.",
+        "summary": "Checks a payment action against the agent's active stored agreement. ALLOW records the spend and the caller's organization as a transaction counterparty, unless counterparty_org_id names another organization. A daily count or amount window above the configured cap returns DENY with kata_decision BLOCK and VELOCITY_COUNT or VELOCITY_AMOUNT and does not record the spend. Other DENY results also use kata_decision BLOCK.",
         "request": '{\n  "agent_id": "shopper-01",\n  "action": {"action_id": "act_1", "action_type": "purchase", "amount": 1300, "currency": "CAD", "proposed_at": "2026-10-04T13:55:00Z"}\n}',
         "response": '{\n  "verdict": "ALLOW",\n  "kata_decision": "ALLOW",\n  "reasons": [],\n  "agent_id": "shopper-01",\n  "agreement_id": "agr_demo"\n}',
         "errors": "AGENT_NOT_ACTIVE, NO_ACTIVE_AGREEMENT, and AGREEMENT_NOT_SELECTED are bureau reasons. Library reasons such as AMOUNT_ABOVE_INTENT_CEILING are passed through.",
@@ -790,10 +790,10 @@ _ENDPOINTS: tuple[dict[str, str], ...] = (
     {
         "method": "POST",
         "path": "/v1/reports",
-        "summary": "Files a transaction outcome, fraud incident, chargeback, or policy violation. evidence_hash is sha256 and 64 hex characters. The same reporter, agent, kind, and hash is a duplicate. counts is true only when this organization has an allowed verify with the agent. An unlinked report is stored and does not change the score.",
+        "summary": "Files a transaction outcome, fraud incident, chargeback, or policy violation. evidence_hash is sha256 and 64 hex characters. The same reporter, agent, kind, and hash is a duplicate. The report is accepted only when this organization has an allowed verify with the agent that meets the link minimum. A stored report has counts true.",
         "request": '{\n  "agent_id": "shopper-01",\n  "kind": "chargeback",\n  "evidence_hash": "sha256:…",\n  "summary": "Disputed purchase.",\n  "action_id": "act_1"\n}',
-        "response": '{\n  "report_id": "rpt_…",\n  "kind": "chargeback",\n  "counts": false\n}',
-        "errors": "409 duplicate report. 429 when the organization exceeds the daily cap.",
+        "response": '{\n  "report_id": "rpt_…",\n  "kind": "chargeback",\n  "counts": true\n}',
+        "errors": "400 when no qualifying verify is on file. 409 duplicate report. 429 when the organization exceeds the daily cap.",
     },
     {
         "method": "POST",

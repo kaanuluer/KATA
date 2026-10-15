@@ -180,12 +180,11 @@ def create_app(
             "kata-icon.svg": "image/svg+xml",
             "kata-logo.svg": "image/svg+xml",
             "simulation-results.json": "application/json",
-            "sim-fraud-dollars.png": "image/png",
-            "sim-collusion-scores.png": "image/png",
-            "sim-fake-reports.png": "image/png",
-            "sim-weekly-loss.png": "image/png",
-            "sim-loss-by-attacker.png": "image/png",
-            "sim-threshold-tradeoff.png": "image/png",
+            "chart-final-1-fraud-dollars.png": "image/png",
+            "chart-final-2-ring-scores.png": "image/png",
+            "chart-final-3-fake-reports.png": "image/png",
+            "chart-final-4-loss-by-attacker.png": "image/png",
+            "chart-final-5-friction-sybils.png": "image/png",
         }.get(name)
         if media is None:
             return _error(404, "asset was not found")
