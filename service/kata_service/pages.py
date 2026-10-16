@@ -21,7 +21,7 @@ DOCUMENTS: tuple[tuple[str, str, str, str], ...] = (
         "quickstart",
         "quickstart.md",
         "Quickstart",
-        "Auth, agent registration, verify, inquire, report, and webhook signature checks.",
+        "Auth, registration, verify, MCP, sandbox keys, health, and rate limits.",
     ),
     (
         "gab-requirements",

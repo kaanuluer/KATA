@@ -52,10 +52,24 @@ def test_quickstart_uses_the_chapters_docs_page():
         "curl -sS",
         "sdk/python/gab.py",
         "Individuals are not scored",
+        "/mcp",
+        "verify_agent",
+        "check_revocation",
+        "fetch_signed_receipt",
+        "gab_test_",
+        "GAB_ENV",
+        "/v1/webhooks/test",
+        "/health",
+        "/v1/health",
+        "/status",
+        "Retry-After",
+        "GAB_RATE_LIMIT_PER_MINUTE",
+        "does not receive the <code>inquire</code> scope",
     ):
         assert needle in body
-    for banned in ("open source", "open-source", "credit bureau", "call"):
-        assert banned not in body.lower()
+    folded = body.lower().replace("tools/call", "")
+    for banned in ("open source", "open-source", "credit bureau", "call", "amex", "american express"):
+        assert banned not in folded
     index = client.get("/docs")
     assert 'href="/docs/quickstart"' in index.text
 
