@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import html
 import json
 import re
 import secrets
@@ -123,32 +124,128 @@ class SilentMailer:
         return None
 
 
+def magic_link_message(email: str, url: str, from_addr: str, *, ttl_seconds: int = 900):
+    """Plain text plus an HTML alternative. The token stays in the URL fragment."""
+
+    from email.message import EmailMessage
+
+    plain, rich = magic_link_bodies(url, ttl_seconds=ttl_seconds)
+    message = EmailMessage()
+    message["Subject"] = "Your Global Agent Bureau sign-in link"
+    message["From"] = from_addr
+    message["To"] = email
+    message.set_content(plain)
+    message.add_alternative(rich, subtype="html")
+    return message
+
+
+def magic_link_bodies(url: str, *, ttl_seconds: int = 900) -> tuple[str, str]:
+    expiry = _expiry_phrase(ttl_seconds)
+    ignore = "If you did not ask for it, ignore this message."
+    plain = (
+        "GAB_\n"
+        "Global Agent Bureau\n\n"
+        "Use this link to sign in.\n"
+        f"{expiry}\n"
+        f"{ignore}\n\n"
+        f"{url}\n\n"
+        "Global Agent Bureau is an agent bureau. Powered by KATA.\n"
+    )
+    return plain, _magic_link_html(url, expiry=expiry, ignore=ignore)
+
+
+def _expiry_phrase(seconds: int) -> str:
+    if seconds >= 60 and seconds % 60 == 0:
+        minutes = seconds // 60
+        unit = "minute" if minutes == 1 else "minutes"
+        return f"This link expires in {minutes} {unit}."
+    unit = "second" if seconds == 1 else "seconds"
+    return f"This link expires in {seconds} {unit}."
+
+
+def _magic_link_html(url: str, *, expiry: str, ignore: str) -> str:
+    safe_url = html.escape(url, quote=True)
+    safe_expiry = html.escape(expiry)
+    safe_ignore = html.escape(ignore)
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="supported-color-schemes" content="dark">
+<title>Your Global Agent Bureau sign-in link</title>
+</head>
+<body style="margin:0;padding:0;background:#13203B;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#13203B" style="background:#13203B;margin:0;padding:0;">
+<tr>
+<td align="center" style="padding:32px 16px;">
+<table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" bgcolor="#0C4E57" style="width:560px;max-width:560px;background:#0C4E57;border-radius:16px;">
+<tr>
+<td style="padding:28px 28px 8px 28px;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" bgcolor="#F3F7F7" style="background:#F3F7F7;border-radius:10px;">
+<tr>
+<td style="padding:10px 14px;font-family:Georgia,'Palatino Linotype',Palatino,serif;font-size:28px;line-height:1;letter-spacing:0.04em;color:#13203B;font-weight:bold;">GAB_</td>
+</tr>
+</table>
+</td>
+</tr>
+<tr>
+<td style="padding:16px 28px 0 28px;font-family:Georgia,'Palatino Linotype',Palatino,serif;font-size:26px;line-height:1.25;color:#F3F7F7;">Sign in to Global Agent Bureau</td>
+</tr>
+<tr>
+<td style="padding:12px 28px 0 28px;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.5;color:#D8F7EE;">Global Agent Bureau is an agent bureau. Use the button to sign in. Powered by KATA.</td>
+</tr>
+<tr>
+<td style="padding:24px 28px 0 28px;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0">
+<tr>
+<td bgcolor="#4FE0C2" style="background:#4FE0C2;border-radius:999px;">
+<a href="{safe_url}" style="display:inline-block;padding:14px 22px;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1;font-weight:bold;color:#12343A;text-decoration:none;">Sign in</a>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+<tr>
+<td style="padding:18px 28px 0 28px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.5;color:#E7F1F2;">Or copy this link:</td>
+</tr>
+<tr>
+<td style="padding:6px 28px 0 28px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.45;color:#4FE0C2;word-break:break-all;"><a href="{safe_url}" style="color:#4FE0C2;text-decoration:underline;word-break:break-all;">{safe_url}</a></td>
+</tr>
+<tr>
+<td style="padding:18px 28px 0 28px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#F3F7F7;">{safe_expiry}</td>
+</tr>
+<tr>
+<td style="padding:8px 28px 28px 28px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#D8F7EE;">{safe_ignore}</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+</body>
+</html>
+"""
+
+
 class SmtpMailer:
     """STARTTLS SMTP. The password is not included in the text representation."""
 
-    def __init__(self, host: str, port: int, user: str, password: str, from_addr: str) -> None:
+    def __init__(self, host: str, port: int, user: str, password: str, from_addr: str, ttl_seconds: int = 900) -> None:
         self.host = host
         self.port = port
         self.user = user
         self._password = password
         self.from_addr = from_addr
+        self.ttl_seconds = ttl_seconds
 
     def __repr__(self) -> str:
         return f"SmtpMailer(host={self.host!r}, port={self.port}, user={self.user!r})"
 
     def send_magic_link(self, email: str, url: str) -> None:
         import smtplib
-        from email.message import EmailMessage
 
-        message = EmailMessage()
-        message["Subject"] = "Your Global Agent Bureau sign-in link"
-        message["From"] = self.from_addr
-        message["To"] = email
-        message.set_content(
-            "Global Agent Bureau is an agent bureau. Use this link to open the portal. "
-            "The link expires soon. If you did not ask for it, ignore this message.\n\n"
-            f"{url}\n"
-        )
+        message = magic_link_message(email, url, self.from_addr, ttl_seconds=self.ttl_seconds)
         try:
             if self.port == 465:
                 with smtplib.SMTP_SSL(self.host, self.port, timeout=10) as smtp:
@@ -173,7 +270,8 @@ def mailer_from_settings(settings: object) -> Mailer:
     password = getattr(settings, "smtp_password", None)
     sender = getattr(settings, "smtp_from", None)
     if host and user and password and sender:
-        return SmtpMailer(host, int(getattr(settings, "smtp_port", 587) or 587), user, password, sender)
+        ttl = int(getattr(settings, "magic_link_ttl_seconds", 900) or 900)
+        return SmtpMailer(host, int(getattr(settings, "smtp_port", 587) or 587), user, password, sender, ttl)
     if getattr(settings, "dev_mailbox", False) or getattr(settings, "demo", False):
         return ConsoleMailer()
     return SilentMailer()
