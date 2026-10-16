@@ -76,7 +76,7 @@ def _body(data: dict) -> str:
   <p class="lede">Global Agent Bureau is an agent bureau and technology company. It keeps trust records for AI agents. KATA is the framework underneath it, under the PolyForm Noncommercial License 1.0.0. This page is one synthetic stress test: {setup["agents"]:,} synthetic agents and {setup["transactions"]:,} synthetic transactions over {setup["days"]} days, seed {setup["seed"]}. The scoring code is the service at its default settings. The surrounding world is simulated. Nothing here is a customer, a transaction, or a performance claim.</p>
   <p><a href="https://globalagentbureau.com">globalagentbureau.com</a></p>
 </section>
-<section>
+<section class="chapter">
   <h2>Side by side</h2>
   {_caption()}
   <div class="table-scroll"><table class="sim">
@@ -104,7 +104,7 @@ def _body(data: dict) -> str:
   </table></div>
   {_figure(*_CHARTS[0])}
 </section>
-<section>
+<section class="chapter">
   <h2>What the run showed</h2>
   {_caption()}
   <ul>
@@ -117,7 +117,7 @@ def _body(data: dict) -> str:
   </ul>
   {_figure(*_CHARTS[4])}
 </section>
-<section>
+<section class="chapter">
   <h2>By attacker type</h2>
   {_caption()}
   <div class="table-scroll"><table class="sim">
@@ -130,7 +130,7 @@ def _body(data: dict) -> str:
   {_figure(*_CHARTS[1])}
   {_figure(*_CHARTS[2])}
 </section>
-<section>
+<section class="chapter">
   <h2>What each defense holds back</h2>
   {_caption()}
   <p>Each row is the same synthetic population with one defense switched off. The controls overlap, so the row is what that control holds back in this run.</p>
@@ -141,7 +141,7 @@ def _body(data: dict) -> str:
     </tbody>
   </table></div>
 </section>
-<section>
+<section class="chapter">
   <h2>Sensitivity</h2>
   {_caption()}
   <div class="table-scroll"><table class="sim">
