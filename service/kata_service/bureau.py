@@ -963,7 +963,15 @@ class BureauService:
         self.repo.create_org(record)
         return record
 
-    def create_key(self, auth: Auth, org_id: str, name: str, scopes: list[str] | None) -> dict[str, Any]:
+    def create_key(
+        self,
+        auth: Auth,
+        org_id: str,
+        name: str,
+        scopes: list[str] | None,
+        *,
+        test: bool = False,
+    ) -> dict[str, Any]:
         org = self._org(org_id)
         if not auth.admin and auth.org_id != org_id:
             raise BureauError(404, "organization was not found")
@@ -971,7 +979,7 @@ class BureauService:
         chosen = list(scopes or default_scopes(org["org_type"]))
         if any(item not in SCOPES for item in chosen):
             raise BureauError(400, "unknown scope")
-        token, prefix, digest = _new_key()
+        token, prefix, digest = _new_key(test=test)
         record = {
             "key_id": _id("key"),
             "org_id": org_id,
@@ -1002,7 +1010,13 @@ class BureauService:
         if current.get("revoked_at"):
             raise BureauError(400, "api key is already revoked")
         self.repo.revoke_key(key_id, self.stamp())
-        created = self.create_key(auth, current["org_id"], current["name"], list(current["scopes"]))
+        created = self.create_key(
+            auth,
+            current["org_id"],
+            current["name"],
+            list(current["scopes"]),
+            test=str(current.get("prefix") or "").startswith("gab_test_"),
+        )
         return created
 
     def register_org_email(self, auth: Auth, org_id: str, email: str) -> dict[str, str]:
@@ -2232,9 +2246,16 @@ def _public_key(record: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _new_key() -> tuple[str, str, str]:
-    prefix = secrets.token_hex(4)
-    token = f"gab_{prefix}_{secrets.token_urlsafe(24)}"
+def _new_key(*, test: bool = False) -> tuple[str, str, str]:
+    """Live tokens use gab_. Test tokens use gab_test_. The stored prefix omits the secret."""
+
+    hex_part = secrets.token_hex(4)
+    if test:
+        prefix = f"gab_test_{hex_part}"
+        token = f"{prefix}_{secrets.token_urlsafe(24)}"
+    else:
+        prefix = hex_part
+        token = f"gab_{prefix}_{secrets.token_urlsafe(24)}"
     return token, prefix, token_hash(token)
 
 
