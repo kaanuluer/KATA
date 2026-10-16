@@ -29,6 +29,7 @@ from kata_service.pages import (
     render_document,
     schema_bytes,
     schema_index,
+    status_page,
 )
 
 from kata_intent.canonical import canonical_bytes
@@ -86,6 +87,19 @@ def create_app(
     def portal():
         return HTMLResponse(portal_page())
 
+    @app.get("/health")
+    def health():
+        return _health_response(app)
+
+    @app.get("/v1/health")
+    def health_v1():
+        return _health_response(app)
+
+    @app.get("/status")
+    def status():
+        _code, body = probe_database(app.state.settings)
+        return HTMLResponse(status_page(body))
+
     @app.get("/docs")
     def docs():
         return _page(documentation_index)
@@ -130,11 +144,32 @@ def create_app(
         )
 
     app.include_router(build_router())
+    if resolved.deployment_env == "sandbox":
+        from kata_service.amex_http import register_sandbox_routes
+
+        register_sandbox_routes(app)
+
+    @app.post("/mcp")
+    async def mcp_post(request: Request):
+        from kata_service.mcp_http import handle_mcp
+
+        return await handle_mcp(request, app)
+
+    @app.api_route("/mcp", methods=["GET", "DELETE", "PUT", "PATCH"])
+    def mcp_method_not_allowed():
+        return JSONResponse(
+            {
+                "jsonrpc": "2.0",
+                "error": {"code": -32601, "message": "Method not found"},
+            },
+            status_code=405,
+            headers={"Allow": "POST"},
+        )
 
     @app.middleware("http")
     async def bureau_guard(request: Request, call_next):
         path = request.url.path
-        if not path.startswith("/v1"):
+        if path in {"/health", "/v1/health"} or not path.startswith("/v1"):
             return await call_next(request)
         try:
             bureau = ensure_bureau(app)
@@ -149,7 +184,7 @@ def create_app(
         if not limited and endpoint_cap is not None:
             limited = bureau.hit_rate(f"{path}:{subject}") > endpoint_cap
         if limited:
-            response = _error(429, "rate limit exceeded")
+            response = _error(429, "rate limit exceeded", {"Retry-After": "60"})
         else:
             response = await call_next(request)
         try:
@@ -164,6 +199,7 @@ def create_app(
                     "status": response.status_code,
                     "purpose_code": getattr(request.state, "purpose_code", None),
                     "agent_id": getattr(request.state, "agent_id", None),
+                    "environment": "test" if getattr(request.state, "environment", None) == "test" else "live",
                 }
             )
         except Exception:
@@ -350,6 +386,39 @@ def create_app(
         )
         return Response(body, media_type="text/plain; charset=utf-8")
 
+    @app.get("/robots.txt")
+    def robots_txt():
+        body = (
+            "User-agent: *\n"
+            "Allow: /\n"
+            "\n"
+            "# MCP endpoint: /mcp\n"
+            "# Documentation: /docs\n"
+            "# Status: /status\n"
+        )
+        return Response(body, media_type="text/plain; charset=utf-8")
+
+    @app.get("/llms.txt")
+    def llms_txt():
+        body = (
+            "# Global Agent Bureau\n"
+            "\n"
+            "> Agent bureau and technology company. The license is PolyForm Noncommercial 1.0.0.\n"
+            "\n"
+            "This service checks a signed intent agreement and publishes an agent trust score.\n"
+            "\n"
+            "## Where to read\n"
+            "\n"
+            "- [Documentation](/docs): design notes, the API reference, and the JSON schemas\n"
+            "- [Status](/status): whether the service and its database check are answering\n"
+            "- [MCP](/mcp): remote MCP endpoint. Send POST with an API key. GET is not the protocol.\n"
+            "\n"
+            "## Keys\n"
+            "\n"
+            "Live keys use the gab_ prefix. Test keys use the gab_test_ prefix and stay in the test partition.\n"
+        )
+        return Response(body, media_type="text/plain; charset=utf-8")
+
     @app.get("/v1/fx")
     def fx_rate(currency: str, day: str | None = None, reference: str | None = None, reference_currency: str | None = None):
         target = reference_currency or reference or "USD"
@@ -406,6 +475,7 @@ def ensure_bureau(app: FastAPI):
             public_base_url=settings.public_base_url,
             policy=settings.score_policy,
             consortium_match_threshold=settings.consortium_match_threshold,
+            deployment_env=settings.deployment_env,
         )
         if settings.demo:
             from kata_service.seed import seed_demo
@@ -436,6 +506,7 @@ def ensure_bureau(app: FastAPI):
         public_base_url=settings.public_base_url,
         policy=settings.score_policy,
         consortium_match_threshold=settings.consortium_match_threshold,
+        deployment_env=settings.deployment_env,
     )
     app.state.bureau = service
     return service
@@ -494,8 +565,30 @@ def _endpoint_rate_cap(method: str, path: str, settings) -> int | None:
     return caps.get(path)
 
 
-def _error(status: int, message: str) -> JSONResponse:
-    return JSONResponse({"error": message}, status_code=status)
+def probe_database(settings: Settings) -> tuple[int, dict[str, str]]:
+    """Ping the database when one is configured. Never include the address or the driver error."""
+
+    if settings.demo or not settings.database_url:
+        return 200, {"status": "ok", "database": "memory"}
+    try:
+        import psycopg
+
+        with psycopg.connect(settings.database_url, connect_timeout=3) as conn:
+            row = conn.execute("SELECT 1").fetchone()
+        if row is None or row[0] != 1:
+            return 503, {"status": "unavailable", "database": "unavailable"}
+    except Exception:
+        return 503, {"status": "unavailable", "database": "unavailable"}
+    return 200, {"status": "ok", "database": "ok"}
+
+
+def _health_response(app: FastAPI) -> JSONResponse:
+    status, body = probe_database(app.state.settings)
+    return JSONResponse(body, status_code=status)
+
+
+def _error(status: int, message: str, headers: dict[str, str] | None = None) -> JSONResponse:
+    return JSONResponse({"error": message}, status_code=status, headers=headers)
 
 
 def _missing_docs(exc: FileNotFoundError) -> HTMLResponse:

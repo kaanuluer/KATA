@@ -17,6 +17,8 @@ import json
 import re
 import secrets
 import threading
+import time
+from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -92,6 +94,34 @@ class BureauError(Exception):
         self.message = message
 
 
+_test_mode: ContextVar[bool] = ContextVar("gab_test_mode", default=False)
+
+
+def in_test_mode() -> bool:
+    return bool(_test_mode.get())
+
+
+def use_test_mode(enabled: bool) -> Token[bool]:
+    return _test_mode.set(bool(enabled))
+
+
+def reset_test_mode(token: Token[bool]) -> None:
+    _test_mode.reset(token)
+
+
+def _stamp_env(record: dict[str, Any]) -> dict[str, Any]:
+    record["is_test"] = in_test_mode()
+    return dict(record)
+
+
+def _in_env(record: dict[str, Any]) -> bool:
+    return bool(record.get("is_test")) == in_test_mode()
+
+
+def _env_key(value: str) -> str:
+    return f"{int(in_test_mode())}:{value}"
+
+
 @dataclass
 class Auth:
     admin: bool = False
@@ -100,6 +130,7 @@ class Auth:
     principal_id: str | None = None
     scopes: frozenset[str] = field(default_factory=frozenset)
     kind: str = "anonymous"
+    test: bool = False
 
 
 class Mailer(Protocol):
@@ -278,7 +309,10 @@ def mailer_from_settings(settings: object) -> Mailer:
 
 
 class HttpWebhookSender:
-    def send(self, url: str, body: dict[str, Any]) -> None:
+    """POST a webhook once. The bureau records each attempt and retries around this."""
+
+    def deliver(self, url: str, body: dict[str, Any]) -> tuple[str, int | None, str]:
+        import urllib.error
         import urllib.request
 
         data = json.dumps(body).encode("utf-8")
@@ -288,8 +322,22 @@ class HttpWebhookSender:
             headers={"Content-Type": "application/json", "User-Agent": "gab-service/0.1"},
             method="POST",
         )
-        with urllib.request.urlopen(request, timeout=3) as response:
-            response.read()
+        try:
+            with urllib.request.urlopen(request, timeout=3) as response:
+                response.read()
+                code = getattr(response, "status", None)
+                return "delivered", int(code) if code is not None else None, "delivered"
+        except urllib.error.HTTPError as exc:
+            return "failed", int(exc.code), "http_error"
+        except TimeoutError:
+            return "failed", None, "timeout"
+        except Exception:
+            return "failed", None, "refused"
+
+    def send(self, url: str, body: dict[str, Any]) -> None:
+        outcome, _http_status, _detail = self.deliver(url, body)
+        if outcome != "delivered":
+            raise BureauError(502, "webhook delivery failed")
 
 
 class RecordingSender:
@@ -502,11 +550,20 @@ class MemoryRepo:
         self.inquiries: list[dict[str, Any]] = []
         self.subscriptions: list[dict[str, Any]] = []
         self.alerts: list[dict[str, Any]] = []
+        self.deliveries: list[dict[str, Any]] = []
         self.disputes: list[dict[str, Any]] = []
         self._lock = threading.Lock()
 
     def migration_versions(self) -> list[str]:
-        return ["001_bureau.sql", "002_defenses.sql", "003_proofing.sql", "004_consortium.sql", "005_org_signals.sql"]
+        return [
+            "001_bureau.sql",
+            "002_defenses.sql",
+            "003_proofing.sql",
+            "004_consortium.sql",
+            "005_org_signals.sql",
+            "006_sandbox.sql",
+            "006_webhook.sql",
+        ]
 
     def create_org(self, record: dict[str, Any]) -> None:
         with self._lock:
@@ -634,24 +691,26 @@ class MemoryRepo:
 
     def save_agent(self, record: dict[str, Any]) -> None:
         with self._lock:
-            self.agents[record["agent_id"]] = dict(record)
-            self.by_fingerprint[record["fingerprint"]] = record["agent_id"]
+            stamped = _stamp_env(record)
+            key = _env_key(stamped["agent_id"])
+            self.agents[key] = stamped
+            self.by_fingerprint[_env_key(stamped["fingerprint"])] = key
 
     def get_agent(self, agent_id: str) -> dict[str, Any] | None:
         with self._lock:
-            item = self.agents.get(agent_id)
+            item = self.agents.get(_env_key(agent_id))
             return dict(item) if item else None
 
     def agent_by_fingerprint(self, fingerprint: str) -> dict[str, Any] | None:
         with self._lock:
-            agent_id = self.by_fingerprint.get(fingerprint)
-            if agent_id is None:
+            key = self.by_fingerprint.get(_env_key(fingerprint))
+            if key is None:
                 return None
-            return dict(self.agents[agent_id])
+            return dict(self.agents[key])
 
     def list_agents(self, *, operator_org_id: str | None = None, principal_id: str | None = None) -> list[dict[str, Any]]:
         with self._lock:
-            rows = list(self.agents.values())
+            rows = [item for item in self.agents.values() if _in_env(item)]
             if operator_org_id is not None:
                 rows = [item for item in rows if item["operator_org_id"] == operator_org_id]
             if principal_id is not None:
@@ -660,57 +719,71 @@ class MemoryRepo:
 
     def save_agreement(self, record: dict[str, Any]) -> None:
         with self._lock:
-            self.agreements[record["agreement_id"]] = dict(record)
+            stamped = _stamp_env(record)
+            self.agreements[stamped["agreement_id"]] = stamped
 
     def get_agreement(self, agreement_id: str) -> dict[str, Any] | None:
         with self._lock:
             item = self.agreements.get(agreement_id)
-            return dict(item) if item else None
+            if item is None or not _in_env(item):
+                return None
+            return dict(item)
 
     def list_agreements(self, agent_id: str) -> list[dict[str, Any]]:
         with self._lock:
-            return [dict(item) for item in self.agreements.values() if item["agent_id"] == agent_id]
+            return [
+                dict(item)
+                for item in self.agreements.values()
+                if item["agent_id"] == agent_id and _in_env(item)
+            ]
 
     def add_report(self, record: dict[str, Any]) -> None:
         with self._lock:
+            stamped = _stamp_env(record)
             for item in self.reports:
+                if not _in_env(item):
+                    continue
                 if (
-                    item["reporter_org_id"] == record["reporter_org_id"]
-                    and item["agent_id"] == record["agent_id"]
-                    and item["kind"] == record["kind"]
-                    and item["evidence_hash"] == record["evidence_hash"]
+                    item["reporter_org_id"] == stamped["reporter_org_id"]
+                    and item["agent_id"] == stamped["agent_id"]
+                    and item["kind"] == stamped["kind"]
+                    and item["evidence_hash"] == stamped["evidence_hash"]
                 ):
                     raise BureauError(409, "duplicate report")
-            self.reports.append(dict(record))
+            self.reports.append(stamped)
 
     def reports_for_agent(self, agent_id: str) -> list[dict[str, Any]]:
         with self._lock:
-            return [dict(item) for item in self.reports if item["agent_id"] == agent_id]
+            return [dict(item) for item in self.reports if item["agent_id"] == agent_id and _in_env(item)]
 
     def reports_by_org_on_day(self, org_id: str, day: str) -> int:
         with self._lock:
-            return sum(1 for item in self.reports if item["reporter_org_id"] == org_id and item["created_at"].startswith(day))
+            return sum(
+                1
+                for item in self.reports
+                if _in_env(item) and item["reporter_org_id"] == org_id and item["created_at"].startswith(day)
+            )
 
     def org_has_report(self, org_id: str) -> bool:
         with self._lock:
-            return any(item["reporter_org_id"] == org_id for item in self.reports)
+            return any(_in_env(item) and item["reporter_org_id"] == org_id for item in self.reports)
 
     def get_report(self, report_id: str) -> dict[str, Any] | None:
         with self._lock:
             for item in self.reports:
-                if item["report_id"] == report_id:
+                if item["report_id"] == report_id and _in_env(item):
                     return dict(item)
             return None
 
     def set_report_excluded(self, report_id: str, excluded: bool) -> None:
         with self._lock:
             for item in self.reports:
-                if item["report_id"] == report_id:
+                if item["report_id"] == report_id and _in_env(item):
                     item["excluded"] = excluded
 
     def all_reports(self) -> list[dict[str, Any]]:
         with self._lock:
-            return [dict(item) for item in self.reports]
+            return [dict(item) for item in self.reports if _in_env(item)]
 
     def org_directory(self) -> dict[str, dict[str, str]]:
         with self._lock:
@@ -721,64 +794,79 @@ class MemoryRepo:
 
     def add_interaction(self, record: dict[str, Any]) -> None:
         with self._lock:
-            self.interactions.append(dict(record))
+            self.interactions.append(_stamp_env(record))
 
     def interactions_for_agent(self, agent_id: str) -> list[dict[str, Any]]:
         with self._lock:
-            return [dict(item) for item in self.interactions if item["agent_id"] == agent_id]
+            return [dict(item) for item in self.interactions if item["agent_id"] == agent_id and _in_env(item)]
 
     def interactions_for_operator(self, operator_org_id: str) -> list[dict[str, Any]]:
         with self._lock:
-            return [dict(item) for item in self.interactions if item["operator_org_id"] == operator_org_id]
+            return [dict(item) for item in self.interactions if item["operator_org_id"] == operator_org_id and _in_env(item)]
 
     def add_signal(self, record: dict[str, Any]) -> None:
         with self._lock:
-            self.agent_signals.append(dict(record))
+            self.agent_signals.append(_stamp_env(record))
 
     def agent_ids_for_signal(self, kind: str, value: str) -> list[str]:
         with self._lock:
-            return [item["agent_id"] for item in self.agent_signals if item["kind"] == kind and item["value"] == value]
+            return [
+                item["agent_id"]
+                for item in self.agent_signals
+                if _in_env(item) and item["kind"] == kind and item["value"] == value
+            ]
 
     def all_interactions(self) -> list[dict[str, Any]]:
         with self._lock:
-            return [dict(item) for item in self.interactions]
+            return [dict(item) for item in self.interactions if _in_env(item)]
 
     def add_org_signal(self, record: dict[str, Any]) -> None:
         with self._lock:
+            stamped = _stamp_env(record)
             for item in self.org_signals:
-                if item["org_id"] == record["org_id"] and item["kind"] == record["kind"] and item["value"] == record["value"]:
+                if (
+                    _in_env(item)
+                    and item["org_id"] == stamped["org_id"]
+                    and item["kind"] == stamped["kind"]
+                    and item["value"] == stamped["value"]
+                ):
                     return
-            self.org_signals.append(dict(record))
+            self.org_signals.append(stamped)
 
     def org_signal_groups(self) -> list[set[str]]:
         with self._lock:
             grouped: dict[str, set[str]] = {}
             for item in self.org_signals:
+                if not _in_env(item):
+                    continue
                 grouped.setdefault(item["value"], set()).add(item["org_id"])
             return [members for members in grouped.values() if len(members) >= 2]
 
     def add_identity_link(self, record: dict[str, Any]) -> None:
         with self._lock:
-            self.identity_links.append(dict(record))
+            self.identity_links.append(_stamp_env(record))
 
     def links_for_agent(self, agent_id: str) -> list[dict[str, Any]]:
         with self._lock:
-            return [dict(item) for item in self.identity_links if item["agent_id"] == agent_id]
+            return [dict(item) for item in self.identity_links if item["agent_id"] == agent_id and _in_env(item)]
 
     def add_proofing(self, record: dict[str, Any]) -> None:
         with self._lock:
+            stamped = _stamp_env(record)
             for item in self.proofings:
+                if not _in_env(item):
+                    continue
                 if (
-                    item["agent_id"] == record["agent_id"]
-                    and item["method"] == record["method"]
-                    and item["evidence_hash"] == record["evidence_hash"]
+                    item["agent_id"] == stamped["agent_id"]
+                    and item["method"] == stamped["method"]
+                    and item["evidence_hash"] == stamped["evidence_hash"]
                 ):
                     return
-            self.proofings.append(dict(record))
+            self.proofings.append(stamped)
 
     def proofings_for_agent(self, agent_id: str) -> list[dict[str, Any]]:
         with self._lock:
-            return [dict(item) for item in self.proofings if item["agent_id"] == agent_id]
+            return [dict(item) for item in self.proofings if item["agent_id"] == agent_id and _in_env(item)]
 
     def add_consortium_member(self, record: dict[str, Any]) -> None:
         with self._lock:
@@ -791,79 +879,104 @@ class MemoryRepo:
 
     def add_sighting(self, record: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
+            stamped = _stamp_env(record)
             for item in self.consortium_sightings:
-                if item["member_id"] == record["member_id"] and item["fingerprint"] == record["fingerprint"]:
+                if _in_env(item) and item["member_id"] == stamped["member_id"] and item["fingerprint"] == stamped["fingerprint"]:
                     return dict(item)
-            self.consortium_sightings.append(dict(record))
-            return dict(record)
+            self.consortium_sightings.append(stamped)
+            return dict(stamped)
 
     def sighting_member_ids(self, fingerprint: str) -> list[str]:
         with self._lock:
-            return [item["member_id"] for item in self.consortium_sightings if item["fingerprint"] == fingerprint]
+            return [item["member_id"] for item in self.consortium_sightings if _in_env(item) and item["fingerprint"] == fingerprint]
 
     def add_inquiry(self, record: dict[str, Any]) -> None:
         with self._lock:
-            self.inquiries.append(dict(record))
+            self.inquiries.append(_stamp_env(record))
 
     def inquiries_for_principal(self, principal_id: str) -> list[dict[str, Any]]:
         with self._lock:
-            return [dict(item) for item in self.inquiries if item["principal_id"] == principal_id]
+            return [dict(item) for item in self.inquiries if item["principal_id"] == principal_id and _in_env(item)]
 
     def add_subscription(self, record: dict[str, Any]) -> None:
         with self._lock:
+            stamped = _stamp_env(record)
             for item in self.subscriptions:
-                if item["org_id"] == record["org_id"] and item["agent_id"] == record["agent_id"] and item["webhook_url"] == record["webhook_url"]:
+                if (
+                    _in_env(item)
+                    and item["org_id"] == stamped["org_id"]
+                    and item["agent_id"] == stamped["agent_id"]
+                    and item["webhook_url"] == stamped["webhook_url"]
+                ):
                     raise BureauError(409, "subscription already exists")
-            self.subscriptions.append(dict(record))
+            self.subscriptions.append(stamped)
 
     def subscriptions_for_agent(self, agent_id: str) -> list[dict[str, Any]]:
         with self._lock:
-            return [dict(item) for item in self.subscriptions if item["agent_id"] == agent_id]
+            return [dict(item) for item in self.subscriptions if item["agent_id"] == agent_id and _in_env(item)]
 
     def subscriptions_for_org(self, org_id: str) -> list[dict[str, Any]]:
         with self._lock:
-            return [dict(item) for item in self.subscriptions if item["org_id"] == org_id]
+            return [dict(item) for item in self.subscriptions if item["org_id"] == org_id and _in_env(item)]
 
     def delete_subscription(self, subscription_id: str, org_id: str) -> bool:
         with self._lock:
             before = len(self.subscriptions)
             self.subscriptions = [
-                item for item in self.subscriptions if not (item["subscription_id"] == subscription_id and item["org_id"] == org_id)
+                item
+                for item in self.subscriptions
+                if not (_in_env(item) and item["subscription_id"] == subscription_id and item["org_id"] == org_id)
             ]
             return len(self.subscriptions) != before
 
     def add_alert(self, record: dict[str, Any]) -> None:
         with self._lock:
-            self.alerts.append(dict(record))
+            self.alerts.append(_stamp_env(record))
 
     def alerts_for_org(self, org_id: str) -> list[dict[str, Any]]:
         with self._lock:
-            return [dict(item) for item in self.alerts if item["org_id"] == org_id]
+            return [dict(item) for item in self.alerts if item["org_id"] == org_id and _in_env(item)]
+
+    def get_subscription(self, subscription_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            for item in self.subscriptions:
+                if item["subscription_id"] == subscription_id:
+                    return dict(item)
+            return None
+
+    def add_delivery(self, record: dict[str, Any]) -> None:
+        with self._lock:
+            self.deliveries.append(dict(record))
+
+    def deliveries_for_org(self, org_id: str) -> list[dict[str, Any]]:
+        with self._lock:
+            return [dict(item) for item in self.deliveries if item["org_id"] == org_id]
 
     def add_dispute(self, record: dict[str, Any]) -> None:
         with self._lock:
-            self.disputes.append(dict(record))
+            self.disputes.append(_stamp_env(record))
 
     def list_disputes(self) -> list[dict[str, Any]]:
         with self._lock:
-            return [dict(item) for item in self.disputes]
+            return [dict(item) for item in self.disputes if _in_env(item)]
 
     def disputes_for_principal(self, principal_id: str) -> list[dict[str, Any]]:
         with self._lock:
-            return [dict(item) for item in self.disputes if item["principal_id"] == principal_id]
+            return [dict(item) for item in self.disputes if item["principal_id"] == principal_id and _in_env(item)]
 
     def get_dispute(self, dispute_id: str) -> dict[str, Any] | None:
         with self._lock:
             for item in self.disputes:
-                if item["dispute_id"] == dispute_id:
+                if item["dispute_id"] == dispute_id and _in_env(item):
                     return dict(item)
             return None
 
     def save_dispute(self, record: dict[str, Any]) -> None:
         with self._lock:
+            stamped = _stamp_env(record)
             for index, item in enumerate(self.disputes):
-                if item["dispute_id"] == record["dispute_id"]:
-                    self.disputes[index] = dict(record)
+                if item["dispute_id"] == stamped["dispute_id"] and _in_env(item):
+                    self.disputes[index] = stamped
                     return
 
     def reporter_types(self) -> dict[str, str]:
@@ -888,8 +1001,13 @@ class BureauService:
         public_base_url: str = "http://127.0.0.1:8765",
         policy: ScorePolicy | None = None,
         consortium_match_threshold: int = 2,
+        deployment_env: str = "production",
+        webhook_attempts: int = 4,
+        webhook_base_delay: float = 0.5,
+        webhook_sleep=None,
     ) -> None:
         self.repo = repo
+        self.deployment_env = deployment_env if deployment_env in {"production", "sandbox"} else "production"
         self._now = now or (lambda: datetime.now(timezone.utc))
         self.log_store = log_store
         self.log_key = log_key
@@ -902,6 +1020,9 @@ class BureauService:
         self.public_base_url = public_base_url.rstrip("/")
         self.policy = policy or ScorePolicy()
         self.consortium_match_threshold = consortium_match_threshold
+        self.webhook_attempts = webhook_attempts
+        self.webhook_base_delay = webhook_base_delay
+        self.webhook_sleep = webhook_sleep or time.sleep
         self.dev_mailbox: list[dict[str, str]] = []
 
     def now(self) -> datetime:
@@ -916,24 +1037,33 @@ class BureauService:
     def authenticate(self, token: str, *, admin_token: str | None) -> Auth:
         if not token:
             raise BureauError(401, "credentials are required")
+        sandbox = self.deployment_env == "sandbox"
         if admin_token and hmac.compare_digest(token, admin_token):
-            return Auth(admin=True, scopes=frozenset(SCOPES), kind="admin", key_id="admin")
+            return Auth(admin=True, scopes=frozenset(SCOPES), kind="admin", key_id="admin", test=sandbox)
         key = self.repo.key_by_hash(token_hash(token))
         if key is not None:
             if key.get("revoked_at"):
                 raise BureauError(401, "api key is revoked")
+            token_says_test = token.startswith("gab_test_")
+            record_says_test = _key_is_test("", key)
+            if token_says_test != record_says_test:
+                raise BureauError(401, "credentials are required")
+            test_key = token_says_test
+            if sandbox and not test_key:
+                raise BureauError(403, "this deployment accepts test keys")
             return Auth(
                 org_id=key["org_id"],
                 key_id=key["key_id"],
                 scopes=frozenset(key["scopes"]),
                 kind="key",
+                test=test_key or sandbox,
             )
         session = self.repo.get_session(token_hash(token))
         if session is not None:
             if session["expires_at"] < self.stamp():
                 raise BureauError(401, "session expired")
             if session["kind"] == "portal":
-                return Auth(principal_id=session["subject_id"], kind="portal")
+                return Auth(principal_id=session["subject_id"], kind="portal", test=sandbox)
             org = self.repo.get_org(session["subject_id"])
             if org is None:
                 raise BureauError(401, "session is not valid")
@@ -941,6 +1071,7 @@ class BureauService:
                 org_id=org["org_id"],
                 scopes=frozenset(default_scopes(org["org_type"])),
                 kind="org_session",
+                test=sandbox,
             )
         raise BureauError(401, "credentials are required")
 
@@ -963,7 +1094,14 @@ class BureauService:
         self.repo.create_org(record)
         return record
 
-    def create_key(self, auth: Auth, org_id: str, name: str, scopes: list[str] | None) -> dict[str, Any]:
+    def create_key(
+        self,
+        auth: Auth,
+        org_id: str,
+        name: str,
+        scopes: list[str] | None,
+        environment: str | None = None,
+    ) -> dict[str, Any]:
         org = self._org(org_id)
         if not auth.admin and auth.org_id != org_id:
             raise BureauError(404, "organization was not found")
@@ -971,12 +1109,22 @@ class BureauService:
         chosen = list(scopes or default_scopes(org["org_type"]))
         if any(item not in SCOPES for item in chosen):
             raise BureauError(400, "unknown scope")
-        token, prefix, digest = _new_key()
+        requested = str(environment or "").strip().lower()
+        if requested and requested not in {"test", "live"}:
+            raise BureauError(400, "environment must be test or live")
+        if self.deployment_env == "sandbox" or auth.test:
+            if requested == "live":
+                raise BureauError(403, "this deployment issues test keys")
+            requested = "test"
+        elif not requested:
+            requested = "live"
+        token, prefix, digest = _new_key(test=requested == "test")
         record = {
             "key_id": _id("key"),
             "org_id": org_id,
             "name": _short(name, "name", 80),
             "prefix": prefix,
+            "environment": requested,
             "secret_hash": digest,
             "scopes": chosen,
             "created_at": self.stamp(),
@@ -1002,7 +1150,8 @@ class BureauService:
         if current.get("revoked_at"):
             raise BureauError(400, "api key is already revoked")
         self.repo.revoke_key(key_id, self.stamp())
-        created = self.create_key(auth, current["org_id"], current["name"], list(current["scopes"]))
+        environment = "test" if _key_is_test("", current) else "live"
+        created = self.create_key(auth, current["org_id"], current["name"], list(current["scopes"]), environment)
         return created
 
     def register_org_email(self, auth: Auth, org_id: str, email: str) -> dict[str, str]:
@@ -1470,6 +1619,49 @@ class BureauService:
     def list_alerts(self, auth: Auth) -> list[dict[str, Any]]:
         self._scope(auth, "alerts")
         return self.repo.alerts_for_org(auth.org_id or "")
+
+    def list_deliveries(self, auth: Auth) -> list[dict[str, Any]]:
+        self._scope(auth, "alerts")
+        return [_public_delivery(item) for item in self.repo.deliveries_for_org(auth.org_id or "")]
+
+    def test_webhook(self, auth: Auth, subscription_id: str) -> dict[str, Any]:
+        """Fire one signed test alert at a subscription this organization already owns."""
+
+        self._scope(auth, "alerts")
+        sub = self.repo.get_subscription(subscription_id)
+        if sub is None or sub["org_id"] != (auth.org_id or ""):
+            raise BureauError(404, "subscription was not found")
+        at = self.stamp()
+        alert = {
+            "alert_id": _id("alt"),
+            "agent_id": sub["agent_id"],
+            "kind": "test",
+            "score": None,
+            "note": "test delivery",
+        }
+        document = {"alert": alert, "at": at, "kata_bureau_alert": "1"}
+        body = dict(document)
+        if self.log_key is not None:
+            body["signature"] = sign_jws(document, self.log_key, typ=ALERT_TYP)
+        delivered = self._deliver(
+            org_id=sub["org_id"],
+            agent_id=sub["agent_id"],
+            alert_id=alert["alert_id"],
+            url=sub["webhook_url"],
+            body=body,
+        )
+        self.repo.add_alert(
+            {
+                "alert_id": alert["alert_id"],
+                "org_id": sub["org_id"],
+                "agent_id": sub["agent_id"],
+                "kind": "test",
+                "document": body,
+                "created_at": at,
+                "delivered": delivered,
+            }
+        )
+        return {"alert_id": alert["alert_id"], "delivered": delivered, "kind": "test"}
 
     def list_audit(self, auth: Auth) -> list[dict[str, Any]]:
         self._scope(auth, "keys:manage")
@@ -1979,14 +2171,15 @@ class BureauService:
             }
             document = {"alert": alert, "at": at, "kata_bureau_alert": "1"}
             body = dict(document)
-            delivered = False
             if self.log_key is not None:
                 body["signature"] = sign_jws(document, self.log_key, typ=ALERT_TYP)
-            try:
-                self.sender.send(sub["webhook_url"], body)
-                delivered = True
-            except Exception:
-                delivered = False
+            delivered = self._deliver(
+                org_id=sub["org_id"],
+                agent_id=agent["agent_id"],
+                alert_id=alert["alert_id"],
+                url=sub["webhook_url"],
+                body=body,
+            )
             self.repo.add_alert(
                 {
                     "alert_id": alert["alert_id"],
@@ -1999,12 +2192,60 @@ class BureauService:
                 }
             )
 
+    def _deliver(self, *, org_id: str, agent_id: str, alert_id: str, url: str, body: dict[str, Any]) -> bool:
+        delivered = False
+        for attempt in range(1, self.webhook_attempts + 1):
+            if attempt > 1:
+                self.webhook_sleep(self.webhook_base_delay * (2 ** (attempt - 2)))
+            outcome, http_status, detail = self._post_once(url, body)
+            self.repo.add_delivery(
+                {
+                    "delivery_id": _id("dlv"),
+                    "org_id": org_id,
+                    "agent_id": agent_id,
+                    "alert_id": alert_id,
+                    "attempt": attempt,
+                    "at": self.stamp(),
+                    "outcome": outcome,
+                    "http_status": http_status,
+                    "detail": detail,
+                }
+            )
+            if outcome == "delivered":
+                delivered = True
+                break
+        return delivered
+
+    def _post_once(self, url: str, body: dict[str, Any]) -> tuple[str, int | None, str]:
+        deliver = getattr(self.sender, "deliver", None)
+        if callable(deliver):
+            outcome, http_status, detail = deliver(url, body)
+            if outcome not in {"delivered", "failed"}:
+                outcome = "failed"
+            if detail not in {"delivered", "timeout", "http_error", "refused"}:
+                detail = "refused"
+            if http_status is not None:
+                try:
+                    http_status = int(http_status)
+                except (TypeError, ValueError):
+                    http_status = None
+            return outcome, http_status, detail
+        try:
+            self.sender.send(url, body)
+        except TimeoutError:
+            return "failed", None, "timeout"
+        except Exception:
+            return "failed", None, "refused"
+        return "delivered", None, "delivered"
+
     def _log(self, kind: str, body: dict[str, Any]) -> None:
         if self.log_store is None or self.log_key is None:
             return
         self.log_store.append_and_sign(kind, body, self.log_key, self.now())
 
     def _agent(self, agent_id: str) -> dict[str, Any]:
+        if any(ord(char) < 32 or ord(char) == 127 for char in agent_id):
+            raise BureauError(400, "agent_id has a control character")
         agent = self.repo.get_agent(agent_id)
         if agent is None:
             raise BureauError(404, "agent was not found")
@@ -2065,6 +2306,7 @@ class BureauService:
             "model_version": self.policy.weights.model_version,
             "score_reasons": agent.get("score_reasons", []),
             "cold_start": agent.get("cold_start", True),
+            "environment": "test" if agent.get("is_test") else "live",
             "created_at": agent["created_at"],
             "updated_at": agent["updated_at"],
         }
@@ -2220,21 +2462,52 @@ def _public_report(record: dict[str, Any], *, full: bool) -> dict[str, Any]:
     return view
 
 
+def _public_delivery(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "delivery_id": record["delivery_id"],
+        "alert_id": record["alert_id"],
+        "agent_id": record["agent_id"],
+        "attempt": record["attempt"],
+        "at": record["at"],
+        "outcome": record["outcome"],
+        "http_status": record.get("http_status"),
+        "detail": record["detail"],
+    }
+
+
 def _public_key(record: dict[str, Any]) -> dict[str, Any]:
     return {
         "key_id": record["key_id"],
         "org_id": record["org_id"],
         "name": record["name"],
         "prefix": record["prefix"],
+        "environment": "test" if _key_is_test("", record) else "live",
         "scopes": list(record["scopes"]),
         "created_at": record["created_at"],
         "revoked_at": record.get("revoked_at"),
     }
 
 
-def _new_key() -> tuple[str, str, str]:
-    prefix = secrets.token_hex(4)
-    token = f"gab_{prefix}_{secrets.token_urlsafe(24)}"
+def _key_is_test(token: str, record: dict[str, Any] | None = None) -> bool:
+    if token.startswith("gab_test_"):
+        return True
+    if record is None:
+        return False
+    if record.get("environment") == "test":
+        return True
+    return str(record.get("prefix") or "").startswith("gab_test_")
+
+
+def _new_key(test: bool = False) -> tuple[str, str, str]:
+    """Live tokens use gab_. Test tokens use gab_test_. The stored prefix omits the secret."""
+
+    visible = secrets.token_hex(4)
+    if test:
+        prefix = f"gab_test_{visible}"
+        token = f"{prefix}_{secrets.token_urlsafe(24)}"
+    else:
+        prefix = visible
+        token = f"gab_{prefix}_{secrets.token_urlsafe(24)}"
     return token, prefix, token_hash(token)
 
 
@@ -2259,9 +2532,7 @@ def _email(value: str) -> str:
 def _webhook(value: str) -> str:
     parsed = urlparse(value.strip())
     host = (parsed.hostname or "").lower()
-    if parsed.scheme == "https":
-        return value.strip()
-    if parsed.scheme == "http" and host in {"localhost", "127.0.0.1"}:
+    if parsed.scheme == "https" and host and host not in {"localhost", "127.0.0.1", "::1"}:
         return value.strip()
     raise BureauError(400, "webhook_url must be https")
 

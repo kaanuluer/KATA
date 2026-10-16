@@ -306,7 +306,7 @@ def test_alerts_are_signed_and_disputes_change_the_score():
     sub = client.post(
         "/v1/subscriptions",
         headers=_auth(merchant_key),
-        json={"agent_id": "shopper-01", "webhook_url": "http://127.0.0.1/hook"},
+        json={"agent_id": "shopper-01", "webhook_url": "https://merchant.example/hooks/gab"},
     )
     assert sub.status_code == 200, sub.text
     client.post("/v1/agents/shopper-01/status", headers=_auth(operator_key), json={"status": "revoked"})
@@ -429,6 +429,7 @@ def test_rate_limit_validation_and_migration_sql():
     assert first.status_code == 200
     assert second.status_code == 200
     assert third.status_code == 429
+    assert third.headers["retry-after"] == "60"
     statements = "\n".join(migration_statements())
     for table in ("gab_organizations", "gab_api_keys", "gab_agents", "gab_reports", "gab_inquiries", "gab_disputes", "gab_audit", "gab_interactions", "gab_identity_links", "gab_proofings", "gab_consortium_members", "gab_consortium_sightings", "gab_org_signals"):
         assert table in statements
@@ -538,7 +539,9 @@ def test_endpoint_rate_limits_do_not_block_other_routes():
     )
     assert client.post("/v1/verify", json={}).status_code != 429
     assert client.post("/v1/verify", json={}).status_code != 429
-    assert client.post("/v1/verify", json={}).status_code == 429
+    limited = client.post("/v1/verify", json={})
+    assert limited.status_code == 429
+    assert limited.headers["retry-after"] == "60"
     created = client.post("/v1/orgs", headers=_auth("admin-test-token"), json={"name": "Still Open", "org_type": "merchant"})
     assert created.status_code == 200
     assert client.post("/v1/inquiries", json={}).status_code != 429
@@ -634,3 +637,256 @@ def test_smtp_is_off_unless_configured_and_does_not_print_the_password():
     assert "src=\"/" not in rich
     assert "test-smtp-secret" not in plain
     assert "test-smtp-secret" not in rich
+
+
+def test_test_keys_use_the_same_api_without_changing_production_scores():
+    from kata_service.bureau import token_hash
+    from kata_service.settings import settings_from_env
+
+    assert settings_from_env({}).deployment_env == "production"
+    assert settings_from_env({"GAB_ENV": "sandbox"}).deployment_env == "sandbox"
+    assert settings_from_env({"GAB_ENV": "lab"}).config_error == "GAB_ENV must be production or sandbox"
+
+    client = _client()
+    operator = _org(client, "Harbor Agents", "agent_operator")
+    merchant = _org(client, "Techstore", "merchant")
+    live_operator = _key(client, operator["org_id"], "live")
+    issued = client.post(
+        f"/v1/orgs/{operator['org_id']}/keys",
+        headers=_auth("admin-test-token"),
+        json={"name": "sandbox", "environment": "test"},
+    )
+    assert issued.status_code == 200, issued.text
+    test_operator = issued.json()["token"]
+    assert test_operator.startswith("gab_test_")
+    assert issued.json()["environment"] == "test"
+    listed = client.get(f"/v1/orgs/{operator['org_id']}/keys", headers=_auth("admin-test-token"))
+    prefix = issued.json()["prefix"]
+    assert test_operator.startswith(prefix + "_")
+    secret = test_operator[len(prefix) + 1 :]
+    assert secret not in listed.text
+    assert test_operator not in listed.text
+    live_merchant = _key(client, merchant["org_id"], "merchant-live")
+    test_merchant = client.post(
+        f"/v1/orgs/{merchant['org_id']}/keys",
+        headers=_auth("admin-test-token"),
+        json={"name": "merchant-sandbox", "environment": "test"},
+    ).json()["token"]
+
+    live_agent = _register(client, live_operator)
+    test_agent_key = private_key_from_seed(hashlib.sha256(b"bureau-agent-sandbox").digest())
+    registered = client.post(
+        "/v1/agents",
+        headers=_auth(test_operator),
+        json={
+            "agent_id": "shopper-01",
+            "principal_id": "prn_person",
+            "public_key": test_agent_key.public.to_jwk(),
+            "verification_level": "operator_verified",
+        },
+    )
+    assert registered.status_code == 200, registered.text
+    assert registered.json()["environment"] == "test"
+    assert registered.json()["fingerprint"] != live_agent["fingerprint"]
+    again = client.get("/v1/agents/shopper-01", headers=_auth(live_operator))
+    assert again.json()["environment"] == "live"
+    assert again.json()["fingerprint"] == live_agent["fingerprint"]
+
+    stored = client.post(
+        "/v1/agents/shopper-01/intents",
+        headers={**_auth(live_operator), "Content-Type": "application/json"},
+        content=_agreement().to_json(),
+    )
+    assert stored.status_code == 200, stored.text
+    allowed = client.post(
+        "/v1/verify",
+        headers=_auth(live_merchant),
+        json={"agent_id": "shopper-01", "action": _action(10, "act_live")},
+    )
+    assert allowed.json()["verdict"] == "ALLOW"
+    evidence = "sha256:" + "ab" * 32
+    filed = client.post(
+        "/v1/reports",
+        headers=_auth(live_merchant),
+        json={"agent_id": "shopper-01", "kind": "fraud_incident", "evidence_hash": evidence, "summary": "Disputed charge"},
+    )
+    assert filed.status_code == 200, filed.text
+    live_after = client.get("/v1/agents/shopper-01", headers=_auth(live_operator)).json()
+    test_after = client.get("/v1/agents/shopper-01", headers=_auth(test_operator)).json()
+    assert live_after["score"] < test_after["score"]
+    live_reports = client.get("/v1/agents/shopper-01/reports", headers=_auth(live_merchant))
+    test_reports = client.get("/v1/agents/shopper-01/reports", headers=_auth(test_merchant))
+    assert live_reports.json()["counts"]["fraud_incident"] == 1
+    assert test_reports.json()["counts"]["fraud_incident"] == 0
+    rotated = client.post(f"/v1/keys/{issued.json()['key_id']}/rotate", headers=_auth("admin-test-token"))
+    assert rotated.status_code == 200
+    assert rotated.json()["environment"] == "test"
+    assert rotated.json()["token"].startswith("gab_test_")
+    assert rotated.json()["token"] != test_operator
+
+    sandbox = _client(deployment_env="sandbox")
+    sandbox_org = _org(sandbox, "Harbor Agents", "agent_operator")
+    refused = sandbox.post(
+        f"/v1/orgs/{sandbox_org['org_id']}/keys",
+        headers=_auth("admin-test-token"),
+        json={"name": "live", "environment": "live"},
+    )
+    assert refused.status_code == 403
+    only = sandbox.post(
+        f"/v1/orgs/{sandbox_org['org_id']}/keys",
+        headers=_auth("admin-test-token"),
+        json={"name": "sandbox"},
+    )
+    assert only.status_code == 200
+    assert only.json()["token"].startswith("gab_test_")
+    sandbox.app.state.bureau.repo.create_key(
+        {
+            "key_id": "key_live_fixture",
+            "org_id": sandbox_org["org_id"],
+            "name": "live fixture",
+            "prefix": "ffffeeee",
+            "environment": "live",
+            "secret_hash": token_hash("gab_ffffeeee_fixture"),
+            "scopes": ["registry:read"],
+            "created_at": "2026-10-16T00:00:00Z",
+            "revoked_at": None,
+            "rotated_from": None,
+        }
+    )
+    assert sandbox.get("/v1/agents/shopper-01", headers=_auth("gab_ffffeeee_fixture")).status_code == 403
+    page = client.get("/docs/sandbox")
+    assert page.status_code == 200
+    assert "gab_test_" in page.text
+    assert "GAB_ENV" in page.text
+    assert "agent bureau" in page.text.lower()
+    assert "open source" not in page.text.lower()
+    assert "credit bureau" not in page.text.lower()
+    assert "call" not in page.text.lower()
+    joined = "\n".join(migration_statements())
+    assert "CREATE SCHEMA IF NOT EXISTS gab_sandbox" in joined
+
+
+def test_webhook_retries_are_logged_per_organization():
+    client = _client()
+    operator = _org(client, "Harbor Agents", "agent_operator")
+    merchant = _org(client, "Techstore", "merchant")
+    operator_key = _key(client, operator["org_id"])
+    merchant_key = _key(client, merchant["org_id"])
+    _register(client, operator_key)
+    sub = client.post(
+        "/v1/subscriptions",
+        headers=_auth(merchant_key),
+        json={"agent_id": "shopper-01", "webhook_url": "https://merchant.example/hooks/gab"},
+    )
+    assert sub.status_code == 200, sub.text
+    service = client.app.state.bureau
+    delays: list[float] = []
+    service.webhook_sleep = delays.append
+    service.webhook_base_delay = 0.5
+
+    class Flaky:
+        def __init__(self, fail_until: int):
+            self.fail_until = fail_until
+            self.calls = 0
+            self.sent: list[tuple[str, dict]] = []
+
+        def send(self, url, body):
+            self.calls += 1
+            self.sent.append((url, body))
+            if self.calls <= self.fail_until:
+                raise TimeoutError("https://user:s3cret@hooks.example/hook")
+
+    service.sender = Flaky(2)
+    fired = client.post(
+        "/v1/webhooks/test",
+        headers=_auth(merchant_key),
+        json={"subscription_id": sub.json()["subscription_id"]},
+    )
+    assert fired.status_code == 200, fired.text
+    assert fired.json()["delivered"] is True
+    assert fired.json()["kind"] == "test"
+    assert "s3cret" not in fired.text
+    assert "hooks.example" not in fired.text
+    assert delays == [0.5, 1.0]
+    assert service.sender.sent[-1][1]["kata_bureau_alert"] == "1"
+    assert service.sender.sent[-1][1]["alert"]["kind"] == "test"
+    listed = client.get("/v1/webhooks/deliveries", headers=_auth(merchant_key))
+    assert listed.status_code == 200
+    assert [row["detail"] for row in listed.json()] == ["timeout", "timeout", "delivered"]
+    assert [row["attempt"] for row in listed.json()] == [1, 2, 3]
+    assert "s3cret" not in listed.text
+    hidden = client.get("/v1/webhooks/deliveries", headers=_auth(operator_key))
+    assert hidden.json() == []
+    denied = client.post(
+        "/v1/webhooks/test",
+        headers=_auth(operator_key),
+        json={"subscription_id": sub.json()["subscription_id"]},
+    )
+    assert denied.status_code == 404
+
+    service.sender = Flaky(9)
+    delays.clear()
+    failed = client.post(
+        "/v1/webhooks/test",
+        headers=_auth(merchant_key),
+        json={"subscription_id": sub.json()["subscription_id"]},
+    )
+    assert failed.status_code == 200
+    assert failed.json()["delivered"] is False
+    assert delays == [0.5, 1.0, 2.0]
+    assert "s3cret" not in failed.text
+    again = client.get("/v1/webhooks/deliveries", headers=_auth(merchant_key))
+    assert [row["detail"] for row in again.json()][-4:] == ["timeout", "timeout", "timeout", "timeout"]
+    assert "s3cret" not in again.text
+
+
+def test_http_webhook_sender_hides_failure_text(monkeypatch):
+    import io
+    import urllib.error
+    import urllib.request
+
+    from kata_service.bureau import BureauError, HttpWebhookSender
+
+    def boom(*_args, **_kwargs):
+        raise TimeoutError("https://user:s3cret@hooks.example/hook")
+
+    monkeypatch.setattr(urllib.request, "urlopen", boom)
+    outcome, status, detail = HttpWebhookSender().deliver("https://hooks.example/gab", {"ok": True})
+    assert (outcome, status, detail) == ("failed", None, "timeout")
+    assert "s3cret" not in detail
+    try:
+        HttpWebhookSender().send("https://hooks.example/gab", {"ok": True})
+    except BureauError as exc:
+        assert exc.message == "webhook delivery failed"
+        assert "s3cret" not in exc.message
+    else:
+        raise AssertionError("delivery should fail")
+
+    def http_error(*_args, **_kwargs):
+        raise urllib.error.HTTPError(
+            "https://user:s3cret@hooks.example/hook",
+            500,
+            "nope",
+            hdrs=None,
+            fp=io.BytesIO(b"token=s3cret"),
+        )
+
+    monkeypatch.setattr(urllib.request, "urlopen", http_error)
+    outcome, status, detail = HttpWebhookSender().deliver("https://hooks.example/gab", {"ok": True})
+    assert (outcome, status, detail) == ("failed", 500, "http_error")
+    assert "s3cret" not in detail
+
+    class _Ok:
+        status = 204
+
+        def read(self):
+            return b""
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *_args, **_kwargs: _Ok())
+    assert HttpWebhookSender().deliver("https://hooks.example/gab", {"ok": True}) == ("delivered", 204, "delivered")

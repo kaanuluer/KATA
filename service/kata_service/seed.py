@@ -123,7 +123,7 @@ def seed_demo(service: BureauService) -> dict[str, str]:
         service.attest_agent(wallet_auth, "shopper-01")
     _ensure_proof(service, wallet_auth, "shopper-01", "institution_attestation", DEMO_INSTITUTION_PROOF)
     merchant_auth = service.authenticate(DEMO_MERCHANT_KEY, admin_token=None)
-    hook = "http://127.0.0.1:8765/demo-hook"
+    hook = "https://merchant.example/hooks/gab"
     subscribed = any(
         item["agent_id"] == "shopper-01" and item["webhook_url"] == hook
         for item in service.repo.subscriptions_for_org(merchant["org_id"])

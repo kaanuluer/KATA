@@ -48,6 +48,7 @@ class Settings:
     verify_rate_limit_per_minute: int = 60
     inquiry_rate_limit_per_minute: int = 30
     report_rate_limit_per_minute: int = 10
+    deployment_env: str = "production"
 
     def log_key(self) -> PrivateKey | None:
         if self.log_signing_seed is None:
@@ -62,6 +63,10 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
     database_url = _blank(env.get("DATABASE_URL")) or _blank(env.get("POSTGRES_URL"))
     schema_url = _blank(env.get("DATABASE_URL_UNPOOLED")) or _blank(env.get("POSTGRES_URL_NON_POOLING")) or database_url
     error = None
+    deployment_env = (_blank(env.get("GAB_ENV")) or "production").lower()
+    if deployment_env not in {"production", "sandbox"}:
+        error = "GAB_ENV must be production or sandbox"
+        deployment_env = "production"
     seed = None
     notifier = None
     published: tuple[dict, ...] = ()
@@ -101,6 +106,7 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
         verify_rate_limit_per_minute=_positive_int(env.get("GAB_VERIFY_RATE_LIMIT_PER_MINUTE"), 60),
         inquiry_rate_limit_per_minute=_positive_int(env.get("GAB_INQUIRY_RATE_LIMIT_PER_MINUTE"), 30),
         report_rate_limit_per_minute=_positive_int(env.get("GAB_REPORT_RATE_LIMIT_PER_MINUTE"), 10),
+        deployment_env=deployment_env,
     )
 
 

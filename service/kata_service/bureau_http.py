@@ -10,7 +10,7 @@ from typing import Any
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from kata_service.bureau import Auth, BureauError
+from kata_service.bureau import Auth, BureauError, reset_test_mode, use_test_mode
 
 
 def build_router() -> APIRouter:
@@ -30,7 +30,13 @@ def build_router() -> APIRouter:
             scopes = body.get("scopes")
             if scopes is not None and not isinstance(scopes, list):
                 raise BureauError(400, "scopes must be a list")
-            return _bureau(request).create_key(auth, org_id, str(body.get("name") or "key"), scopes)
+            return _bureau(request).create_key(
+                auth,
+                org_id,
+                str(body.get("name") or "key"),
+                scopes,
+                None if body.get("environment") is None else str(body.get("environment")),
+            )
 
         return await _run(request, action)
 
@@ -134,6 +140,17 @@ def build_router() -> APIRouter:
     async def list_alerts(request: Request):
         return await _run(request, lambda auth, body: _bureau(request).list_alerts(auth), read_body=False)
 
+    @router.get("/v1/webhooks/deliveries", summary="List webhook delivery attempts for this organization")
+    async def list_deliveries(request: Request):
+        return await _run(request, lambda auth, body: _bureau(request).list_deliveries(auth), read_body=False)
+
+    @router.post("/v1/webhooks/test", summary="Send a signed test alert to one subscription")
+    async def test_webhook(request: Request):
+        return await _run(
+            request,
+            lambda auth, body: _bureau(request).test_webhook(auth, str(body.get("subscription_id") or "")),
+        )
+
     @router.get("/v1/audit", summary="Read the audit log for this organization")
     async def list_audit(request: Request):
         return await _run(request, lambda auth, body: _bureau(request).list_audit(auth), read_body=False)
@@ -231,7 +248,7 @@ def build_router() -> APIRouter:
         try:
             return _plain(_bureau(request).latest_dev_link())
         except BureauError as exc:
-            return JSONResponse({"error": exc.message}, status_code=exc.status)
+            return _error_body(exc)
 
     return router
 
@@ -253,10 +270,19 @@ async def _run(request: Request, action, *, read_body: bool = True, anonymous: b
                 auth = _auth(request)
             except BureauError:
                 auth = Auth()
-        result = action(auth, body)
+        mode = use_test_mode(bool(getattr(auth, "test", False)))
+        try:
+            result = action(auth, body)
+        finally:
+            reset_test_mode(mode)
         return _plain(result)
     except BureauError as exc:
-        return JSONResponse({"error": exc.message}, status_code=exc.status)
+        return _error_body(exc)
+
+
+def _error_body(exc: BureauError) -> JSONResponse:
+    headers = {"Retry-After": "60"} if exc.status == 429 else None
+    return JSONResponse({"error": exc.message}, status_code=exc.status, headers=headers)
 
 
 def _auth(request: Request) -> Auth:
@@ -266,6 +292,7 @@ def _auth(request: Request) -> Auth:
     auth = _bureau(request).authenticate(token, admin_token=request.app.state.settings.admin_token)
     request.state.org_id = auth.org_id
     request.state.key_id = auth.key_id
+    request.state.environment = "test" if auth.test else "live"
     if auth.principal_id:
         request.state.principal_id = auth.principal_id
     return auth

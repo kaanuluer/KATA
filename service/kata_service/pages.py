@@ -30,6 +30,24 @@ DOCUMENTS: tuple[tuple[str, str, str, str], ...] = (
         "Functional and non-functional requirements for the Global Agent Bureau.",
     ),
     (
+        "sandbox",
+        "sandbox.md",
+        "Sandbox",
+        "Test keys on the same API. Test rows do not change a production score.",
+    ),
+    (
+        "mcp",
+        "mcp.md",
+        "MCP",
+        "Remote MCP server for verify, inquire, report, revocation, and a signed log entry.",
+    ),
+    (
+        "uptime",
+        "uptime.md",
+        "Uptime",
+        "How to watch /health and /v1/health from outside the host.",
+    ),
+    (
         "design",
         "intent-agreement.md",
         "Design",
@@ -82,6 +100,12 @@ DOCUMENTS: tuple[tuple[str, str, str, str], ...] = (
         "interoperability.md",
         "Interoperability",
         "Field mapping from Verifiable Intent, AP2, TAP, and AGNTCY into KATA objects.",
+    ),
+    (
+        "ucp-research",
+        "ucp-research.md",
+        "UCP research",
+        "What the Universal Commerce Protocol is, and what the bureau could consume. No implementation.",
     ),
 )
 
@@ -270,6 +294,37 @@ def api_reference() -> str:
     return shell("API reference — KATA", "KATA service endpoints.", "".join(blocks), current="/docs")
 
 
+def status_page(report: dict[str, str]) -> str:
+    """Human-readable result of the same check /health returns."""
+
+    database = report.get("database", "unavailable")
+    ok = report.get("status") == "ok"
+    if database == "memory":
+        detail = "This process is using the in-memory store. A database URL is not in use."
+    elif database == "ok":
+        detail = "The database answered a connectivity check."
+    else:
+        detail = "The database connectivity check did not succeed."
+    state = "Operating" if ok else "Unavailable"
+    body = (
+        '<section class="hero"><p class="kicker">Service</p><h1>Status</h1>'
+        f'<p class="lede">{html.escape(state)}. {html.escape(detail)}</p>'
+        "<p>JSON probes: <a href=\"/health\"><code>/health</code></a> and "
+        "<a href=\"/v1/health\"><code>/v1/health</code></a>. "
+        "Uptime guidance is in <a href=\"/docs/uptime\">the uptime note</a>.</p>"
+        "<dl>"
+        f"<dt>Service</dt><dd>{html.escape(report.get('status', 'unavailable'))}</dd>"
+        f"<dt>Database</dt><dd>{html.escape(database)}</dd>"
+        "</dl></section>"
+    )
+    return shell(
+        "Status — Global Agent Bureau",
+        "Whether the Global Agent Bureau service and its database check are answering.",
+        body,
+        current="/status",
+    )
+
+
 def history_section() -> str:
     return (
         "<section id=\"history\">"
@@ -370,6 +425,7 @@ def _nav(current: str) -> str:
         ("/history", "History", "/history"),
         ("/simulation", "Simulation", "/simulation"),
         ("/docs", "Docs", "/docs"),
+        ("/status", "Status", "/status"),
         ("/#operations", "Live status", ""),
         (GITHUB, "GitHub", "github"),
     ]
@@ -566,6 +622,20 @@ _MILESTONES = (
 
 
 _ENDPOINTS: tuple[dict[str, str], ...] = (
+    {
+        "method": "GET",
+        "path": "/health",
+        "summary": "Service probe. No API key. Same body as /v1/health.",
+        "response": '{\n  "status": "ok",\n  "database": "ok"\n}',
+        "errors": '503 {"status": "unavailable", "database": "unavailable"} when the database check fails. The body has no error text.',
+    },
+    {
+        "method": "GET",
+        "path": "/v1/health",
+        "summary": "Service probe on the versioned API. No API key. Same body as /health.",
+        "response": '{\n  "status": "ok",\n  "database": "ok"\n}',
+        "errors": '503 {"status": "unavailable", "database": "unavailable"} when the database check fails. The body has no error text.',
+    },
     {
         "method": "GET",
         "path": "/v1/revocations",
@@ -865,7 +935,21 @@ _ENDPOINTS: tuple[dict[str, str], ...] = (
         "summary": "Subscribes the caller to signed webhooks for revocation, a new incident, and a score drop of 50 points or more. The signature typ is kata-bureau-alert+jws and uses the log signing key.",
         "request": '{\n  "agent_id": "shopper-01",\n  "webhook_url": "https://merchant.example/hooks/gab"\n}',
         "response": '{\n  "subscription_id": "sub_…",\n  "agent_id": "shopper-01"\n}',
-        "errors": "400 unless the URL is https, or http on localhost.",
+        "errors": "400 unless the URL is https and the host is not a loopback name.",
+    },
+    {
+        "method": "POST",
+        "path": "/v1/webhooks/test",
+        "summary": "Sends one signed test alert to a subscription this organization already owns. The response is the alert id and whether delivery succeeded. It does not include the payload or the webhook address.",
+        "request": '{\n  "subscription_id": "sub_…"\n}',
+        "response": '{\n  "alert_id": "alt_…",\n  "delivered": true,\n  "kind": "test"\n}',
+        "errors": "404 when the subscription is missing or belongs to another organization. Failed attempts are retried after 0.5s, 1s, and 2s.",
+    },
+    {
+        "method": "GET",
+        "path": "/v1/webhooks/deliveries",
+        "summary": "Delivery attempts for this organization. detail is delivered, timeout, http_error, or refused. The log does not include error text.",
+        "response": '[\n  {\n    "delivery_id": "dlv_…",\n    "alert_id": "alt_…",\n    "attempt": 1,\n    "outcome": "delivered",\n    "http_status": 204,\n    "detail": "delivered"\n  }\n]',
     },
     {
         "method": "POST",
