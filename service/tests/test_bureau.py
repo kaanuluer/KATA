@@ -587,7 +587,9 @@ def test_smtp_is_off_unless_configured_and_does_not_print_the_password():
         def send_message(self, message):
             sent["to"] = message["To"]
             sent["from"] = message["From"]
-            sent["body"] = message.get_content()
+            sent["message"] = message
+            sent["plain"] = message.get_body(preferencelist=("plain",)).get_content()
+            sent["html"] = message.get_body(preferencelist=("html",)).get_content()
 
         def __enter__(self):
             return self
@@ -608,5 +610,20 @@ def test_smtp_is_off_unless_configured_and_does_not_print_the_password():
     assert sent["tls"] is True
     assert sent["user"] == "mailbox"
     assert sent["from"] == "from@example.com"
-    assert "agent bureau" in str(sent["body"]).lower()
-    assert "credit bureau" not in str(sent["body"]).lower()
+    plain = str(sent["plain"])
+    rich = str(sent["html"])
+    link = "https://globalagentbureau.com/portal#token=abc"
+    assert sent["message"]["Subject"] == "Your Global Agent Bureau sign-in link"
+    assert sent["message"].get_content_type() == "multipart/alternative"
+    for part in (plain, rich):
+        assert "agent bureau" in part.lower()
+        assert "credit bureau" not in part.lower()
+        assert "GAB_" in part
+        assert "If you did not ask for it, ignore this message." in part
+        assert "This link expires in 15 minutes." in part
+        assert link in part
+        assert "call" not in part.lower()
+    assert f'href="{link}"' in rich
+    assert "?token=" not in rich
+    assert "test-smtp-secret" not in plain
+    assert "test-smtp-secret" not in rich
