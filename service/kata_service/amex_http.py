@@ -13,7 +13,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from kata_service.amex_adapter import AdapterError, convert_to_amex, convert_to_kata
-from kata_service.bureau import BureauError, reset_test_mode, use_test_mode
+from kata_service.bureau import BureauError, reject_deep_json, reset_test_mode, use_test_mode
 from kata_service.bureau_http import _bearer, _json_body
 
 
@@ -33,6 +33,7 @@ async def _convert(request: Request, direction: str) -> JSONResponse | dict[str,
     try:
         _guard(request)
         body = await _json_body(request)
+        reject_deep_json(body)
         mode = use_test_mode(True)
         try:
             if direction == "to_kata":

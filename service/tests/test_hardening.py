@@ -104,7 +104,7 @@ def test_vercel_headers_keep_the_site_assets():
 
 
 def test_audit_rows_record_the_key_environment():
-    client = _client()
+    client = _client(dev_mailbox=True)
     operator = _org(client, "Harbor Agents", "agent_operator")
     live = _key(client, operator["org_id"], "live")
     issued = client.post(
@@ -115,11 +115,26 @@ def test_audit_rows_record_the_key_environment():
     assert issued.status_code == 200, issued.text
     test_key = issued.json()["token"]
     assert test_key.startswith("gab_test_")
-    assert client.get("/v1/agents/shopper-01", headers=_auth(live)).status_code == 404
+    _register(client, live, principal_email="owner@example.com")
+    assert client.get("/v1/agents/shopper-01", headers=_auth(live)).status_code == 200
     assert client.get("/v1/agents/shopper-01", headers=_auth(test_key)).status_code == 404
-    rows = client.get("/v1/audit", headers=_auth(live)).json()
-    assert any(row["environment"] == "live" and row["path"] == "/v1/agents/shopper-01" for row in rows)
-    assert any(row["environment"] == "test" and row["path"] == "/v1/agents/shopper-01" for row in rows)
+    live_rows = client.get("/v1/audit", headers=_auth(live))
+    test_rows = client.get("/v1/audit", headers=_auth(test_key))
+    assert live_rows.status_code == 200, live_rows.text
+    assert test_rows.status_code == 200, test_rows.text
+    assert live_rows.json()
+    assert test_rows.json()
+    assert all(row["environment"] == "live" for row in live_rows.json())
+    assert all(row["environment"] == "test" for row in test_rows.json())
+    assert any(row["path"] == "/v1/agents/shopper-01" for row in live_rows.json())
+    assert any(row["path"] == "/v1/agents/shopper-01" for row in test_rows.json())
+    link = client.post("/v1/portal/magic-link", json={"email": "owner@example.com"})
+    assert link.status_code == 200, link.text
+    session = client.post("/v1/sessions", json={"token": client.app.state.bureau.dev_mailbox[-1]["token"]})
+    assert session.status_code == 200, session.text
+    portal = client.get("/v1/audit", headers=_auth(session.json()["token"]))
+    assert portal.status_code == 403
+    assert portal.json()["error"] == "missing scope"
 
 
 def test_postgres_rejects_a_control_character_and_stores_the_audit_environment():
@@ -146,8 +161,34 @@ def test_postgres_rejects_a_control_character_and_stores_the_audit_environment()
     assert "control character" in rejected.json()["error"]
     assert client.get("/v1/agents/shopper-01", headers=_auth(live)).status_code == 404
     assert client.get("/v1/agents/shopper-01", headers=_auth(test_key)).status_code == 404
-    rows = client.get("/v1/audit", headers=_auth(live)).json()
-    assert any(row["environment"] == "live" for row in rows)
-    assert any(row["environment"] == "test" for row in rows)
+    live_rows = client.get("/v1/audit", headers=_auth(live)).json()
+    test_rows = client.get("/v1/audit", headers=_auth(test_key)).json()
+    assert live_rows and all(row["environment"] == "live" for row in live_rows)
+    assert test_rows and all(row["environment"] == "test" for row in test_rows)
+    assert any(row["path"] == "/v1/agents/shopper-01" for row in live_rows)
+    assert any(row["path"] == "/v1/agents/shopper-01" for row in test_rows)
     versions = client.app.state.bureau.repo.migration_versions()
     assert "008_audit_environment.sql" in versions
+
+
+def _nested(levels: int) -> dict:
+    node: dict = {"leaf": 1}
+    for _ in range(levels):
+        node = {"down": node}
+    return node
+
+
+def test_a_deep_body_without_an_agent_id_is_rejected():
+    client, _operator_key, merchant_key = _ready()
+    deep = _nested(40)
+    for path in ("/v1/verify", "/v1/reports", "/v1/inquiries", "/v1/subscriptions"):
+        rejected = client.post(path, headers=_auth(merchant_key), json=deep)
+        assert rejected.status_code == 400, (path, rejected.text)
+        assert rejected.json()["error"] == "document is nested too deeply"
+    missing = client.post("/v1/verify", headers=_auth(merchant_key), json={"action": _action(10)})
+    assert missing.status_code == 404
+    assert missing.json()["error"] == "agent was not found"
+    action = _action(10)
+    action["context"] = _nested(30)
+    held = client.post("/v1/verify", headers=_auth(merchant_key), json={"agent_id": "shopper-01", "action": action})
+    assert "document is nested too deeply" not in held.text

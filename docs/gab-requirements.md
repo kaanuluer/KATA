@@ -32,7 +32,7 @@ Organization types are `agent_operator`, `wallet`, `bank_issuer`, `processor_psp
 - Default scopes: operators get `registry:read`, `registry:write`, `verify`, `report`, `alerts`, `keys:manage`. Wallets and banks get those plus `inquire`. Other types get `registry:read`, `inquire`, `verify`, `report`, `alerts`, `keys:manage`.
 - Every `/v1` request is counted toward a per-minute limit. The default is 120. Over the limit the response is 429 `{"error":"rate limit exceeded"}`. The subject is the hash of the bearer token, or the client host when there is no bearer.
 - `POST /v1/verify`, `POST /v1/inquiries`, and `POST /v1/reports` also have their own per-minute caps, counted separately from the global cap. The defaults are 60, 30, and 10.
-- After each `/v1` response the service writes an audit row: id, time, organization, key id, method, path, status, purpose code, and agent id. The row does not include the Authorization header, the raw key, or an email address.
+- After each `/v1` response the service writes an audit row: id, time, organization, key id, method, path, status, purpose code, agent id, and environment (`live` or `test`). The row does not include the Authorization header, the raw key, or an email address. `GET /v1/audit` returns that organization's rows for the key's environment. A live key sees live rows. A `gab_test_` key sees test rows. The individual portal does not read this log.
 
 Acceptance: the tests in `service/tests/test_bureau.py` create an organization, reject a cross-tenant key list, reject a revoked key, reject a non-admin organization create, and reject a third call when the limit is 2 per minute.
 

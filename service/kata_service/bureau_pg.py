@@ -144,20 +144,21 @@ class PostgresRepo:
             ),
         )
 
-    def list_audit(self, org_id: str | None) -> list[dict[str, Any]]:
-        if org_id is None:
-            rows = self._all(
-                "SELECT audit_id, at, org_id, key_id, method, path, status, purpose_code, agent_id, environment FROM gab_audit ORDER BY at",
-                (),
-            )
-        else:
-            rows = self._all(
-                """
-                SELECT audit_id, at, org_id, key_id, method, path, status, purpose_code, agent_id, environment
-                FROM gab_audit WHERE org_id = %s ORDER BY at
-                """,
-                (org_id,),
-            )
+    def list_audit(self, org_id: str | None, environment: str | None = None) -> list[dict[str, Any]]:
+        columns = "audit_id, at, org_id, key_id, method, path, status, purpose_code, agent_id, environment"
+        clauses: list[str] = []
+        params: list[Any] = []
+        if org_id is not None:
+            clauses.append("org_id = %s")
+            params.append(org_id)
+        if environment is not None:
+            clauses.append("environment = %s")
+            params.append(environment)
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        rows = self._all(
+            f"SELECT {columns} FROM gab_audit{where} ORDER BY at",
+            tuple(params),
+        )
         return [
             {
                 "audit_id": row[0],

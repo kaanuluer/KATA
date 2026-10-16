@@ -30,7 +30,7 @@ from kata_intent.canonical import canonical_bytes
 from kata_intent.errors import KataError
 from kata_intent.jws import sign_jws
 from kata_intent.keys import PrivateKey, public_key_from_jwk
-from kata_intent.values import hash_document
+from kata_intent.values import coerce, hash_document
 
 from kata_service.score_model import ScoreWeights
 from kata_service.defenses import (
@@ -107,6 +107,31 @@ def use_test_mode(enabled: bool) -> Token[bool]:
 
 def reset_test_mode(token: Token[bool]) -> None:
     _test_mode.reset(token)
+
+
+def _json_within_depth(value: Any) -> bool:
+    try:
+        coerce(value)
+    except KataError:
+        return False
+    return True
+
+
+def reject_deep_json(body: Any) -> None:
+    """Refuse a JSON body nested past the document limit before any lookup.
+
+    The action document keeps the existing 32-level limit. The HTTP envelope
+    around that document is not counted as an extra level.
+    """
+
+    if not isinstance(body, dict) or _json_within_depth(body):
+        return
+    action = body.get("action")
+    if isinstance(action, dict) and _json_within_depth(action):
+        rest = {key: value for key, value in body.items() if key != "action"}
+        if _json_within_depth(rest):
+            return
+    raise BureauError(400, "document is nested too deeply")
 
 
 def _stamp_env(record: dict[str, Any]) -> dict[str, Any]:
@@ -608,9 +633,11 @@ class MemoryRepo:
         with self._lock:
             self.audit.append(dict(record))
 
-    def list_audit(self, org_id: str | None) -> list[dict[str, Any]]:
+    def list_audit(self, org_id: str | None, environment: str | None = None) -> list[dict[str, Any]]:
         with self._lock:
             rows = self.audit if org_id is None else [item for item in self.audit if item.get("org_id") == org_id]
+            if environment is not None:
+                rows = [item for item in rows if (item.get("environment") or "live") == environment]
             return [dict(item) for item in rows]
 
     def hit_rate(self, subject: str, window: str) -> int:
@@ -1388,6 +1415,7 @@ class BureauService:
 
     def verify(self, auth: Auth, body: dict[str, Any]) -> dict[str, Any]:
         self._scope(auth, "verify")
+        reject_deep_json(body)
         agent_id = str(body.get("agent_id") or "")
         agent = self._agent(agent_id)
         action = body.get("action")
@@ -1456,6 +1484,7 @@ class BureauService:
     def verify_checkout(self, auth: Auth, body: dict[str, Any]) -> dict[str, Any]:
         """Check a UCP checkout as an action. Sandbox test keys only."""
 
+        reject_deep_json(body)
         self._scope(auth, "verify")
         if auth.kind != "key" or not auth.test:
             raise BureauError(403, "this route accepts test keys")
@@ -1503,6 +1532,7 @@ class BureauService:
 
     def report(self, auth: Auth, body: dict[str, Any]) -> dict[str, Any]:
         self._scope(auth, "report")
+        reject_deep_json(body)
         org = self._caller_org(auth)
         agent = self._agent(str(body.get("agent_id") or ""))
         kind = str(body.get("kind") or "")
@@ -1583,6 +1613,7 @@ class BureauService:
 
     def inquire(self, auth: Auth, body: dict[str, Any]) -> dict[str, Any]:
         self._scope(auth, "inquire")
+        reject_deep_json(body)
         purpose = str(body.get("purpose_code") or "")
         if purpose not in PURPOSE_CODES:
             raise BureauError(400, "purpose_code is required")
@@ -1714,7 +1745,8 @@ class BureauService:
     def list_audit(self, auth: Auth) -> list[dict[str, Any]]:
         self._scope(auth, "keys:manage")
         org_id = None if auth.admin else auth.org_id
-        return self.repo.list_audit(org_id)
+        environment = "test" if auth.test else "live"
+        return self.repo.list_audit(org_id, environment)
 
     def request_portal_link(self, email: str) -> dict[str, bool]:
         address = _email(email)
