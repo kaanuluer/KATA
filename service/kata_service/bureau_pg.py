@@ -22,6 +22,10 @@ def migration_sql() -> str:
     return "\n".join(path.read_text(encoding="utf-8") for path in sorted(_MIGRATIONS.glob("*.sql")))
 
 
+def _test_row() -> bool:
+    return in_test_mode()
+
+
 def _recorded_versions(conn) -> set[str]:
     row = conn.execute("SELECT to_regclass('public.gab_schema_migrations')").fetchone()
     if row is None or row[0] is None:
@@ -274,14 +278,15 @@ class PostgresRepo:
         return {"token_hash": row[0], "kind": row[1], "subject_id": row[2], "expires_at": row[3]}
 
     def save_agent(self, record: dict[str, Any]) -> None:
+        record["is_test"] = _test_row()
         self._execute(
             """
             INSERT INTO gab_agents (
               agent_id, operator_org_id, principal_id, status, verification_level, algorithm,
               fingerprint, public_key, created_at, updated_at, score, score_reasons, cold_start,
-              principal_public_key
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (agent_id) DO UPDATE SET
+              principal_public_key, is_test
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (agent_id, is_test) DO UPDATE SET
               status = EXCLUDED.status,
               verification_level = EXCLUDED.verification_level,
               updated_at = EXCLUDED.updated_at,
@@ -305,47 +310,49 @@ class PostgresRepo:
                 json.dumps(record.get("score_reasons") or []),
                 1 if record.get("cold_start", True) else 0,
                 json.dumps(record["principal_public_key"]) if record.get("principal_public_key") else None,
+                _test_row(),
             ),
         )
 
     def get_agent(self, agent_id: str) -> dict[str, Any] | None:
-        row = self._one("SELECT * FROM gab_agents WHERE agent_id = %s", (agent_id,))
+        row = self._one("SELECT * FROM gab_agents WHERE agent_id = %s AND is_test = %s", (agent_id, _test_row()))
         return None if row is None else _agent_row(row)
 
     def agent_by_fingerprint(self, fingerprint: str) -> dict[str, Any] | None:
-        row = self._one("SELECT * FROM gab_agents WHERE fingerprint = %s", (fingerprint,))
+        row = self._one("SELECT * FROM gab_agents WHERE fingerprint = %s AND is_test = %s", (fingerprint, _test_row()))
         return None if row is None else _agent_row(row)
 
     def list_agents(self, *, operator_org_id: str | None = None, principal_id: str | None = None) -> list[dict[str, Any]]:
+        flag = _test_row()
         if operator_org_id is not None:
-            rows = self._all("SELECT * FROM gab_agents WHERE operator_org_id = %s", (operator_org_id,))
+            rows = self._all("SELECT * FROM gab_agents WHERE operator_org_id = %s AND is_test = %s", (operator_org_id, flag))
         elif principal_id is not None:
-            rows = self._all("SELECT * FROM gab_agents WHERE principal_id = %s", (principal_id,))
+            rows = self._all("SELECT * FROM gab_agents WHERE principal_id = %s AND is_test = %s", (principal_id, flag))
         else:
-            rows = self._all("SELECT * FROM gab_agents", ())
+            rows = self._all("SELECT * FROM gab_agents WHERE is_test = %s", (flag,))
         return [_agent_row(row) for row in rows]
 
     def save_agreement(self, record: dict[str, Any]) -> None:
         self._execute(
             """
-            INSERT INTO gab_agreements (agreement_id, agent_id, document, status, updated_at)
-            VALUES (%s, %s, %s, %s, %s)
-            ON CONFLICT (agreement_id) DO UPDATE SET document = EXCLUDED.document, status = EXCLUDED.status, updated_at = EXCLUDED.updated_at
+            INSERT INTO gab_agreements (agreement_id, agent_id, document, status, updated_at, is_test)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (agreement_id, is_test) DO UPDATE SET document = EXCLUDED.document, status = EXCLUDED.status, updated_at = EXCLUDED.updated_at
             """,
-            (record["agreement_id"], record["agent_id"], dump_doc(record["document"]), record["status"], record["updated_at"]),
+            (record["agreement_id"], record["agent_id"], dump_doc(record["document"]), record["status"], record["updated_at"], _test_row()),
         )
 
     def get_agreement(self, agreement_id: str) -> dict[str, Any] | None:
         row = self._one(
-            "SELECT agreement_id, agent_id, document, status, updated_at FROM gab_agreements WHERE agreement_id = %s",
-            (agreement_id,),
+            "SELECT agreement_id, agent_id, document, status, updated_at FROM gab_agreements WHERE agreement_id = %s AND is_test = %s",
+            (agreement_id, _test_row()),
         )
         return None if row is None else _agreement_row(row)
 
     def list_agreements(self, agent_id: str) -> list[dict[str, Any]]:
         rows = self._all(
-            "SELECT agreement_id, agent_id, document, status, updated_at FROM gab_agreements WHERE agent_id = %s",
-            (agent_id,),
+            "SELECT agreement_id, agent_id, document, status, updated_at FROM gab_agreements WHERE agent_id = %s AND is_test = %s",
+            (agent_id, _test_row()),
         )
         return [_agreement_row(row) for row in rows]
 
@@ -356,8 +363,8 @@ class PostgresRepo:
                 conn.execute(
                     """
                     INSERT INTO gab_reports (
-                      report_id, agent_id, reporter_org_id, kind, evidence_hash, summary, outcome, created_at, excluded, action_id
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                      report_id, agent_id, reporter_org_id, kind, evidence_hash, summary, outcome, created_at, excluded, action_id, is_test
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         record["report_id"],
@@ -370,6 +377,7 @@ class PostgresRepo:
                         record["created_at"],
                         1 if record.get("excluded") else 0,
                         record.get("action_id"),
+                        _test_row(),
                     ),
                 )
         except Exception as exc:
@@ -381,43 +389,46 @@ class PostgresRepo:
         rows = self._all(
             """
             SELECT report_id, agent_id, reporter_org_id, kind, evidence_hash, summary, outcome, created_at, excluded, action_id
-            FROM gab_reports WHERE agent_id = %s ORDER BY created_at
+            FROM gab_reports WHERE agent_id = %s AND is_test = %s ORDER BY created_at
             """,
-            (agent_id,),
+            (agent_id, _test_row()),
         )
         return [_report_row(row) for row in rows]
 
     def reports_by_org_on_day(self, org_id: str, day: str) -> int:
         row = self._one(
-            "SELECT COUNT(*) FROM gab_reports WHERE reporter_org_id = %s AND created_at LIKE %s",
-            (org_id, day + "%"),
+            "SELECT COUNT(*) FROM gab_reports WHERE reporter_org_id = %s AND created_at LIKE %s AND is_test = %s",
+            (org_id, day + "%", _test_row()),
         )
         return int(row[0] if row else 0)
 
     def org_has_report(self, org_id: str) -> bool:
-        row = self._one("SELECT 1 FROM gab_reports WHERE reporter_org_id = %s LIMIT 1", (org_id,))
+        row = self._one("SELECT 1 FROM gab_reports WHERE reporter_org_id = %s AND is_test = %s LIMIT 1", (org_id, _test_row()))
         return row is not None
 
     def get_report(self, report_id: str) -> dict[str, Any] | None:
         row = self._one(
             """
             SELECT report_id, agent_id, reporter_org_id, kind, evidence_hash, summary, outcome, created_at, excluded, action_id
-            FROM gab_reports WHERE report_id = %s
+            FROM gab_reports WHERE report_id = %s AND is_test = %s
             """,
-            (report_id,),
+            (report_id, _test_row()),
         )
         return None if row is None else _report_row(row)
 
     def set_report_excluded(self, report_id: str, excluded: bool) -> None:
-        self._execute("UPDATE gab_reports SET excluded = %s WHERE report_id = %s", (1 if excluded else 0, report_id))
+        self._execute(
+            "UPDATE gab_reports SET excluded = %s WHERE report_id = %s AND is_test = %s",
+            (1 if excluded else 0, report_id, _test_row()),
+        )
 
     def all_reports(self) -> list[dict[str, Any]]:
         rows = self._all(
             """
             SELECT report_id, agent_id, reporter_org_id, kind, evidence_hash, summary, outcome, created_at, excluded, action_id
-            FROM gab_reports ORDER BY created_at
+            FROM gab_reports WHERE is_test = %s ORDER BY created_at
             """,
-            (),
+            (_test_row(),),
         )
         return [_report_row(row) for row in rows]
 
@@ -429,8 +440,8 @@ class PostgresRepo:
         self._execute(
             """
             INSERT INTO gab_interactions (
-              interaction_id, agent_id, operator_org_id, counterparty_org_id, action_id, amount, currency, agreement_id, at
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+              interaction_id, agent_id, operator_org_id, counterparty_org_id, action_id, amount, currency, agreement_id, at, is_test
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 record["interaction_id"],
@@ -442,6 +453,7 @@ class PostgresRepo:
                 record.get("currency"),
                 record.get("agreement_id"),
                 record["at"],
+                _test_row(),
             ),
         )
 
@@ -449,9 +461,9 @@ class PostgresRepo:
         rows = self._all(
             """
             SELECT interaction_id, agent_id, operator_org_id, counterparty_org_id, action_id, amount, currency, agreement_id, at
-            FROM gab_interactions WHERE agent_id = %s
+            FROM gab_interactions WHERE agent_id = %s AND is_test = %s
             """,
-            (agent_id,),
+            (agent_id, _test_row()),
         )
         return [_interaction_row(row) for row in rows]
 
@@ -459,46 +471,49 @@ class PostgresRepo:
         rows = self._all(
             """
             SELECT interaction_id, agent_id, operator_org_id, counterparty_org_id, action_id, amount, currency, agreement_id, at
-            FROM gab_interactions WHERE operator_org_id = %s
+            FROM gab_interactions WHERE operator_org_id = %s AND is_test = %s
             """,
-            (operator_org_id,),
+            (operator_org_id, _test_row()),
         )
         return [_interaction_row(row) for row in rows]
 
     def add_signal(self, record: dict[str, Any]) -> None:
         self._execute(
             """
-            INSERT INTO gab_agent_signals (agent_id, kind, value, created_at) VALUES (%s, %s, %s, %s)
-            ON CONFLICT (agent_id, kind, value) DO NOTHING
+            INSERT INTO gab_agent_signals (agent_id, kind, value, created_at, is_test) VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (agent_id, kind, value, is_test) DO NOTHING
             """,
-            (record["agent_id"], record["kind"], record["value"], record["created_at"]),
+            (record["agent_id"], record["kind"], record["value"], record["created_at"], _test_row()),
         )
 
     def agent_ids_for_signal(self, kind: str, value: str) -> list[str]:
-        rows = self._all("SELECT agent_id FROM gab_agent_signals WHERE kind = %s AND value = %s", (kind, value))
+        rows = self._all(
+            "SELECT agent_id FROM gab_agent_signals WHERE kind = %s AND value = %s AND is_test = %s",
+            (kind, value, _test_row()),
+        )
         return [row[0] for row in rows]
 
     def all_interactions(self) -> list[dict[str, Any]]:
         rows = self._all(
             """
             SELECT interaction_id, agent_id, operator_org_id, counterparty_org_id, action_id, amount, currency, agreement_id, at
-            FROM gab_interactions
+            FROM gab_interactions WHERE is_test = %s
             """,
-            (),
+            (_test_row(),),
         )
         return [_interaction_row(row) for row in rows]
 
     def add_org_signal(self, record: dict[str, Any]) -> None:
         self._execute(
             """
-            INSERT INTO gab_org_signals (org_id, kind, value, created_at) VALUES (%s, %s, %s, %s)
-            ON CONFLICT (org_id, kind, value) DO NOTHING
+            INSERT INTO gab_org_signals (org_id, kind, value, created_at, is_test) VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (org_id, kind, value, is_test) DO NOTHING
             """,
-            (record["org_id"], record["kind"], record["value"], record["created_at"]),
+            (record["org_id"], record["kind"], record["value"], record["created_at"], _test_row()),
         )
 
     def org_signal_groups(self) -> list[set[str]]:
-        rows = self._all("SELECT org_id, value FROM gab_org_signals", ())
+        rows = self._all("SELECT org_id, value FROM gab_org_signals WHERE is_test = %s", (_test_row(),))
         grouped: dict[str, set[str]] = {}
         for org_id, value in rows:
             grouped.setdefault(value, set()).add(org_id)
@@ -507,16 +522,16 @@ class PostgresRepo:
     def add_identity_link(self, record: dict[str, Any]) -> None:
         self._execute(
             """
-            INSERT INTO gab_identity_links (link_id, agent_id, linked_agent_id, signal, created_at)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO gab_identity_links (link_id, agent_id, linked_agent_id, signal, created_at, is_test)
+            VALUES (%s, %s, %s, %s, %s, %s)
             """,
-            (record["link_id"], record["agent_id"], record["linked_agent_id"], record["signal"], record["created_at"]),
+            (record["link_id"], record["agent_id"], record["linked_agent_id"], record["signal"], record["created_at"], _test_row()),
         )
 
     def links_for_agent(self, agent_id: str) -> list[dict[str, Any]]:
         rows = self._all(
-            "SELECT link_id, agent_id, linked_agent_id, signal, created_at FROM gab_identity_links WHERE agent_id = %s",
-            (agent_id,),
+            "SELECT link_id, agent_id, linked_agent_id, signal, created_at FROM gab_identity_links WHERE agent_id = %s AND is_test = %s",
+            (agent_id, _test_row()),
         )
         return [
             {
@@ -532,9 +547,9 @@ class PostgresRepo:
     def add_proofing(self, record: dict[str, Any]) -> None:
         self._execute(
             """
-            INSERT INTO gab_proofings (proofing_id, agent_id, org_id, method, evidence_hash, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            ON CONFLICT (agent_id, method, evidence_hash) DO NOTHING
+            INSERT INTO gab_proofings (proofing_id, agent_id, org_id, method, evidence_hash, created_at, is_test)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (agent_id, method, evidence_hash, is_test) DO NOTHING
             """,
             (
                 record["proofing_id"],
@@ -543,6 +558,7 @@ class PostgresRepo:
                 record["method"],
                 record["evidence_hash"],
                 record["created_at"],
+                _test_row(),
             ),
         )
 
@@ -550,9 +566,9 @@ class PostgresRepo:
         rows = self._all(
             """
             SELECT proofing_id, agent_id, org_id, method, evidence_hash, created_at
-            FROM gab_proofings WHERE agent_id = %s ORDER BY created_at
+            FROM gab_proofings WHERE agent_id = %s AND is_test = %s ORDER BY created_at
             """,
-            (agent_id,),
+            (agent_id, _test_row()),
         )
         return [
             {
@@ -588,18 +604,18 @@ class PostgresRepo:
     def add_sighting(self, record: dict[str, Any]) -> dict[str, Any]:
         self._execute(
             """
-            INSERT INTO gab_consortium_sightings (sighting_id, member_id, fingerprint, seen_at)
-            VALUES (%s, %s, %s, %s)
-            ON CONFLICT (member_id, fingerprint) DO NOTHING
+            INSERT INTO gab_consortium_sightings (sighting_id, member_id, fingerprint, seen_at, is_test)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (member_id, fingerprint, is_test) DO NOTHING
             """,
-            (record["sighting_id"], record["member_id"], record["fingerprint"], record["seen_at"]),
+            (record["sighting_id"], record["member_id"], record["fingerprint"], record["seen_at"], _test_row()),
         )
         row = self._one(
             """
             SELECT sighting_id, member_id, fingerprint, seen_at
-            FROM gab_consortium_sightings WHERE member_id = %s AND fingerprint = %s
+            FROM gab_consortium_sightings WHERE member_id = %s AND fingerprint = %s AND is_test = %s
             """,
-            (record["member_id"], record["fingerprint"]),
+            (record["member_id"], record["fingerprint"], _test_row()),
         )
         if row is None:
             raise BureauError(500, "sighting was not stored")
@@ -607,27 +623,35 @@ class PostgresRepo:
 
     def sighting_member_ids(self, fingerprint: str) -> list[str]:
         rows = self._all(
-            "SELECT member_id FROM gab_consortium_sightings WHERE fingerprint = %s",
-            (fingerprint,),
+            "SELECT member_id FROM gab_consortium_sightings WHERE fingerprint = %s AND is_test = %s",
+            (fingerprint, _test_row()),
         )
         return [row[0] for row in rows]
 
     def add_inquiry(self, record: dict[str, Any]) -> None:
         self._execute(
             """
-            INSERT INTO gab_inquiries (inquiry_id, org_id, agent_id, principal_id, purpose_code, at)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO gab_inquiries (inquiry_id, org_id, agent_id, principal_id, purpose_code, at, is_test)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             """,
-            (record["inquiry_id"], record["org_id"], record["agent_id"], record["principal_id"], record["purpose_code"], record["at"]),
+            (
+                record["inquiry_id"],
+                record["org_id"],
+                record["agent_id"],
+                record["principal_id"],
+                record["purpose_code"],
+                record["at"],
+                _test_row(),
+            ),
         )
 
     def inquiries_for_principal(self, principal_id: str) -> list[dict[str, Any]]:
         rows = self._all(
             """
             SELECT inquiry_id, org_id, agent_id, principal_id, purpose_code, at
-            FROM gab_inquiries WHERE principal_id = %s ORDER BY at
+            FROM gab_inquiries WHERE principal_id = %s AND is_test = %s ORDER BY at
             """,
-            (principal_id,),
+            (principal_id, _test_row()),
         )
         return [
             {
@@ -645,10 +669,10 @@ class PostgresRepo:
         try:
             self._execute(
                 """
-                INSERT INTO gab_subscriptions (subscription_id, org_id, agent_id, webhook_url, created_at)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO gab_subscriptions (subscription_id, org_id, agent_id, webhook_url, created_at, is_test)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 """,
-                (record["subscription_id"], record["org_id"], record["agent_id"], record["webhook_url"], record["created_at"]),
+                (record["subscription_id"], record["org_id"], record["agent_id"], record["webhook_url"], record["created_at"], _test_row()),
             )
         except Exception as exc:
             if "unique" in str(exc).lower() or "duplicate" in str(exc).lower():
@@ -657,22 +681,22 @@ class PostgresRepo:
 
     def subscriptions_for_agent(self, agent_id: str) -> list[dict[str, Any]]:
         rows = self._all(
-            "SELECT subscription_id, org_id, agent_id, webhook_url, created_at FROM gab_subscriptions WHERE agent_id = %s",
-            (agent_id,),
+            "SELECT subscription_id, org_id, agent_id, webhook_url, created_at FROM gab_subscriptions WHERE agent_id = %s AND is_test = %s",
+            (agent_id, _test_row()),
         )
         return [_sub_row(row) for row in rows]
 
     def subscriptions_for_org(self, org_id: str) -> list[dict[str, Any]]:
         rows = self._all(
-            "SELECT subscription_id, org_id, agent_id, webhook_url, created_at FROM gab_subscriptions WHERE org_id = %s",
-            (org_id,),
+            "SELECT subscription_id, org_id, agent_id, webhook_url, created_at FROM gab_subscriptions WHERE org_id = %s AND is_test = %s",
+            (org_id, _test_row()),
         )
         return [_sub_row(row) for row in rows]
 
     def get_subscription(self, subscription_id: str) -> dict[str, Any] | None:
         row = self._one(
-            "SELECT subscription_id, org_id, agent_id, webhook_url, created_at FROM gab_subscriptions WHERE subscription_id = %s",
-            (subscription_id,),
+            "SELECT subscription_id, org_id, agent_id, webhook_url, created_at FROM gab_subscriptions WHERE subscription_id = %s AND is_test = %s",
+            (subscription_id, _test_row()),
         )
         return None if row is None else _sub_row(row)
 
@@ -680,8 +704,8 @@ class PostgresRepo:
         self._execute(
             """
             INSERT INTO gab_webhook_deliveries (
-              delivery_id, org_id, agent_id, alert_id, attempt, at, outcome, http_status, detail
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+              delivery_id, org_id, agent_id, alert_id, attempt, at, outcome, http_status, detail, is_test
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 record["delivery_id"],
@@ -693,6 +717,7 @@ class PostgresRepo:
                 record["outcome"],
                 record.get("http_status"),
                 record["detail"],
+                _test_row(),
             ),
         )
 
@@ -700,9 +725,9 @@ class PostgresRepo:
         rows = self._all(
             """
             SELECT delivery_id, alert_id, agent_id, attempt, at, outcome, http_status, detail
-            FROM gab_webhook_deliveries WHERE org_id = %s ORDER BY at, attempt
+            FROM gab_webhook_deliveries WHERE org_id = %s AND is_test = %s ORDER BY at, attempt
             """,
-            (org_id,),
+            (org_id, _test_row()),
         )
         return [
             {
@@ -723,16 +748,16 @@ class PostgresRepo:
         self._ensure()
         with self._connect() as conn:
             cursor = conn.execute(
-                "DELETE FROM gab_subscriptions WHERE subscription_id = %s AND org_id = %s",
-                (subscription_id, org_id),
+                "DELETE FROM gab_subscriptions WHERE subscription_id = %s AND org_id = %s AND is_test = %s",
+                (subscription_id, org_id, _test_row()),
             )
             return cursor.rowcount > 0
 
     def add_alert(self, record: dict[str, Any]) -> None:
         self._execute(
             """
-            INSERT INTO gab_alerts (alert_id, org_id, agent_id, kind, document, created_at, delivered)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO gab_alerts (alert_id, org_id, agent_id, kind, document, created_at, delivered, is_test)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 record["alert_id"],
@@ -742,13 +767,14 @@ class PostgresRepo:
                 dump_doc(record["document"]),
                 record["created_at"],
                 1 if record.get("delivered") else 0,
+                _test_row(),
             ),
         )
 
     def alerts_for_org(self, org_id: str) -> list[dict[str, Any]]:
         rows = self._all(
-            "SELECT alert_id, org_id, agent_id, kind, document, created_at, delivered FROM gab_alerts WHERE org_id = %s ORDER BY created_at",
-            (org_id,),
+            "SELECT alert_id, org_id, agent_id, kind, document, created_at, delivered FROM gab_alerts WHERE org_id = %s AND is_test = %s ORDER BY created_at",
+            (org_id, _test_row()),
         )
         return [
             {
@@ -766,8 +792,8 @@ class PostgresRepo:
     def add_dispute(self, record: dict[str, Any]) -> None:
         self._execute(
             """
-            INSERT INTO gab_disputes (dispute_id, report_id, principal_id, statement, status, outcome, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO gab_disputes (dispute_id, report_id, principal_id, statement, status, outcome, created_at, updated_at, is_test)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 record["dispute_id"],
@@ -778,13 +804,14 @@ class PostgresRepo:
                 record.get("outcome"),
                 record["created_at"],
                 record["updated_at"],
+                _test_row(),
             ),
         )
 
     def list_disputes(self) -> list[dict[str, Any]]:
         rows = self._all(
-            "SELECT dispute_id, report_id, principal_id, statement, status, outcome, created_at, updated_at FROM gab_disputes ORDER BY created_at",
-            (),
+            "SELECT dispute_id, report_id, principal_id, statement, status, outcome, created_at, updated_at FROM gab_disputes WHERE is_test = %s ORDER BY created_at",
+            (_test_row(),),
         )
         return [_dispute_row(row) for row in rows]
 
@@ -792,9 +819,9 @@ class PostgresRepo:
         rows = self._all(
             """
             SELECT dispute_id, report_id, principal_id, statement, status, outcome, created_at, updated_at
-            FROM gab_disputes WHERE principal_id = %s ORDER BY created_at
+            FROM gab_disputes WHERE principal_id = %s AND is_test = %s ORDER BY created_at
             """,
-            (principal_id,),
+            (principal_id, _test_row()),
         )
         return [_dispute_row(row) for row in rows]
 
@@ -802,16 +829,16 @@ class PostgresRepo:
         row = self._one(
             """
             SELECT dispute_id, report_id, principal_id, statement, status, outcome, created_at, updated_at
-            FROM gab_disputes WHERE dispute_id = %s
+            FROM gab_disputes WHERE dispute_id = %s AND is_test = %s
             """,
-            (dispute_id,),
+            (dispute_id, _test_row()),
         )
         return None if row is None else _dispute_row(row)
 
     def save_dispute(self, record: dict[str, Any]) -> None:
         self._execute(
-            "UPDATE gab_disputes SET status = %s, outcome = %s, updated_at = %s WHERE dispute_id = %s",
-            (record["status"], record.get("outcome"), record["updated_at"], record["dispute_id"]),
+            "UPDATE gab_disputes SET status = %s, outcome = %s, updated_at = %s WHERE dispute_id = %s AND is_test = %s",
+            (record["status"], record.get("outcome"), record["updated_at"], record["dispute_id"], _test_row()),
         )
 
     def reporter_types(self) -> dict[str, str]:
@@ -849,10 +876,7 @@ class PostgresRepo:
     def _connect(self):
         import psycopg
 
-        conn = psycopg.connect(self.database_url)
-        if in_test_mode():
-            conn.execute("SET search_path TO gab_sandbox, public")
-        return conn
+        return psycopg.connect(self.database_url)
 
     def _execute(self, sql: str, params: tuple) -> None:
         self._ensure()
@@ -901,6 +925,7 @@ def _agent_row(row) -> dict[str, Any]:
         "score_reasons": json.loads(row[11]),
         "cold_start": bool(row[12]),
         "principal_public_key": json.loads(row[13]) if len(row) > 13 and row[13] else None,
+        "is_test": bool(row[14]) if len(row) > 14 else False,
     }
 
 
