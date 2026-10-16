@@ -24,6 +24,12 @@ DOCUMENTS: tuple[tuple[str, str, str, str], ...] = (
         "Functional and non-functional requirements for the Global Agent Bureau.",
     ),
     (
+        "sandbox",
+        "sandbox.md",
+        "Sandbox",
+        "Test keys on the same API. Test rows do not change a production score.",
+    ),
+    (
         "design",
         "intent-agreement.md",
         "Design",

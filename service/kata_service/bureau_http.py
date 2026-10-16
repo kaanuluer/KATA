@@ -10,7 +10,7 @@ from typing import Any
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from kata_service.bureau import Auth, BureauError
+from kata_service.bureau import Auth, BureauError, reset_test_mode, use_test_mode
 
 
 def build_router() -> APIRouter:
@@ -30,7 +30,13 @@ def build_router() -> APIRouter:
             scopes = body.get("scopes")
             if scopes is not None and not isinstance(scopes, list):
                 raise BureauError(400, "scopes must be a list")
-            return _bureau(request).create_key(auth, org_id, str(body.get("name") or "key"), scopes)
+            return _bureau(request).create_key(
+                auth,
+                org_id,
+                str(body.get("name") or "key"),
+                scopes,
+                None if body.get("environment") is None else str(body.get("environment")),
+            )
 
         return await _run(request, action)
 
@@ -253,7 +259,11 @@ async def _run(request: Request, action, *, read_body: bool = True, anonymous: b
                 auth = _auth(request)
             except BureauError:
                 auth = Auth()
-        result = action(auth, body)
+        mode = use_test_mode(bool(getattr(auth, "test", False)))
+        try:
+            result = action(auth, body)
+        finally:
+            reset_test_mode(mode)
         return _plain(result)
     except BureauError as exc:
         return JSONResponse({"error": exc.message}, status_code=exc.status)

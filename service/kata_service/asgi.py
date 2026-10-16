@@ -406,6 +406,7 @@ def ensure_bureau(app: FastAPI):
             public_base_url=settings.public_base_url,
             policy=settings.score_policy,
             consortium_match_threshold=settings.consortium_match_threshold,
+            deployment_env=settings.deployment_env,
         )
         if settings.demo:
             from kata_service.seed import seed_demo
@@ -436,6 +437,7 @@ def ensure_bureau(app: FastAPI):
         public_base_url=settings.public_base_url,
         policy=settings.score_policy,
         consortium_match_threshold=settings.consortium_match_threshold,
+        deployment_env=settings.deployment_env,
     )
     app.state.bureau = service
     return service
