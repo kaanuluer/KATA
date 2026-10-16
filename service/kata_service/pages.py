@@ -18,6 +18,12 @@ _HREF = re.compile(r"""href=(["'])(.*?)(\1)""")
 # Slug, repository file, nav label, index blurb.
 DOCUMENTS: tuple[tuple[str, str, str, str], ...] = (
     (
+        "quickstart",
+        "quickstart.md",
+        "Quickstart",
+        "Auth, agent registration, verify, inquire, report, and webhook signature checks.",
+    ),
+    (
         "gab-requirements",
         "gab-requirements.md",
         "Bureau requirements",
