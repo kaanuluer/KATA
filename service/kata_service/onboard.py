@@ -187,6 +187,9 @@ def _welcome(
         "The test key writes the test partition and does not change a production score. "
         "Use the test key while you integrate. Use the live key for production traffic.\n"
         "\n"
+        "An agent_operator organization does not receive the inquire scope. "
+        "A wallet, bank, processor, or merchant key does.\n"
+        "\n"
         "Global Agent Bureau is an agent bureau and a technology company. "
         "The framework is KATA. The license is PolyForm Noncommercial.\n"
     )

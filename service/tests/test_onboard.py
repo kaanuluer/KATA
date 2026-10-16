@@ -67,6 +67,7 @@ def test_onboard_writes_keys_once_and_keeps_them_out_of_logs(tmp_path, capsys, c
     assert welcome == printed
     assert "agent bureau" in welcome.lower()
     assert "PolyForm Noncommercial" in welcome
+    assert "agent_operator organization does not receive the inquire scope" in welcome
     assert "finance@northwind.example" in welcome
     assert "Ops@Northwind.example" not in welcome
     for banned in ("open source", "open-source", "credit bureau", "call"):

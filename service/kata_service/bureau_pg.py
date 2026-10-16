@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -13,10 +14,20 @@ from kata_service.store import dump_doc, load_doc
 
 _MIGRATIONS = Path(__file__).resolve().parent / "migrations"
 _MIGRATION = _MIGRATIONS / "001_bureau.sql"
+# Session advisory lock for bureau DDL. Distinct from the log lock in store.py.
+_SCHEMA_LOCK = 8412553
 
 
 def migration_sql() -> str:
     return "\n".join(path.read_text(encoding="utf-8") for path in sorted(_MIGRATIONS.glob("*.sql")))
+
+
+def _recorded_versions(conn) -> set[str]:
+    row = conn.execute("SELECT to_regclass('public.gab_schema_migrations')").fetchone()
+    if row is None or row[0] is None:
+        return set()
+    rows = conn.execute("SELECT version FROM gab_schema_migrations").fetchall()
+    return {item[0] for item in rows}
 
 
 def migration_statements() -> list[str]:
@@ -34,6 +45,7 @@ class PostgresRepo:
         self.database_url = database_url
         self.schema_url = schema_url or database_url
         self._ready = False
+        self._schema_lock = threading.Lock()
 
     def migration_versions(self) -> list[str]:
         self._ensure()
@@ -471,7 +483,8 @@ class PostgresRepo:
             """
             SELECT interaction_id, agent_id, operator_org_id, counterparty_org_id, action_id, amount, currency, agreement_id, at
             FROM gab_interactions
-            """
+            """,
+            (),
         )
         return [_interaction_row(row) for row in rows]
 
@@ -485,7 +498,7 @@ class PostgresRepo:
         )
 
     def org_signal_groups(self) -> list[set[str]]:
-        rows = self._all("SELECT org_id, value FROM gab_org_signals")
+        rows = self._all("SELECT org_id, value FROM gab_org_signals", ())
         grouped: dict[str, set[str]] = {}
         for org_id, value in rows:
             grouped.setdefault(value, set()).add(org_id)
@@ -808,17 +821,30 @@ class PostgresRepo:
     def _ensure(self) -> None:
         if self._ready:
             return
-        import psycopg
+        with self._schema_lock:
+            if self._ready:
+                return
+            import psycopg
 
-        with psycopg.connect(self.schema_url, autocommit=True) as conn:
-            for statement in migration_statements():
-                conn.execute(statement)
-            for path in sorted(_MIGRATIONS.glob("*.sql")):
-                conn.execute(
-                    "INSERT INTO gab_schema_migrations (version, applied_at) VALUES (%s, %s) ON CONFLICT (version) DO NOTHING",
-                    (path.name, "applied"),
-                )
-        self._ready = True
+            expected = {path.name for path in _MIGRATIONS.glob("*.sql")}
+            with psycopg.connect(self.schema_url, autocommit=True) as conn:
+                # Session lock, not transaction lock: autocommit would release the latter after one statement.
+                conn.execute("SELECT pg_advisory_lock(%s)", (_SCHEMA_LOCK,))
+                try:
+                    # Filenames are the recorded versions. 006_sandbox.sql and 006_webhook.sql
+                    # are already applied in production under those names, so they stay.
+                    applied = _recorded_versions(conn)
+                    if not (expected and expected <= applied):
+                        for statement in migration_statements():
+                            conn.execute(statement)
+                        for name in sorted(expected):
+                            conn.execute(
+                                "INSERT INTO gab_schema_migrations (version, applied_at) VALUES (%s, %s) ON CONFLICT (version) DO NOTHING",
+                                (name, "applied"),
+                            )
+                finally:
+                    conn.execute("SELECT pg_advisory_unlock(%s)", (_SCHEMA_LOCK,))
+            self._ready = True
 
     def _connect(self):
         import psycopg
