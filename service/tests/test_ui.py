@@ -17,6 +17,51 @@ def _client() -> TestClient:
     return TestClient(create_app(settings, MemoryStore()))
 
 
+def test_pages_default_to_dark_and_keep_the_existing_palette():
+    import re
+
+    client = _client()
+    home = client.get("/")
+    assert home.status_code == 200
+    assert 'data-theme="dark"' in home.text
+    assert 'id="theme-toggle"' in home.text
+    assert "Light mode" in home.text
+    assert "book a call" not in home.text.lower()
+    css = client.get("/assets/app.css").text
+    assert "--teal" in css
+    found = {item.lower() for item in re.findall(r"#[0-9A-Fa-f]{3,8}", css)}
+    allowed = {
+        "#12343a",
+        "#3e5c63",
+        "#5d767c",
+        "#f3f7f7",
+        "#ffffff",
+        "#0f6570",
+        "#0c4e57",
+        "#4fe0c2",
+        "#0c5c4a",
+        "#d8f7ee",
+        "#8d2430",
+        "#fde2e4",
+        "#8a5a10",
+        "#fff1d6",
+        "#f7fbfb",
+        "#e7f1f2",
+        "#1f8a62",
+        "#a33b48",
+        "#b8883a",
+        "#13203b",
+        "#2bb89c",
+    }
+    assert found <= allowed
+    for path in ("/dashboard", "/portal", "/docs", "/history", "/simulation"):
+        page = client.get(path)
+        assert page.status_code == 200
+        assert 'data-theme="dark"' in page.text
+        assert "open source" not in page.text.lower()
+        assert "credit bureau" not in page.text.lower()
+
+
 def test_home_page_explains_kata_in_english():
     page = _client().get("/")
     assert page.status_code == 200

@@ -1,8 +1,65 @@
-<section class="hero">
-  <p class="kicker">Global Agent Bureau</p>
-  <h1>Know the agent before the payment goes through.</h1>
-  <p class="lede">Global Agent Bureau is an independent agent bureau. Participants register agents, check signed intents, inquire with a purpose code, and report incidents. The checks are powered by KATA — Know And Trust Agents. A valid identity is not the same thing as a valid action.</p>
-  <p class="actions"><a class="button" href="/dashboard">Organization dashboard</a> <a class="button ghost" href="/portal">Individual portal</a></p>
+<section class="hero stage">
+  <div class="stage-copy">
+    <p class="kicker">Global Agent Bureau</p>
+    <h1>Know the agent before the payment goes through.</h1>
+    <p class="lede">Global Agent Bureau is an independent agent bureau. Participants register agents, check signed intents, inquire with a purpose code, and report incidents. The checks are powered by KATA — Know And Trust Agents. A valid identity is not the same thing as a valid action.</p>
+    <p class="actions"><a class="button" href="#demo">Try the check</a> <a class="button ghost" href="/dashboard">Organization dashboard</a> <a class="button ghost" href="/portal">Individual portal</a></p>
+  </div>
+  <div id="demo">
+    <h2>Try a signed intent</h2>
+    <p class="lede">This sample uses public demo keys for K. Uluer and the agent shopper-01. The page asks the reference library to render the confirmation, sign it, and return allow, deny, or step-up. It does not spend money.</p>
+    <form id="demo-form" class="panel">
+      <div class="demo-grid">
+        <fieldset>
+          <legend>Intent the principal signs</legend>
+          <label for="maximum_amount">Maximum amount</label>
+          <input id="maximum_amount" name="maximum_amount" type="number" min="0" step="0.01" value="1500" required>
+          <label for="intent_currency">Currency</label>
+          <input id="intent_currency" name="intent_currency" value="CAD" maxlength="3" required>
+          <label for="purpose">Purpose</label>
+          <select id="purpose" name="purpose">
+            <option value="purchase" selected>purchase</option>
+            <option value="payment">payment</option>
+            <option value="transfer">transfer</option>
+          </select>
+          <label for="category">Category</label>
+          <input id="category" name="category" value="electronics">
+          <label for="allowed_merchant">Allowed merchant, if any</label>
+          <input id="allowed_merchant" name="allowed_merchant" placeholder="Leave empty for any merchant">
+          <label for="natural_language">Instruction</label>
+          <textarea id="natural_language" name="natural_language">Find and buy a laptop for me, maximum CAD 1,500.</textarea>
+          <label class="check" for="include_expiry">
+            <input id="include_expiry" name="include_expiry" type="checkbox" checked>
+            Include an expiry. Without one, the check asks for approval.
+          </label>
+          <label for="time_limit">Expiry date</label>
+          <input id="time_limit" name="time_limit" type="date">
+        </fieldset>
+        <fieldset>
+          <legend>Payment the agent proposes</legend>
+          <label for="item">Item</label>
+          <input id="item" name="item" value="Laptop" required>
+          <label for="payment_amount">Amount</label>
+          <input id="payment_amount" name="payment_amount" type="number" min="0" step="0.01" value="1300" required>
+          <label for="payment_currency">Currency</label>
+          <input id="payment_currency" name="payment_currency" value="CAD" maxlength="3" required>
+          <label for="payment_merchant">Merchant</label>
+          <input id="payment_merchant" name="payment_merchant" value="techstore.example" required>
+          <div class="actions">
+            <button type="submit">Sign and check</button>
+            <button class="ghost" type="button" data-preset="allow">CAD 1,300 laptop</button>
+            <button class="ghost" type="button" data-preset="deny">CAD 4,200 laptop</button>
+            <button class="ghost" type="button" data-preset="step">No expiry</button>
+          </div>
+        </fieldset>
+      </div>
+      <div id="demo-result" class="result" hidden aria-live="polite"></div>
+    </form>
+  </div>
+</section>
+
+<section>
+  <h2>Four questions</h2>
   <ol class="questions" id="questions">
     <li>
       <em>01</em>
@@ -25,58 +82,6 @@
       <p>The payment is checked against that signed record.</p>
     </li>
   </ol>
-</section>
-
-<section id="demo">
-  <h2>Try a signed intent</h2>
-  <p class="lede">This sample uses public demo keys for K. Uluer and the agent shopper-01. The page asks the reference library to render the confirmation, sign it, and return allow, deny, or step-up. It does not spend money.</p>
-  <form id="demo-form" class="panel">
-    <div class="demo-grid">
-      <fieldset>
-        <legend>Intent the principal signs</legend>
-        <label for="maximum_amount">Maximum amount</label>
-        <input id="maximum_amount" name="maximum_amount" type="number" min="0" step="0.01" value="1500" required>
-        <label for="intent_currency">Currency</label>
-        <input id="intent_currency" name="intent_currency" value="CAD" maxlength="3" required>
-        <label for="purpose">Purpose</label>
-        <select id="purpose" name="purpose">
-          <option value="purchase" selected>purchase</option>
-          <option value="payment">payment</option>
-          <option value="transfer">transfer</option>
-        </select>
-        <label for="category">Category</label>
-        <input id="category" name="category" value="electronics">
-        <label for="allowed_merchant">Allowed merchant, if any</label>
-        <input id="allowed_merchant" name="allowed_merchant" placeholder="Leave empty for any merchant">
-        <label for="natural_language">Instruction</label>
-        <textarea id="natural_language" name="natural_language">Find and buy a laptop for me, maximum CAD 1,500.</textarea>
-        <label class="check" for="include_expiry">
-          <input id="include_expiry" name="include_expiry" type="checkbox" checked>
-          Include an expiry. Without one, the check asks for approval.
-        </label>
-        <label for="time_limit">Expiry date</label>
-        <input id="time_limit" name="time_limit" type="date">
-      </fieldset>
-      <fieldset>
-        <legend>Payment the agent proposes</legend>
-        <label for="item">Item</label>
-        <input id="item" name="item" value="Laptop" required>
-        <label for="payment_amount">Amount</label>
-        <input id="payment_amount" name="payment_amount" type="number" min="0" step="0.01" value="1300" required>
-        <label for="payment_currency">Currency</label>
-        <input id="payment_currency" name="payment_currency" value="CAD" maxlength="3" required>
-        <label for="payment_merchant">Merchant</label>
-        <input id="payment_merchant" name="payment_merchant" value="techstore.example" required>
-        <div class="actions">
-          <button type="submit">Sign and check</button>
-          <button class="ghost" type="button" data-preset="allow">CAD 1,300 laptop</button>
-          <button class="ghost" type="button" data-preset="deny">CAD 4,200 laptop</button>
-          <button class="ghost" type="button" data-preset="step">No expiry</button>
-        </div>
-      </fieldset>
-    </div>
-    <div id="demo-result" class="result" hidden aria-live="polite"></div>
-  </form>
 </section>
 
 <section id="operations">
