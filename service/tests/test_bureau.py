@@ -306,7 +306,7 @@ def test_alerts_are_signed_and_disputes_change_the_score():
     sub = client.post(
         "/v1/subscriptions",
         headers=_auth(merchant_key),
-        json={"agent_id": "shopper-01", "webhook_url": "http://127.0.0.1/hook"},
+        json={"agent_id": "shopper-01", "webhook_url": "https://merchant.example/hooks/gab"},
     )
     assert sub.status_code == 200, sub.text
     client.post("/v1/agents/shopper-01/status", headers=_auth(operator_key), json={"status": "revoked"})
@@ -429,6 +429,7 @@ def test_rate_limit_validation_and_migration_sql():
     assert first.status_code == 200
     assert second.status_code == 200
     assert third.status_code == 429
+    assert third.headers["retry-after"] == "60"
     statements = "\n".join(migration_statements())
     for table in ("gab_organizations", "gab_api_keys", "gab_agents", "gab_reports", "gab_inquiries", "gab_disputes", "gab_audit", "gab_interactions", "gab_identity_links", "gab_proofings", "gab_consortium_members", "gab_consortium_sightings", "gab_org_signals"):
         assert table in statements
@@ -538,7 +539,9 @@ def test_endpoint_rate_limits_do_not_block_other_routes():
     )
     assert client.post("/v1/verify", json={}).status_code != 429
     assert client.post("/v1/verify", json={}).status_code != 429
-    assert client.post("/v1/verify", json={}).status_code == 429
+    limited = client.post("/v1/verify", json={})
+    assert limited.status_code == 429
+    assert limited.headers["retry-after"] == "60"
     created = client.post("/v1/orgs", headers=_auth("admin-test-token"), json={"name": "Still Open", "org_type": "merchant"})
     assert created.status_code == 200
     assert client.post("/v1/inquiries", json={}).status_code != 429

@@ -127,8 +127,8 @@ class PostgresRepo:
     def add_audit(self, record: dict[str, Any]) -> None:
         self._execute(
             """
-            INSERT INTO gab_audit (audit_id, at, org_id, key_id, method, path, status, purpose_code, agent_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO gab_audit (audit_id, at, org_id, key_id, method, path, status, purpose_code, agent_id, environment)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 record["audit_id"],
@@ -140,19 +140,20 @@ class PostgresRepo:
                 record["status"],
                 record.get("purpose_code"),
                 record.get("agent_id"),
+                "test" if record.get("environment") == "test" else "live",
             ),
         )
 
     def list_audit(self, org_id: str | None) -> list[dict[str, Any]]:
         if org_id is None:
             rows = self._all(
-                "SELECT audit_id, at, org_id, key_id, method, path, status, purpose_code, agent_id FROM gab_audit ORDER BY at",
+                "SELECT audit_id, at, org_id, key_id, method, path, status, purpose_code, agent_id, environment FROM gab_audit ORDER BY at",
                 (),
             )
         else:
             rows = self._all(
                 """
-                SELECT audit_id, at, org_id, key_id, method, path, status, purpose_code, agent_id
+                SELECT audit_id, at, org_id, key_id, method, path, status, purpose_code, agent_id, environment
                 FROM gab_audit WHERE org_id = %s ORDER BY at
                 """,
                 (org_id,),
@@ -168,6 +169,7 @@ class PostgresRepo:
                 "status": row[6],
                 "purpose_code": row[7],
                 "agent_id": row[8],
+                "environment": row[9],
             }
             for row in rows
         ]

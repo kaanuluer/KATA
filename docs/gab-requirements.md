@@ -152,14 +152,14 @@ Acceptance: `GET /v1/score-model` returns `gab-score-1` and fraud impact `-120` 
 ### 2.7 Alerts
 
 - A participant with `alerts` subscribes to an agent and a webhook URL.
-- `https` is required. `http` is accepted only for `localhost` and `127.0.0.1`.
+- `https` is required. `http` is rejected, and so is an `https` URL whose host is a loopback name.
 - Events are revocation, a new incident, and a score drop of 50 points or more.
 - The body is `{at, kata_bureau_alert: "1", alert, signature}`. `signature` is a flattened JWS with `typ` `kata-bureau-alert+jws`, signed by `KATA_LOG_SIGNING_SEED`.
 - The inbound revocation-push verifier still uses `KATA_PUSH_NOTIFIER_JWK`, which is public only and cannot sign outbound alerts.
 - Delivery uses a 3-second timeout. A failed delivery does not fail the revocation, report, or status change. The alert row records whether delivery succeeded.
 - Demo and memory mode record the body in process instead of opening a socket.
 
-Acceptance: revoking an agent after a localhost subscription stores a signed `kata_bureau_alert` body.
+Acceptance: revoking an agent after an https subscription stores a signed `kata_bureau_alert` body.
 
 ### 2.8 Individual portal
 
@@ -199,7 +199,7 @@ Acceptance: an upheld policy-violation dispute leaves the score greater than or 
 
 ### 2.12 Demo seed
 
-- `GAB_DEMO=1` uses the memory repository even when `DATABASE_URL` is set, turns on the development mailbox, and seeds Harbor Agents, Northwind Wallet, Techstore, agent `shopper-01`, agreement `agr_demo`, one chargeback, and a localhost subscription.
+- `GAB_DEMO=1` uses the memory repository even when `DATABASE_URL` is set, turns on the development mailbox, and seeds Harbor Agents, Northwind Wallet, Techstore, agent `shopper-01`, agreement `agr_demo`, one chargeback, and an https subscription.
 - Public demo credentials, which must not be used in production: admin `gab-demo-admin`, operator `gab_demo_operator_public`, wallet `gab_demo_wallet_public`, merchant `gab_demo_merchant_public`, portal `principal@example.com`, organization email `ops@harbor.example`.
 - `python3 -m kata_service.seed` applies the SQL migration to `DATABASE_URL`. `--demo` also inserts that data. Without `DATABASE_URL` the script exits and tells the operator to use `GAB_DEMO=1` for a local demo.
 - `POST /v1/admin/seed-demo` inserts the same public demo rows into whatever repository the process is using, including Neon, without `GAB_DEMO`. The caller must send the `GAB_ADMIN_TOKEN` bearer. The route returns 403 `demo seed is disabled` unless `GAB_ALLOW_DEMO_SEED=1`. A second call keeps the same organizations, agent, agreement, chargeback, and subscription. The response lists the public demo keys and does not echo the admin token.
@@ -239,7 +239,7 @@ Acceptance: one other sighting stays `matched: false` with no count. A third mem
 - Audit rows, inquiry responses, and transparency-log bodies do not contain email addresses or raw credentials.
 - The development mailbox returns the latest link, including the email, and is disabled unless the flag is on. Do not enable it in production.
 - `GAB_DEMO=1` ignores the production database and installs public credentials. Do not set it on Vercel production.
-- Outbound webhook hosts other than localhost must be `https`.
+- Outbound webhook URLs must be `https`, and the host must not be a loopback name.
 
 ## 5. Compliance notes
 

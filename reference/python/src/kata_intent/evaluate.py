@@ -189,6 +189,9 @@ def evaluate(
         raw["mandates"] = [raw.pop("mandate")]
 
     action_data = coerce(dict(action))
+    malformed_amount = _malformed_amount(action_data.get("amount"))
+    if malformed_amount is not None:
+        return _result("DENY", [("ACTION_MALFORMED", malformed_amount)], None)
     parameters = action_data.get("parameters") or {}
     if ledger_sequence is None and parameters.get("ledger_sequence") is not None:
         ledger_sequence = int(parameters["ledger_sequence"])
@@ -671,10 +674,15 @@ def _check_scope(mandate: Mapping[str, Any], action: Mapping[str, Any], findings
 
     amount = action.get("amount")
     if amount is not None:
-        parsed = money(amount)
-        if parsed < 0:
+        malformed_amount = _malformed_amount(amount)
+        if malformed_amount is not None:
+            findings.deny("ACTION_MALFORMED", malformed_amount)
+            parsed = None
+        else:
+            parsed = money(amount)
+        if parsed is not None and parsed < 0:
             findings.deny("ACTION_MALFORMED", "The action amount is negative.")
-        elif ceiling is not None and parsed > money(ceiling):
+        elif parsed is not None and ceiling is not None and parsed > money(ceiling):
             findings.deny(
                 "AMOUNT_ABOVE_INTENT_CEILING",
                 f"Amount {_plain(parsed)} {action.get('currency', '')} exceeds the intent ceiling of {_plain(money(ceiling))} {intent.get('currency', '')}.",
@@ -1150,6 +1158,16 @@ def _finish(findings: _Findings, mandate_hash_value: str | None) -> Evaluation:
         required = "HUMAN_APPROVAL" if any(code == "OVER_BROAD_INTENT" for code, _message in findings.steps) else "STEP_UP"
         return _result("STEP_UP", findings.steps, mandate_hash_value, required_action=required)
     return _result("ALLOW", [], mandate_hash_value)
+
+
+def _malformed_amount(amount: Any) -> str | None:
+    if amount is None:
+        return None
+    try:
+        money(amount)
+    except KataError:
+        return "The action amount is not a number."
+    return None
 
 
 def _result(
