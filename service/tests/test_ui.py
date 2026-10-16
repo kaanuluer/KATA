@@ -276,6 +276,27 @@ def test_trust_score_abuse_note_is_public():
     assert "credit bureau" not in body.lower()
 
 
+def test_pages_share_the_chapters_shell():
+    client = _client()
+    css = client.get("/assets/app.css").text
+    assert "--teal" in css
+    assert "#13203B" in css or "#13203b" in css
+    assert "#4FE0C2" in css or "#4fe0c2" in css
+    for path in ("/", "/dashboard", "/portal", "/docs", "/history", "/simulation"):
+        body = client.get(path).text
+        assert 'data-theme="dark"' in body
+        assert 'id="theme-toggle"' in body
+        assert "Light mode" in body
+        assert 'alt="GAB_"' in body
+        assert "book a call" not in body.lower()
+        assert "credit bureau" not in body.lower()
+        assert "open source" not in body.lower()
+        assert "open-source" not in body.lower()
+    assert client.get("/design").status_code == 404
+    assert client.get("/design/b").status_code == 404
+    assert client.get("/design/c").status_code == 404
+
+
 def test_dashboard_and_portal_pages():
     client = _client()
     dashboard = client.get("/dashboard")

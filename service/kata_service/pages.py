@@ -133,10 +133,14 @@ def portal_page() -> str:
 
 
 def history_page() -> str:
+    intro = (
+        '<section class="hero"><p class="kicker">Repository</p><h1>History</h1>'
+        "<p class=\"lede\">Milestones from the commit history, the changelog, and the GitHub pull requests.</p></section>"
+    )
     return shell(
         "History — KATA",
         "Milestones taken from the KATA commit history, changelog, and GitHub pull requests.",
-        history_section(),
+        intro + history_section(),
         current="/history",
     )
 
@@ -166,7 +170,13 @@ def documentation_index() -> str:
         f"<a href=\"{GITHUB}/blob/main/KATA.md\">GitHub</a> "
         f"(<a href=\"{GITHUB}/blob/main/research/standards.md\">standards survey</a>).</p>"
     )
-    body = "<h1>Documentation</h1>" + intro + "<div class=\"doc-grid\">" + "".join(cards) + "</div>"
+    body = (
+        '<section class="hero"><p class="kicker">KATA</p><h1>Documentation</h1>'
+        + intro
+        + '</section><div class="doc-grid">'
+        + "".join(cards)
+        + "</div>"
+    )
     return shell("Documentation — KATA", "KATA design, authorization, intent, threat model, schemas, and API.", body, current="/docs")
 
 
@@ -207,10 +217,10 @@ def schema_index() -> str:
             )
         )
     body = (
-        "<h1>JSON schemas</h1>"
+        '<section class="hero"><p class="kicker">Schemas</p><h1>JSON schemas</h1>'
         "<p class=\"lede\">Each file in <code>schemas/</code> is served unchanged at "
-        "<code>/docs/schemas/&lt;name&gt;.json</code>.</p>"
-        "<div class=\"doc-grid\">" + "".join(cards) + "</div>"
+        "<code>/docs/schemas/&lt;name&gt;.json</code>.</p></section>"
+        '<div class="doc-grid">' + "".join(cards) + "</div>"
     )
     return shell("JSON schemas — KATA", "KATA JSON schemas.", body, current="/docs")
 
@@ -231,10 +241,10 @@ def schema_bytes(name: str) -> bytes | None:
 
 def api_reference() -> str:
     blocks = [
-        "<h1>API reference</h1>",
+        '<section class="hero"><p class="kicker">Service</p><h1>API reference</h1>',
         "<p class=\"lede\">Shapes below are the fields this service returns. "
         f"FastAPI generates the machine-readable description at <a href=\"/docs/openapi\">/docs/openapi</a> "
-        "and <a href=\"/openapi.json\">/openapi.json</a>.</p>",
+        "and <a href=\"/openapi.json\">/openapi.json</a>.</p></section>",
     ]
     for item in _ENDPOINTS:
         blocks.append("<section class=\"endpoint\">")
@@ -276,36 +286,69 @@ def shell(title: str, description: str, body: str, *, current: str, script: bool
         tags.append(f'<script src="/assets/{html.escape(src)}"></script>')
     script_tag = "".join(tags)
     return f"""<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{html.escape(title)}</title>
   <meta name="description" content="{html.escape(description)}">
+  <meta name="color-scheme" content="dark light">
   <link rel="icon" href="/assets/gab-icon.svg" type="image/svg+xml">
   <link rel="icon" href="/assets/favicon-32.png" type="image/png" sizes="32x32">
   <link rel="apple-touch-icon" href="/assets/gab-icon-180.png">
   <link rel="stylesheet" href="/assets/app.css">
+  <script>
+    try {{
+      var storedTheme = localStorage.getItem("gab-theme");
+      if (storedTheme === "light" || storedTheme === "dark") document.documentElement.setAttribute("data-theme", storedTheme);
+    }} catch (err) {{}}
+  </script>
 </head>
 <body>
   <a class="skip" href="#top">Skip to content</a>
-  <div class="wrap">
-    <header class="site">
+  <header class="site">
+    <div class="wrap bar">
       <a class="brand" href="/">
-        <img class="logo" src="/assets/gab-logo.svg" alt="GAB_ global.agent.bureau" width="142" height="76">
-        <span>Powered by KATA · Know And Trust Agents</span>
+        <span class="plate"><img class="logo" src="/assets/gab-logo.svg" alt="GAB_" width="142" height="76"></span>
+        <span class="brand-note">Powered by KATA · Know And Trust Agents</span>
       </a>
-      {_nav(current)}
-    </header>
+      <div class="header-tools">
+        {_nav(current)}
+        <button class="mode" id="theme-toggle" type="button" aria-pressed="true">Light mode</button>
+      </div>
+    </div>
+  </header>
+  <div class="wrap">
     <main id="top">
       {_docs_nav(current)}
       {body}
     </main>
     <footer class="site">
-      <p>Global Agent Bureau. Powered by <img class="mark" src="/assets/kata-logo.svg" alt="KATA">. Copyright 2026 Kaan Uluer. PolyForm Noncommercial License. <a href="/simulation">Simulation</a>. <a href="{GITHUB}">GitHub</a>.</p>
+      <p>Global Agent Bureau is an agent bureau. Powered by <img class="mark" src="/assets/kata-logo.svg" alt="KATA">. Copyright 2026 Kaan Uluer. PolyForm Noncommercial License. <a href="/simulation">Simulation</a>. <a href="{GITHUB}">GitHub</a>.</p>
       <p><img src="/assets/kata-icon.svg" alt="" width="28" height="28"> The demo seed is public and is not a production signing key. Verdicts here are allow, deny, or step-up. Deny means block the action. It does not revoke the grant.</p>
     </footer>
   </div>
+  <script>
+    (function () {{
+      var root = document.documentElement;
+      var button = document.getElementById("theme-toggle");
+      function paint() {{
+        var theme = root.getAttribute("data-theme") === "light" ? "light" : "dark";
+        if (!button) return;
+        button.textContent = theme === "dark" ? "Light mode" : "Dark mode";
+        button.setAttribute("aria-pressed", theme === "dark" ? "true" : "false");
+      }}
+      if (button) {{
+        button.addEventListener("click", function () {{
+          var next = root.getAttribute("data-theme") === "light" ? "dark" : "light";
+          root.setAttribute("data-theme", next);
+          try {{ localStorage.setItem("gab-theme", next); }} catch (err) {{}}
+          paint();
+        }});
+      }}
+      paint();
+    }})();
+  </script>
   {script_tag}
 </body>
 </html>
