@@ -758,3 +758,129 @@ def test_test_keys_use_the_same_api_without_changing_production_scores():
     assert "call" not in page.text.lower()
     joined = "\n".join(migration_statements())
     assert "CREATE SCHEMA IF NOT EXISTS gab_sandbox" in joined
+
+
+def test_webhook_retries_are_logged_per_organization():
+    client = _client()
+    operator = _org(client, "Harbor Agents", "agent_operator")
+    merchant = _org(client, "Techstore", "merchant")
+    operator_key = _key(client, operator["org_id"])
+    merchant_key = _key(client, merchant["org_id"])
+    _register(client, operator_key)
+    sub = client.post(
+        "/v1/subscriptions",
+        headers=_auth(merchant_key),
+        json={"agent_id": "shopper-01", "webhook_url": "https://merchant.example/hooks/gab"},
+    )
+    assert sub.status_code == 200, sub.text
+    service = client.app.state.bureau
+    delays: list[float] = []
+    service.webhook_sleep = delays.append
+    service.webhook_base_delay = 0.5
+
+    class Flaky:
+        def __init__(self, fail_until: int):
+            self.fail_until = fail_until
+            self.calls = 0
+            self.sent: list[tuple[str, dict]] = []
+
+        def send(self, url, body):
+            self.calls += 1
+            self.sent.append((url, body))
+            if self.calls <= self.fail_until:
+                raise TimeoutError("https://user:s3cret@hooks.example/hook")
+
+    service.sender = Flaky(2)
+    fired = client.post(
+        "/v1/webhooks/test",
+        headers=_auth(merchant_key),
+        json={"subscription_id": sub.json()["subscription_id"]},
+    )
+    assert fired.status_code == 200, fired.text
+    assert fired.json()["delivered"] is True
+    assert fired.json()["kind"] == "test"
+    assert "s3cret" not in fired.text
+    assert "hooks.example" not in fired.text
+    assert delays == [0.5, 1.0]
+    assert service.sender.sent[-1][1]["kata_bureau_alert"] == "1"
+    assert service.sender.sent[-1][1]["alert"]["kind"] == "test"
+    listed = client.get("/v1/webhooks/deliveries", headers=_auth(merchant_key))
+    assert listed.status_code == 200
+    assert [row["detail"] for row in listed.json()] == ["timeout", "timeout", "delivered"]
+    assert [row["attempt"] for row in listed.json()] == [1, 2, 3]
+    assert "s3cret" not in listed.text
+    hidden = client.get("/v1/webhooks/deliveries", headers=_auth(operator_key))
+    assert hidden.json() == []
+    denied = client.post(
+        "/v1/webhooks/test",
+        headers=_auth(operator_key),
+        json={"subscription_id": sub.json()["subscription_id"]},
+    )
+    assert denied.status_code == 404
+
+    service.sender = Flaky(9)
+    delays.clear()
+    failed = client.post(
+        "/v1/webhooks/test",
+        headers=_auth(merchant_key),
+        json={"subscription_id": sub.json()["subscription_id"]},
+    )
+    assert failed.status_code == 200
+    assert failed.json()["delivered"] is False
+    assert delays == [0.5, 1.0, 2.0]
+    assert "s3cret" not in failed.text
+    again = client.get("/v1/webhooks/deliveries", headers=_auth(merchant_key))
+    assert [row["detail"] for row in again.json()][-4:] == ["timeout", "timeout", "timeout", "timeout"]
+    assert "s3cret" not in again.text
+
+
+def test_http_webhook_sender_hides_failure_text(monkeypatch):
+    import io
+    import urllib.error
+    import urllib.request
+
+    from kata_service.bureau import BureauError, HttpWebhookSender
+
+    def boom(*_args, **_kwargs):
+        raise TimeoutError("https://user:s3cret@hooks.example/hook")
+
+    monkeypatch.setattr(urllib.request, "urlopen", boom)
+    outcome, status, detail = HttpWebhookSender().deliver("https://hooks.example/gab", {"ok": True})
+    assert (outcome, status, detail) == ("failed", None, "timeout")
+    assert "s3cret" not in detail
+    try:
+        HttpWebhookSender().send("https://hooks.example/gab", {"ok": True})
+    except BureauError as exc:
+        assert exc.message == "webhook delivery failed"
+        assert "s3cret" not in exc.message
+    else:
+        raise AssertionError("delivery should fail")
+
+    def http_error(*_args, **_kwargs):
+        raise urllib.error.HTTPError(
+            "https://user:s3cret@hooks.example/hook",
+            500,
+            "nope",
+            hdrs=None,
+            fp=io.BytesIO(b"token=s3cret"),
+        )
+
+    monkeypatch.setattr(urllib.request, "urlopen", http_error)
+    outcome, status, detail = HttpWebhookSender().deliver("https://hooks.example/gab", {"ok": True})
+    assert (outcome, status, detail) == ("failed", 500, "http_error")
+    assert "s3cret" not in detail
+
+    class _Ok:
+        status = 204
+
+        def read(self):
+            return b""
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *_args, **_kwargs: _Ok())
+    assert HttpWebhookSender().deliver("https://hooks.example/gab", {"ok": True}) == ("delivered", 204, "delivered")

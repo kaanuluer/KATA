@@ -921,6 +921,20 @@ _ENDPOINTS: tuple[dict[str, str], ...] = (
     },
     {
         "method": "POST",
+        "path": "/v1/webhooks/test",
+        "summary": "Sends one signed test alert to a subscription this organization already owns. The response is the alert id and whether delivery succeeded. It does not include the payload or the webhook address.",
+        "request": '{\n  "subscription_id": "sub_…"\n}',
+        "response": '{\n  "alert_id": "alt_…",\n  "delivered": true,\n  "kind": "test"\n}',
+        "errors": "404 when the subscription is missing or belongs to another organization. Failed attempts are retried after 0.5s, 1s, and 2s.",
+    },
+    {
+        "method": "GET",
+        "path": "/v1/webhooks/deliveries",
+        "summary": "Delivery attempts for this organization. detail is delivered, timeout, http_error, or refused. The log does not include error text.",
+        "response": '[\n  {\n    "delivery_id": "dlv_…",\n    "alert_id": "alt_…",\n    "attempt": 1,\n    "outcome": "delivered",\n    "http_status": 204,\n    "detail": "delivered"\n  }\n]',
+    },
+    {
+        "method": "POST",
         "path": "/v1/portal/magic-link",
         "summary": "Sends a portal sign-in link. The response is always sent true. An email already bound to a principal keeps that principal. A new email creates a new principal id and does not move an existing binding. SMTP is used when the host, user, password, and from address are set. Otherwise the link is not printed unless the development mailbox is on.",
         "request": '{\n  "email": "principal@example.com"\n}',
