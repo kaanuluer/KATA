@@ -6,4 +6,4 @@ Global Agent Bureau is an agent bureau. The same API accepts live keys and test 
 
 Ask for a test key with `"environment": "test"` when the key is issued. The secret is returned once, in that response. A later list of keys shows the prefix and `environment`, not the secret. Rotating a test key issues another `gab_test_` key.
 
-Live and test registrations of the same agent id are different records. Inquiries, reports, agreements, and scores stay inside the environment of the key that wrote them.
+Live and test registrations of the same agent id are different records. Inquiries, reports, agreements, subscriptions, deliveries, and scores stay inside the environment of the key that wrote them. Rows that already existed stay in the live partition. A test key does not read them, and a test report does not change a live score. Attest marks the agent in that same partition. With proofing required, the score stays where it is until an institution attestation proof is on file.
