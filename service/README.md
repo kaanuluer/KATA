@@ -48,6 +48,15 @@ Set these on the Vercel project. Generate the secret values on your machine and 
 | `KATA_FX_SOURCE_URL` | no | no | Daily rate origin. Default `https://api.frankfurter.dev/v1` (ECB rates, no API key). |
 | `GAB_ADMIN_TOKEN` | yes, to create organizations | yes | Bearer token for the admin bootstrap and dispute review. |
 | `GAB_RATE_LIMIT_PER_MINUTE` | no | no | Default 120 `/v1` calls per minute per credential hash. |
+| `GAB_VERIFY_RATE_LIMIT_PER_MINUTE` | no | no | Default 60. Extra cap on `POST /v1/verify`. |
+| `GAB_INQUIRY_RATE_LIMIT_PER_MINUTE` | no | no | Default 30. Extra cap on `POST /v1/inquiries`. |
+| `GAB_REPORT_RATE_LIMIT_PER_MINUTE` | no | no | Default 10. Extra cap on `POST /v1/reports`. |
+| `GAB_SMTP_HOST` | no | no | SMTP host. Leave unset to keep mail off. |
+| `GAB_SMTP_PORT` | no | no | Default 587. |
+| `GAB_SMTP_USER` | no | yes | SMTP username. |
+| `GAB_SMTP_PASSWORD` | no | yes | SMTP password. |
+| `GAB_SMTP_FROM` | no | no | From address on the sign-in message. |
+| `GAB_PUBLIC_BASE_URL` | no | no | Origin written into magic links. |
 | `GAB_REPORT_DAILY_CAP` | no | no | Default 20 reports per organization per UTC day. |
 | `GAB_MAGIC_LINK_TTL_SECONDS` | no | no | Default 900. |
 | `GAB_SESSION_TTL_SECONDS` | no | no | Default 43200. |

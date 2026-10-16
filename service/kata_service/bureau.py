@@ -116,6 +116,69 @@ class ConsoleMailer:
         print(f"GAB magic link for {email}: {url}", flush=True)
 
 
+class SilentMailer:
+    """No transport. The link stays in the store and is not printed."""
+
+    def send_magic_link(self, email: str, url: str) -> None:
+        return None
+
+
+class SmtpMailer:
+    """STARTTLS SMTP. The password is not included in the text representation."""
+
+    def __init__(self, host: str, port: int, user: str, password: str, from_addr: str) -> None:
+        self.host = host
+        self.port = port
+        self.user = user
+        self._password = password
+        self.from_addr = from_addr
+
+    def __repr__(self) -> str:
+        return f"SmtpMailer(host={self.host!r}, port={self.port}, user={self.user!r})"
+
+    def send_magic_link(self, email: str, url: str) -> None:
+        import smtplib
+        from email.message import EmailMessage
+
+        message = EmailMessage()
+        message["Subject"] = "Your Global Agent Bureau sign-in link"
+        message["From"] = self.from_addr
+        message["To"] = email
+        message.set_content(
+            "Global Agent Bureau is an agent bureau. Use this link to open the portal. "
+            "The link expires soon. If you did not ask for it, ignore this message.\n\n"
+            f"{url}\n"
+        )
+        try:
+            if self.port == 465:
+                with smtplib.SMTP_SSL(self.host, self.port, timeout=10) as smtp:
+                    smtp.login(self.user, self._password)
+                    smtp.send_message(message)
+                return
+            with smtplib.SMTP(self.host, self.port, timeout=10) as smtp:
+                smtp.ehlo()
+                smtp.starttls()
+                smtp.ehlo()
+                smtp.login(self.user, self._password)
+                smtp.send_message(message)
+        except Exception as exc:
+            raise BureauError(503, "the sign-in link could not be sent") from exc
+
+
+def mailer_from_settings(settings: object) -> Mailer:
+    """Use SMTP only when host, user, password, and from are all set."""
+
+    host = getattr(settings, "smtp_host", None)
+    user = getattr(settings, "smtp_user", None)
+    password = getattr(settings, "smtp_password", None)
+    sender = getattr(settings, "smtp_from", None)
+    if host and user and password and sender:
+        return SmtpMailer(host, int(getattr(settings, "smtp_port", 587) or 587), user, password, sender)
+    if getattr(settings, "dev_mailbox", False) or getattr(settings, "demo", False):
+        return ConsoleMailer()
+    return SilentMailer()
+
+
 class HttpWebhookSender:
     def send(self, url: str, body: dict[str, Any]) -> None:
         import urllib.request
@@ -405,13 +468,25 @@ class MemoryRepo:
         with self._lock:
             self.principals.setdefault(principal_id, {"principal_id": principal_id, "created_at": at})
 
-    def upsert_login(self, email: str, principal_id: str, at: str) -> None:
+    def insert_login(self, email: str, principal_id: str, at: str) -> str:
+        """Bind an email once. A later call cannot move it to another principal."""
+
         with self._lock:
-            self.logins[email_hash(email)] = {
-                "email": normalize_email(email),
-                "principal_id": principal_id,
-                "created_at": at,
-            }
+            digest = email_hash(email)
+            current = self.logins.get(digest)
+            if current is None:
+                self.logins[digest] = {
+                    "email": normalize_email(email),
+                    "principal_id": principal_id,
+                    "created_at": at,
+                }
+                return "inserted"
+            if current["principal_id"] == principal_id:
+                return "same"
+            return "conflict"
+
+    def upsert_login(self, email: str, principal_id: str, at: str) -> None:
+        self.insert_login(email, principal_id, at)
 
     def login_by_email(self, email: str) -> dict[str, Any] | None:
         return self.login_by_hash(email_hash(email))
@@ -904,6 +979,8 @@ class BureauService:
             raise BureauError(400, "principal_id is invalid")
         at = self.stamp()
         self.repo.ensure_principal(principal_id, at)
+        if body.get("principal_email"):
+            self._bind_principal_email(str(body.get("principal_email")), principal_id, at)
         record = {
             "agent_id": agent_id,
             "operator_org_id": org["org_id"],
@@ -1308,9 +1385,14 @@ class BureauService:
         if existing is None:
             principal_id = _id("prn")
             self.repo.ensure_principal(principal_id, at)
-            self.repo.upsert_login(address, principal_id, at)
+            self.repo.insert_login(address, principal_id, at)
         self._send_link("portal", address, email_hash(address))
         return {"sent": True}
+
+    def _bind_principal_email(self, email: str, principal_id: str, at: str) -> None:
+        address = _email(email)
+        if self.repo.insert_login(address, principal_id, at) == "conflict":
+            raise BureauError(409, "email is already bound to another principal")
 
     def request_org_link(self, email: str) -> dict[str, bool]:
         address = _email(email)

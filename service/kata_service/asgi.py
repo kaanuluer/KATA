@@ -15,7 +15,7 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 
-from kata_service.bureau import BureauError, BureauService, HttpWebhookSender, MemoryRepo, RecordingSender, token_hash
+from kata_service.bureau import BureauError, BureauService, HttpWebhookSender, MemoryRepo, RecordingSender, mailer_from_settings, token_hash
 from kata_service.bureau_http import build_router
 from kata_service.demo import run_demo
 from kata_service.pages import (
@@ -143,7 +143,11 @@ def create_app(
         header = request.headers.get("authorization", "")
         token = header[7:].strip() if header.startswith("Bearer ") else ""
         subject = token_hash(token) if token else (request.client.host if request.client else "anonymous")
-        limited = bureau.hit_rate(subject) > app.state.settings.rate_limit_per_minute
+        settings = app.state.settings
+        limited = bureau.hit_rate(subject) > settings.rate_limit_per_minute
+        endpoint_cap = _endpoint_rate_cap(request.method, path, settings)
+        if not limited and endpoint_cap is not None:
+            limited = bureau.hit_rate(f"{path}:{subject}") > endpoint_cap
         if limited:
             response = _error(429, "rate limit exceeded")
         else:
@@ -388,11 +392,13 @@ def ensure_bureau(app: FastAPI):
             repo,
             log_store=store,
             log_key=settings.log_key(),
+            mailer=mailer_from_settings(settings),
             sender=RecordingSender(),
             magic_link_ttl_seconds=settings.magic_link_ttl_seconds,
             session_ttl_seconds=settings.session_ttl_seconds,
             report_daily_cap=settings.report_daily_cap,
             dev_mailbox=settings.dev_mailbox or settings.demo,
+            public_base_url=settings.public_base_url,
             policy=settings.score_policy,
             consortium_match_threshold=settings.consortium_match_threshold,
         )
@@ -416,11 +422,13 @@ def ensure_bureau(app: FastAPI):
         repo,
         log_store=store,
         log_key=settings.log_key(),
+        mailer=mailer_from_settings(settings),
         sender=HttpWebhookSender(),
         magic_link_ttl_seconds=settings.magic_link_ttl_seconds,
         session_ttl_seconds=settings.session_ttl_seconds,
         report_daily_cap=settings.report_daily_cap,
         dev_mailbox=settings.dev_mailbox,
+        public_base_url=settings.public_base_url,
         policy=settings.score_policy,
         consortium_match_threshold=settings.consortium_match_threshold,
     )
@@ -468,6 +476,17 @@ def _static_dir():
     from pathlib import Path
 
     return Path(__file__).resolve().parent / "static"
+
+
+def _endpoint_rate_cap(method: str, path: str, settings) -> int | None:
+    if method != "POST":
+        return None
+    caps = {
+        "/v1/verify": settings.verify_rate_limit_per_minute,
+        "/v1/inquiries": settings.inquiry_rate_limit_per_minute,
+        "/v1/reports": settings.report_rate_limit_per_minute,
+    }
+    return caps.get(path)
 
 
 def _error(status: int, message: str) -> JSONResponse:

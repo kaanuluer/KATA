@@ -31,6 +31,7 @@ Organization types are `agent_operator`, `wallet`, `bank_issuer`, `processor_psp
 - A non-admin that creates an organization receives 403.
 - Default scopes: operators get `registry:read`, `registry:write`, `verify`, `report`, `alerts`, `keys:manage`. Wallets and banks get those plus `inquire`. Other types get `registry:read`, `inquire`, `verify`, `report`, `alerts`, `keys:manage`.
 - Every `/v1` request is counted toward a per-minute limit. The default is 120. Over the limit the response is 429 `{"error":"rate limit exceeded"}`. The subject is the hash of the bearer token, or the client host when there is no bearer.
+- `POST /v1/verify`, `POST /v1/inquiries`, and `POST /v1/reports` also have their own per-minute caps, counted separately from the global cap. The defaults are 60, 30, and 10.
 - After each `/v1` response the service writes an audit row: id, time, organization, key id, method, path, status, purpose code, and agent id. The row does not include the Authorization header, the raw key, or an email address.
 
 Acceptance: the tests in `service/tests/test_bureau.py` create an organization, reject a cross-tenant key list, reject a revoked key, reject a non-admin organization create, and reject a third call when the limit is 2 per minute.
@@ -162,7 +163,9 @@ Acceptance: revoking an agent after a localhost subscription stores a signed `ka
 
 ### 2.8 Individual portal
 
-- `POST /v1/portal/magic-link` always returns `{"sent": true}`. A new email creates a new principal id. An email already bound to a principal keeps that principal.
+- `POST /v1/portal/magic-link` always returns `{"sent": true}`. A new email creates a new principal id. An email already bound to a principal keeps that principal. The binding cannot be moved to a different principal.
+- `POST /v1/agents` accepts optional `principal_email`. That address is bound to the registered principal. If the address is already bound to another principal, the response is 409.
+- Mail uses SMTP when `GAB_SMTP_HOST`, `GAB_SMTP_USER`, `GAB_SMTP_PASSWORD`, and `GAB_SMTP_FROM` are all set. The default port is 587 with STARTTLS. If any of those four is missing, no network mail is sent and the link is not printed. `GAB_PUBLIC_BASE_URL` is the origin in the link.
 - The token is stored as a hash. The link lifetime is 15 minutes. The session lifetime is 12 hours.
 - The development mailbox (`GAB_DEV_MAILBOX=1` or `GAB_DEMO=1`) keeps the latest link in memory. `GET /v1/dev/mailbox` is 404 when that flag is off.
 - Organization magic links also always return `{"sent": true}` and send only when the email was registered in advance, so the response does not reveal whether the address exists.
@@ -225,7 +228,7 @@ Acceptance: one other sighting stays `matched: false` with no count. A third mem
 - The process is a FastAPI app. Vercel loads `app:app` from the repository-root `app.py`. Importing the module does not open Postgres. The bureau repository opens on the first `/v1` request.
 - Tests run against the memory repository and do not need a network or a database.
 - Postgres schema lives in `service/kata_service/migrations/001_bureau.sql` and is applied by `PostgresRepo` on first use. KATA tables remain the revocation list, log, tree head, and FX cache.
-- Webhook delivery and mail sending are protocols. Tests use an in-memory sender. Production Postgres uses an HTTP sender. The mailer defaults to printing the link. A deployment can pass another mailer. No SMTP vendor is bundled.
+- Webhook delivery and mail sending are protocols. Tests use an in-memory sender. Production Postgres uses an HTTP sender for webhooks. Mail uses SMTP when the SMTP variables are set, and otherwise does not print the link.
 - Decimal amounts in stored agreements round-trip through canonical JSON.
 
 ## 4. Security and privacy
@@ -280,6 +283,15 @@ Set secrets in the host. Do not commit values.
 | `KATA_APPEND_TOKEN` | Yes for `POST /v1/log/entries` | yes | Bearer for manual log append. |
 | `GAB_ADMIN_TOKEN` | Yes to create organizations | yes | Admin bearer. |
 | `GAB_RATE_LIMIT_PER_MINUTE` | No | no | Default 120. |
+| `GAB_VERIFY_RATE_LIMIT_PER_MINUTE` | No | no | Default 60. Extra cap on `POST /v1/verify`. |
+| `GAB_INQUIRY_RATE_LIMIT_PER_MINUTE` | No | no | Default 30. Extra cap on `POST /v1/inquiries`. |
+| `GAB_REPORT_RATE_LIMIT_PER_MINUTE` | No | no | Default 10. Extra cap on `POST /v1/reports`. |
+| `GAB_SMTP_HOST` | No | no | SMTP host. Mail stays off until this and the user, password, and from address are set. |
+| `GAB_SMTP_PORT` | No | no | Default 587. STARTTLS. Port 465 uses implicit TLS. |
+| `GAB_SMTP_USER` | No | yes | SMTP username. |
+| `GAB_SMTP_PASSWORD` | No | yes | SMTP password. |
+| `GAB_SMTP_FROM` | No | no | From address on the sign-in message. |
+| `GAB_PUBLIC_BASE_URL` | No | no | Origin used in magic links. Default `http://127.0.0.1:8765`. |
 | `GAB_REPORT_DAILY_CAP` | No | no | Default 20. |
 | `GAB_MAGIC_LINK_TTL_SECONDS` | No | no | Default 900. |
 | `GAB_SESSION_TTL_SECONDS` | No | no | Default 43200. |
@@ -324,9 +336,8 @@ Supabase is not part of this deployment. There is no `SUPABASE_URL`, anon key, o
 
 ## 8. Known limits of this version
 
-- Mail delivery is a plug-in. The default mailer writes the link to the process log. There is no bundled SMTP or hosted mailbox.
-- The development mailbox is in memory and is not shared across serverless instances.
-- A person who already has a principal id must have that email registered against it. A brand-new magic link creates a new principal id and will not see another principal's agents.
+- Mail is SMTP when the four SMTP variables are set, and otherwise sends nothing. The development mailbox is in memory and is not shared across serverless instances.
+- A person who already has a principal id must have that email registered against it, including through `principal_email` at agent registration. A brand-new magic link creates a new principal id and will not see another principal's agents. An existing binding is not moved.
 - Anti-gaming adds a transaction link, reporter reputation, a settled-credit cap, cluster ring detection, adaptive velocity denial, re-registration history, and an evidence gate on operator and institution claims. It does not convert currencies. The evidence hash is not confirmed by an outside issuer. `/simulation` publishes one synthetic stress test, labeled `SYNTHETIC TEST DATA – not real customers`: 73% of adaptive attempted fraud dollars stopped ($0.71M executed) and 78% when attackers do not know the rules ($0.68M executed).
 - Score-drop alerting uses a 50-point threshold and does not page a human.
 - `GET /v1/score-model` publishes the rule weights. It does not fit them from outcomes. `risk` is `1000 - score`.
