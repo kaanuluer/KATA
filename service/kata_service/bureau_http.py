@@ -140,6 +140,17 @@ def build_router() -> APIRouter:
     async def list_alerts(request: Request):
         return await _run(request, lambda auth, body: _bureau(request).list_alerts(auth), read_body=False)
 
+    @router.get("/v1/webhooks/deliveries", summary="List webhook delivery attempts for this organization")
+    async def list_deliveries(request: Request):
+        return await _run(request, lambda auth, body: _bureau(request).list_deliveries(auth), read_body=False)
+
+    @router.post("/v1/webhooks/test", summary="Send a signed test alert to one subscription")
+    async def test_webhook(request: Request):
+        return await _run(
+            request,
+            lambda auth, body: _bureau(request).test_webhook(auth, str(body.get("subscription_id") or "")),
+        )
+
     @router.get("/v1/audit", summary="Read the audit log for this organization")
     async def list_audit(request: Request):
         return await _run(request, lambda auth, body: _bureau(request).list_audit(auth), read_body=False)
