@@ -17,6 +17,7 @@ import json
 import re
 import secrets
 import threading
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -278,7 +279,10 @@ def mailer_from_settings(settings: object) -> Mailer:
 
 
 class HttpWebhookSender:
-    def send(self, url: str, body: dict[str, Any]) -> None:
+    """POST a webhook once. The bureau records each attempt and retries around this."""
+
+    def deliver(self, url: str, body: dict[str, Any]) -> tuple[str, int | None, str]:
+        import urllib.error
         import urllib.request
 
         data = json.dumps(body).encode("utf-8")
@@ -288,8 +292,22 @@ class HttpWebhookSender:
             headers={"Content-Type": "application/json", "User-Agent": "gab-service/0.1"},
             method="POST",
         )
-        with urllib.request.urlopen(request, timeout=3) as response:
-            response.read()
+        try:
+            with urllib.request.urlopen(request, timeout=3) as response:
+                response.read()
+                code = getattr(response, "status", None)
+                return "delivered", int(code) if code is not None else None, "delivered"
+        except urllib.error.HTTPError as exc:
+            return "failed", int(exc.code), "http_error"
+        except TimeoutError:
+            return "failed", None, "timeout"
+        except Exception:
+            return "failed", None, "refused"
+
+    def send(self, url: str, body: dict[str, Any]) -> None:
+        outcome, _http_status, _detail = self.deliver(url, body)
+        if outcome != "delivered":
+            raise BureauError(502, "webhook delivery failed")
 
 
 class RecordingSender:
@@ -502,11 +520,19 @@ class MemoryRepo:
         self.inquiries: list[dict[str, Any]] = []
         self.subscriptions: list[dict[str, Any]] = []
         self.alerts: list[dict[str, Any]] = []
+        self.deliveries: list[dict[str, Any]] = []
         self.disputes: list[dict[str, Any]] = []
         self._lock = threading.Lock()
 
     def migration_versions(self) -> list[str]:
-        return ["001_bureau.sql", "002_defenses.sql", "003_proofing.sql", "004_consortium.sql", "005_org_signals.sql"]
+        return [
+            "001_bureau.sql",
+            "002_defenses.sql",
+            "003_proofing.sql",
+            "004_consortium.sql",
+            "005_org_signals.sql",
+            "006_webhook.sql",
+        ]
 
     def create_org(self, record: dict[str, Any]) -> None:
         with self._lock:
@@ -840,6 +866,21 @@ class MemoryRepo:
         with self._lock:
             return [dict(item) for item in self.alerts if item["org_id"] == org_id]
 
+    def get_subscription(self, subscription_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            for item in self.subscriptions:
+                if item["subscription_id"] == subscription_id:
+                    return dict(item)
+            return None
+
+    def add_delivery(self, record: dict[str, Any]) -> None:
+        with self._lock:
+            self.deliveries.append(dict(record))
+
+    def deliveries_for_org(self, org_id: str) -> list[dict[str, Any]]:
+        with self._lock:
+            return [dict(item) for item in self.deliveries if item["org_id"] == org_id]
+
     def add_dispute(self, record: dict[str, Any]) -> None:
         with self._lock:
             self.disputes.append(dict(record))
@@ -888,6 +929,9 @@ class BureauService:
         public_base_url: str = "http://127.0.0.1:8765",
         policy: ScorePolicy | None = None,
         consortium_match_threshold: int = 2,
+        webhook_attempts: int = 4,
+        webhook_base_delay: float = 0.5,
+        webhook_sleep=None,
     ) -> None:
         self.repo = repo
         self._now = now or (lambda: datetime.now(timezone.utc))
@@ -902,6 +946,9 @@ class BureauService:
         self.public_base_url = public_base_url.rstrip("/")
         self.policy = policy or ScorePolicy()
         self.consortium_match_threshold = consortium_match_threshold
+        self.webhook_attempts = webhook_attempts
+        self.webhook_base_delay = webhook_base_delay
+        self.webhook_sleep = webhook_sleep or time.sleep
         self.dev_mailbox: list[dict[str, str]] = []
 
     def now(self) -> datetime:
@@ -1471,6 +1518,49 @@ class BureauService:
         self._scope(auth, "alerts")
         return self.repo.alerts_for_org(auth.org_id or "")
 
+    def list_deliveries(self, auth: Auth) -> list[dict[str, Any]]:
+        self._scope(auth, "alerts")
+        return [_public_delivery(item) for item in self.repo.deliveries_for_org(auth.org_id or "")]
+
+    def test_webhook(self, auth: Auth, subscription_id: str) -> dict[str, Any]:
+        """Fire one signed test alert at a subscription this organization already owns."""
+
+        self._scope(auth, "alerts")
+        sub = self.repo.get_subscription(subscription_id)
+        if sub is None or sub["org_id"] != (auth.org_id or ""):
+            raise BureauError(404, "subscription was not found")
+        at = self.stamp()
+        alert = {
+            "alert_id": _id("alt"),
+            "agent_id": sub["agent_id"],
+            "kind": "test",
+            "score": None,
+            "note": "test delivery",
+        }
+        document = {"alert": alert, "at": at, "kata_bureau_alert": "1"}
+        body = dict(document)
+        if self.log_key is not None:
+            body["signature"] = sign_jws(document, self.log_key, typ=ALERT_TYP)
+        delivered = self._deliver(
+            org_id=sub["org_id"],
+            agent_id=sub["agent_id"],
+            alert_id=alert["alert_id"],
+            url=sub["webhook_url"],
+            body=body,
+        )
+        self.repo.add_alert(
+            {
+                "alert_id": alert["alert_id"],
+                "org_id": sub["org_id"],
+                "agent_id": sub["agent_id"],
+                "kind": "test",
+                "document": body,
+                "created_at": at,
+                "delivered": delivered,
+            }
+        )
+        return {"alert_id": alert["alert_id"], "delivered": delivered, "kind": "test"}
+
     def list_audit(self, auth: Auth) -> list[dict[str, Any]]:
         self._scope(auth, "keys:manage")
         org_id = None if auth.admin else auth.org_id
@@ -1979,14 +2069,15 @@ class BureauService:
             }
             document = {"alert": alert, "at": at, "kata_bureau_alert": "1"}
             body = dict(document)
-            delivered = False
             if self.log_key is not None:
                 body["signature"] = sign_jws(document, self.log_key, typ=ALERT_TYP)
-            try:
-                self.sender.send(sub["webhook_url"], body)
-                delivered = True
-            except Exception:
-                delivered = False
+            delivered = self._deliver(
+                org_id=sub["org_id"],
+                agent_id=agent["agent_id"],
+                alert_id=alert["alert_id"],
+                url=sub["webhook_url"],
+                body=body,
+            )
             self.repo.add_alert(
                 {
                     "alert_id": alert["alert_id"],
@@ -1998,6 +2089,52 @@ class BureauService:
                     "delivered": delivered,
                 }
             )
+
+    def _deliver(self, *, org_id: str, agent_id: str, alert_id: str, url: str, body: dict[str, Any]) -> bool:
+        delivered = False
+        for attempt in range(1, self.webhook_attempts + 1):
+            if attempt > 1:
+                self.webhook_sleep(self.webhook_base_delay * (2 ** (attempt - 2)))
+            outcome, http_status, detail = self._post_once(url, body)
+            self.repo.add_delivery(
+                {
+                    "delivery_id": _id("dlv"),
+                    "org_id": org_id,
+                    "agent_id": agent_id,
+                    "alert_id": alert_id,
+                    "attempt": attempt,
+                    "at": self.stamp(),
+                    "outcome": outcome,
+                    "http_status": http_status,
+                    "detail": detail,
+                }
+            )
+            if outcome == "delivered":
+                delivered = True
+                break
+        return delivered
+
+    def _post_once(self, url: str, body: dict[str, Any]) -> tuple[str, int | None, str]:
+        deliver = getattr(self.sender, "deliver", None)
+        if callable(deliver):
+            outcome, http_status, detail = deliver(url, body)
+            if outcome not in {"delivered", "failed"}:
+                outcome = "failed"
+            if detail not in {"delivered", "timeout", "http_error", "refused"}:
+                detail = "refused"
+            if http_status is not None:
+                try:
+                    http_status = int(http_status)
+                except (TypeError, ValueError):
+                    http_status = None
+            return outcome, http_status, detail
+        try:
+            self.sender.send(url, body)
+        except TimeoutError:
+            return "failed", None, "timeout"
+        except Exception:
+            return "failed", None, "refused"
+        return "delivered", None, "delivered"
 
     def _log(self, kind: str, body: dict[str, Any]) -> None:
         if self.log_store is None or self.log_key is None:
@@ -2218,6 +2355,19 @@ def _public_report(record: dict[str, Any], *, full: bool) -> dict[str, Any]:
         view["outcome"] = record.get("outcome")
         view["reporter_org_id"] = record["reporter_org_id"]
     return view
+
+
+def _public_delivery(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "delivery_id": record["delivery_id"],
+        "alert_id": record["alert_id"],
+        "agent_id": record["agent_id"],
+        "attempt": record["attempt"],
+        "at": record["at"],
+        "outcome": record["outcome"],
+        "http_status": record.get("http_status"),
+        "detail": record["detail"],
+    }
 
 
 def _public_key(record: dict[str, Any]) -> dict[str, Any]:

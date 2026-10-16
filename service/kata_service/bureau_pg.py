@@ -654,6 +654,56 @@ class PostgresRepo:
         )
         return [_sub_row(row) for row in rows]
 
+    def get_subscription(self, subscription_id: str) -> dict[str, Any] | None:
+        row = self._one(
+            "SELECT subscription_id, org_id, agent_id, webhook_url, created_at FROM gab_subscriptions WHERE subscription_id = %s",
+            (subscription_id,),
+        )
+        return None if row is None else _sub_row(row)
+
+    def add_delivery(self, record: dict[str, Any]) -> None:
+        self._execute(
+            """
+            INSERT INTO gab_webhook_deliveries (
+              delivery_id, org_id, agent_id, alert_id, attempt, at, outcome, http_status, detail
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                record["delivery_id"],
+                record["org_id"],
+                record["agent_id"],
+                record["alert_id"],
+                record["attempt"],
+                record["at"],
+                record["outcome"],
+                record.get("http_status"),
+                record["detail"],
+            ),
+        )
+
+    def deliveries_for_org(self, org_id: str) -> list[dict[str, Any]]:
+        rows = self._all(
+            """
+            SELECT delivery_id, alert_id, agent_id, attempt, at, outcome, http_status, detail
+            FROM gab_webhook_deliveries WHERE org_id = %s ORDER BY at, attempt
+            """,
+            (org_id,),
+        )
+        return [
+            {
+                "delivery_id": row[0],
+                "org_id": org_id,
+                "alert_id": row[1],
+                "agent_id": row[2],
+                "attempt": row[3],
+                "at": row[4],
+                "outcome": row[5],
+                "http_status": row[6],
+                "detail": row[7],
+            }
+            for row in rows
+        ]
+
     def delete_subscription(self, subscription_id: str, org_id: str) -> bool:
         self._ensure()
         with self._connect() as conn:
