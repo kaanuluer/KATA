@@ -658,8 +658,11 @@ def test_test_keys_use_the_same_api_without_changing_production_scores():
     assert test_operator.startswith("gab_test_")
     assert issued.json()["environment"] == "test"
     listed = client.get(f"/v1/orgs/{operator['org_id']}/keys", headers=_auth("admin-test-token"))
+    prefix = issued.json()["prefix"]
+    assert test_operator.startswith(prefix + "_")
+    secret = test_operator[len(prefix) + 1 :]
+    assert secret not in listed.text
     assert test_operator not in listed.text
-    assert test_operator.rsplit("_", 1)[-1] not in listed.text
     live_merchant = _key(client, merchant["org_id"], "merchant-live")
     test_merchant = client.post(
         f"/v1/orgs/{merchant['org_id']}/keys",
