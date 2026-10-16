@@ -2244,6 +2244,8 @@ class BureauService:
         self.log_store.append_and_sign(kind, body, self.log_key, self.now())
 
     def _agent(self, agent_id: str) -> dict[str, Any]:
+        if any(ord(char) < 32 or ord(char) == 127 for char in agent_id):
+            raise BureauError(400, "agent_id has a control character")
         agent = self.repo.get_agent(agent_id)
         if agent is None:
             raise BureauError(404, "agent was not found")
@@ -2530,9 +2532,7 @@ def _email(value: str) -> str:
 def _webhook(value: str) -> str:
     parsed = urlparse(value.strip())
     host = (parsed.hostname or "").lower()
-    if parsed.scheme == "https":
-        return value.strip()
-    if parsed.scheme == "http" and host in {"localhost", "127.0.0.1"}:
+    if parsed.scheme == "https" and host and host not in {"localhost", "127.0.0.1", "::1"}:
         return value.strip()
     raise BureauError(400, "webhook_url must be https")
 

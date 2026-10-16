@@ -435,6 +435,7 @@ def _api_key(request: Request, bureau, settings, token: str):
         raise _RpcFailure(401, -32001, "an api key is required")
     request.state.org_id = auth.org_id
     request.state.key_id = auth.key_id
+    request.state.environment = "test" if auth.test else "live"
     return auth
 
 
@@ -473,6 +474,7 @@ def _audit(bureau, request: Request, status: int, payload: dict[str, Any], name:
                 "status": status,
                 "purpose_code": purpose,
                 "agent_id": agent_id,
+                "environment": "test" if getattr(request.state, "environment", None) == "test" else "live",
             }
         )
     except Exception:
@@ -671,5 +673,9 @@ def _rpc(
     body: dict[str, Any] = {"jsonrpc": "2.0", "error": error}
     if not omit_id:
         body["id"] = ident
-    headers = {"WWW-Authenticate": "Bearer"} if authenticate else None
-    return JSONResponse(body, status_code=status, headers=headers)
+    headers: dict[str, str] = {}
+    if authenticate:
+        headers["WWW-Authenticate"] = "Bearer"
+    if status == 429:
+        headers["Retry-After"] = "60"
+    return JSONResponse(body, status_code=status, headers=headers or None)

@@ -340,6 +340,7 @@ def test_test_key_uses_sandbox_isolation_and_rate_limits():
 
     audit = client.app.state.bureau.repo.list_audit(merchant["org_id"])
     assert audit
+    assert any(row.get("environment") == "live" for row in audit)
     assert live_merchant not in str(audit)
     assert test_merchant not in str(audit)
 
@@ -350,6 +351,7 @@ def test_test_key_uses_sandbox_isolation_and_rate_limits():
     assert first.status_code == 200
     second = _mcp(limited, "tools/call", {"name": "verify_agent", "arguments": {"agent_id": "shopper-01", "action": {}}}, token=limited_key)
     assert second.status_code == 429
+    assert second.headers["retry-after"] == "60"
     assert second.json()["error"]["message"] == "rate limit exceeded"
     assert limited_key not in second.text
 

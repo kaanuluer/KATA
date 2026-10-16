@@ -180,7 +180,7 @@ def create_app(
         if not limited and endpoint_cap is not None:
             limited = bureau.hit_rate(f"{path}:{subject}") > endpoint_cap
         if limited:
-            response = _error(429, "rate limit exceeded")
+            response = _error(429, "rate limit exceeded", {"Retry-After": "60"})
         else:
             response = await call_next(request)
         try:
@@ -195,6 +195,7 @@ def create_app(
                     "status": response.status_code,
                     "purpose_code": getattr(request.state, "purpose_code", None),
                     "agent_id": getattr(request.state, "agent_id", None),
+                    "environment": "test" if getattr(request.state, "environment", None) == "test" else "live",
                 }
             )
         except Exception:
@@ -381,6 +382,39 @@ def create_app(
         )
         return Response(body, media_type="text/plain; charset=utf-8")
 
+    @app.get("/robots.txt")
+    def robots_txt():
+        body = (
+            "User-agent: *\n"
+            "Allow: /\n"
+            "\n"
+            "# MCP endpoint: /mcp\n"
+            "# Documentation: /docs\n"
+            "# Status: /status\n"
+        )
+        return Response(body, media_type="text/plain; charset=utf-8")
+
+    @app.get("/llms.txt")
+    def llms_txt():
+        body = (
+            "# Global Agent Bureau\n"
+            "\n"
+            "> Agent bureau and technology company. The license is PolyForm Noncommercial 1.0.0.\n"
+            "\n"
+            "This service checks a signed intent agreement and publishes an agent trust score.\n"
+            "\n"
+            "## Where to read\n"
+            "\n"
+            "- [Documentation](/docs): design notes, the API reference, and the JSON schemas\n"
+            "- [Status](/status): whether the service and its database check are answering\n"
+            "- [MCP](/mcp): remote MCP endpoint. Send POST with an API key. GET is not the protocol.\n"
+            "\n"
+            "## Keys\n"
+            "\n"
+            "Live keys use the gab_ prefix. Test keys use the gab_test_ prefix and stay in the test partition.\n"
+        )
+        return Response(body, media_type="text/plain; charset=utf-8")
+
     @app.get("/v1/fx")
     def fx_rate(currency: str, day: str | None = None, reference: str | None = None, reference_currency: str | None = None):
         target = reference_currency or reference or "USD"
@@ -549,8 +583,8 @@ def _health_response(app: FastAPI) -> JSONResponse:
     return JSONResponse(body, status_code=status)
 
 
-def _error(status: int, message: str) -> JSONResponse:
-    return JSONResponse({"error": message}, status_code=status)
+def _error(status: int, message: str, headers: dict[str, str] | None = None) -> JSONResponse:
+    return JSONResponse({"error": message}, status_code=status, headers=headers)
 
 
 def _missing_docs(exc: FileNotFoundError) -> HTMLResponse:

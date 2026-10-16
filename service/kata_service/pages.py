@@ -929,7 +929,7 @@ _ENDPOINTS: tuple[dict[str, str], ...] = (
         "summary": "Subscribes the caller to signed webhooks for revocation, a new incident, and a score drop of 50 points or more. The signature typ is kata-bureau-alert+jws and uses the log signing key.",
         "request": '{\n  "agent_id": "shopper-01",\n  "webhook_url": "https://merchant.example/hooks/gab"\n}',
         "response": '{\n  "subscription_id": "sub_…",\n  "agent_id": "shopper-01"\n}',
-        "errors": "400 unless the URL is https, or http on localhost.",
+        "errors": "400 unless the URL is https and the host is not a loopback name.",
     },
     {
         "method": "POST",

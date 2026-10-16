@@ -248,7 +248,7 @@ def build_router() -> APIRouter:
         try:
             return _plain(_bureau(request).latest_dev_link())
         except BureauError as exc:
-            return JSONResponse({"error": exc.message}, status_code=exc.status)
+            return _error_body(exc)
 
     return router
 
@@ -277,7 +277,12 @@ async def _run(request: Request, action, *, read_body: bool = True, anonymous: b
             reset_test_mode(mode)
         return _plain(result)
     except BureauError as exc:
-        return JSONResponse({"error": exc.message}, status_code=exc.status)
+        return _error_body(exc)
+
+
+def _error_body(exc: BureauError) -> JSONResponse:
+    headers = {"Retry-After": "60"} if exc.status == 429 else None
+    return JSONResponse({"error": exc.message}, status_code=exc.status, headers=headers)
 
 
 def _auth(request: Request) -> Auth:
@@ -287,6 +292,7 @@ def _auth(request: Request) -> Auth:
     auth = _bureau(request).authenticate(token, admin_token=request.app.state.settings.admin_token)
     request.state.org_id = auth.org_id
     request.state.key_id = auth.key_id
+    request.state.environment = "test" if auth.test else "live"
     if auth.principal_id:
         request.state.principal_id = auth.principal_id
     return auth

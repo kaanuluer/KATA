@@ -7,7 +7,7 @@ from __future__ import annotations
 import hashlib
 import re
 from datetime import datetime, timezone
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from kata_intent.canonical import canonical_bytes
@@ -18,6 +18,7 @@ FREQUENCY = frozenset({"agreement", "P1D", "P7D", "P1M"})
 MONEY_PURPOSES = frozenset({"purchase", "payment", "transfer", "booking", "investment"})
 ACK_ROLES = frozenset({"agent", "merchant", "psp", "issuer"})
 ACTOR_ROLES = frozenset({"principal", "agent", "merchant", "psp", "issuer", "policy"})
+MAX_DOCUMENT_DEPTH = 32
 
 
 def money(value: Any) -> Decimal:
@@ -32,7 +33,10 @@ def money(value: Any) -> Decimal:
     elif isinstance(value, float):
         amount = Decimal(str(value))
     elif isinstance(value, str):
-        amount = Decimal(value)
+        try:
+            amount = Decimal(value)
+        except InvalidOperation as exc:
+            raise KataError("amount must be a number") from exc
     else:
         raise KataError("amount must be a number")
     if not amount.is_finite():
@@ -86,13 +90,15 @@ def require_text(value: Any, label: str) -> str:
     return value
 
 
-def coerce(value: Any) -> Any:
+def coerce(value: Any, _depth: int = 0) -> Any:
     """Convert floats that arrived from ``json.loads`` into decimals."""
 
+    if _depth > MAX_DOCUMENT_DEPTH:
+        raise KataError("document is nested too deeply")
     if isinstance(value, float):
         return Decimal(str(value))
     if isinstance(value, list):
-        return [coerce(item) for item in value]
+        return [coerce(item, _depth + 1) for item in value]
     if isinstance(value, dict):
-        return {str(key): coerce(item) for key, item in value.items()}
+        return {str(key): coerce(item, _depth + 1) for key, item in value.items()}
     return value
