@@ -37,6 +37,13 @@ def test_home_page_explains_kata_in_english():
     assert "Global Agent Bureau" in body
     assert 'href="/dashboard"' in body
     assert 'href="/portal"' in body
+    assert 'id="explainer"' in body
+    assert 'poster="/assets/gab-explainer-poster.jpg"' in body
+    assert "/assets/gab-explainer-1080.mp4" in body
+    assert "/assets/gab-explainer-720.mp4" in body
+    assert "/assets/gab-explainer.vtt" in body
+    assert "autoplay" not in body.lower()
+    assert "73.5 seconds" in body
     assert 'href="/simulation"' in body
     assert "SYNTHETIC TEST DATA – not real customers" in body
     assert "$0.71M" in body
@@ -197,6 +204,21 @@ def test_static_assets_are_served():
     assert gab.status_code == 200
     assert "Global Agent Bureau" in gab.text
     assert client.get("/assets/secret.txt").status_code == 404
+    poster = client.get("/assets/gab-explainer-poster.jpg")
+    assert poster.status_code == 200
+    assert poster.headers["content-type"].startswith("image/jpeg")
+    wide = client.get("/assets/gab-explainer-1080.mp4")
+    narrow = client.get("/assets/gab-explainer-720.mp4")
+    assert wide.status_code == 200
+    assert narrow.status_code == 200
+    assert wide.headers["content-type"].startswith("video/mp4")
+    assert narrow.headers["content-type"].startswith("video/mp4")
+    captions = client.get("/assets/gab-explainer.vtt")
+    assert captions.status_code == 200
+    assert captions.headers["content-type"].startswith("text/vtt")
+    assert captions.text.startswith("WEBVTT")
+    assert "credit bureau" not in captions.text.lower()
+    assert "open source" not in captions.text.lower()
 
 
 def test_simulation_page_labels_every_figure_as_synthetic():

@@ -118,6 +118,23 @@ nav.docs a { white-space: nowrap; }
 
 .hero { padding: 48px 0 20px; }
 
+.explainer { margin: 8px 0 20px; }
+
+.explainer video {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #12343a;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+
+.explainer figcaption {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
 .kicker {
   margin: 0 0 12px;
   color: var(--teal);
