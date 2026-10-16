@@ -219,6 +219,8 @@ def create_app(
             "gab-logo.png": "image/png",
             "gab-icon.svg": "image/svg+xml",
             "gab-icon-180.png": "image/png",
+            "gab-icon-192.png": "image/png",
+            "gab-icon-512.png": "image/png",
             "favicon-32.png": "image/png",
             "kata-icon.svg": "image/svg+xml",
             "kata-logo.svg": "image/svg+xml",
@@ -236,6 +238,18 @@ def create_app(
         if media is None:
             return _error(404, "asset was not found")
         return FileResponse(pages / name, media_type=media)
+
+    @app.get("/manifest.webmanifest")
+    def manifest():
+        return FileResponse(pages / "manifest.webmanifest", media_type="application/manifest+json")
+
+    @app.get("/sw.js")
+    def service_worker():
+        return FileResponse(
+            pages / "sw.js",
+            media_type="text/javascript",
+            headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"},
+        )
 
     @app.post("/demo/check")
     async def demo_check(request: Request):
@@ -491,6 +505,11 @@ def ensure_bureau(app: FastAPI):
             policy=settings.score_policy,
             consortium_match_threshold=settings.consortium_match_threshold,
             deployment_env=settings.deployment_env,
+            step_up_approval=settings.step_up_approval,
+            approval_ttl_seconds=settings.approval_ttl_seconds,
+            vapid_public_key=settings.vapid_public_key,
+            vapid_private_key=settings.vapid_private_key,
+            vapid_subject=settings.vapid_subject,
         )
         if settings.demo:
             from kata_service.seed import seed_demo
@@ -522,6 +541,11 @@ def ensure_bureau(app: FastAPI):
         policy=settings.score_policy,
         consortium_match_threshold=settings.consortium_match_threshold,
         deployment_env=settings.deployment_env,
+        step_up_approval=settings.step_up_approval,
+        approval_ttl_seconds=settings.approval_ttl_seconds,
+        vapid_public_key=settings.vapid_public_key,
+        vapid_private_key=settings.vapid_private_key,
+        vapid_subject=settings.vapid_subject,
     )
     app.state.bureau = service
     return service

@@ -332,6 +332,11 @@ def test_dashboard_and_portal_pages():
     assert "Your disputes" in portal.text
     assert 'id="portal-disputes"' in portal.text
     assert "/assets/portal.js" in portal.text
+    assert "does not store a trust score" in portal.text
+    assert "Add to home screen" in portal.text
+    assert 'href="/manifest.webmanifest"' in portal.text
+    assert "portal-score" not in portal.text
+    assert "/ 1000" not in portal.text
     requirements = client.get("/docs/gab-requirements")
     assert requirements.status_code == 200
     assert "Trust score" in requirements.text

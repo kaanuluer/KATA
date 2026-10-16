@@ -848,6 +848,202 @@ class PostgresRepo:
         rows = self._all("SELECT org_id, org_type FROM gab_organizations", ())
         return {row[0]: row[1] for row in rows}
 
+    def put_passkey(self, record: dict[str, Any]) -> None:
+        self._execute(
+            """
+            INSERT INTO gab_passkeys (credential_id, principal_id, public_key, sign_count, label, created_at, last_used_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                record["credential_id"],
+                record["principal_id"],
+                record["public_key"],
+                record["sign_count"],
+                record["label"],
+                record["created_at"],
+                record.get("last_used_at"),
+            ),
+        )
+
+    def list_passkeys(self, principal_id: str) -> list[dict[str, Any]]:
+        rows = self._all(
+            """
+            SELECT credential_id, principal_id, public_key, sign_count, label, created_at, last_used_at
+            FROM gab_passkeys WHERE principal_id = %s ORDER BY created_at
+            """,
+            (principal_id,),
+        )
+        return [_passkey_row(row) for row in rows]
+
+    def passkey_by_id(self, credential_id: str) -> dict[str, Any] | None:
+        row = self._one(
+            """
+            SELECT credential_id, principal_id, public_key, sign_count, label, created_at, last_used_at
+            FROM gab_passkeys WHERE credential_id = %s
+            """,
+            (credential_id,),
+        )
+        return None if row is None else _passkey_row(row)
+
+    def delete_passkey(self, credential_id: str, principal_id: str) -> bool:
+        self._ensure()
+        with self._connect() as conn:
+            cursor = conn.execute(
+                "DELETE FROM gab_passkeys WHERE credential_id = %s AND principal_id = %s",
+                (credential_id, principal_id),
+            )
+            return cursor.rowcount > 0
+
+    def update_passkey_use(self, credential_id: str, sign_count: int, at: str) -> None:
+        self._execute(
+            "UPDATE gab_passkeys SET sign_count = %s, last_used_at = %s WHERE credential_id = %s",
+            (sign_count, at, credential_id),
+        )
+
+    def put_challenge(self, record: dict[str, Any]) -> None:
+        self._execute(
+            """
+            INSERT INTO gab_webauthn_challenges (
+              challenge_id, principal_id, kind, challenge, rp_id, origin, expires_at, used_at
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                record["challenge_id"],
+                record.get("principal_id"),
+                record["kind"],
+                record["challenge"],
+                record["rp_id"],
+                record["origin"],
+                record["expires_at"],
+                record.get("used_at"),
+            ),
+        )
+
+    def take_challenge(
+        self, kind: str, challenge: str, principal_id: str | None, origin: str, now: str
+    ) -> dict[str, Any] | None:
+        self._ensure()
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                UPDATE gab_webauthn_challenges
+                SET used_at = %s
+                WHERE challenge_id = (
+                  SELECT challenge_id FROM gab_webauthn_challenges
+                  WHERE kind = %s AND challenge = %s AND origin = %s AND used_at IS NULL AND expires_at >= %s
+                    AND principal_id IS NOT DISTINCT FROM %s
+                  ORDER BY expires_at DESC
+                  LIMIT 1
+                )
+                RETURNING challenge_id, principal_id, kind, challenge, rp_id, origin, expires_at, used_at
+                """,
+                (now, kind, challenge, origin, now, principal_id),
+            ).fetchone()
+        return None if row is None else _challenge_row(row)
+
+    def put_push(self, record: dict[str, Any]) -> None:
+        self._execute(
+            """
+            INSERT INTO gab_push_devices (device_id, principal_id, endpoint, p256dh, auth_secret, consent_at, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                record["device_id"],
+                record["principal_id"],
+                record["endpoint"],
+                record["p256dh"],
+                record["auth_secret"],
+                record["consent_at"],
+                record["created_at"],
+            ),
+        )
+
+    def list_push(self, principal_id: str) -> list[dict[str, Any]]:
+        rows = self._all(
+            """
+            SELECT device_id, principal_id, endpoint, p256dh, auth_secret, consent_at, created_at
+            FROM gab_push_devices WHERE principal_id = %s ORDER BY created_at
+            """,
+            (principal_id,),
+        )
+        return [_push_row(row) for row in rows]
+
+    def delete_push(self, device_id: str, principal_id: str) -> bool:
+        self._ensure()
+        with self._connect() as conn:
+            cursor = conn.execute(
+                "DELETE FROM gab_push_devices WHERE device_id = %s AND principal_id = %s",
+                (device_id, principal_id),
+            )
+            return cursor.rowcount > 0
+
+    def put_approval(self, record: dict[str, Any]) -> None:
+        self._execute(
+            """
+            INSERT INTO gab_approvals (
+              approval_id, principal_id, action_hash, action_document, status, expires_at, used_at, created_at
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                record["approval_id"],
+                record["principal_id"],
+                record["action_hash"],
+                None if record.get("action") is None else json.dumps(record["action"]),
+                record["status"],
+                record["expires_at"],
+                record.get("used_at"),
+                record["created_at"],
+            ),
+        )
+
+    def pending_approval(self, principal_id: str, action_hash: str, now: str) -> dict[str, Any] | None:
+        row = self._one(
+            """
+            SELECT approval_id, principal_id, action_hash, action_document, status, expires_at, used_at, created_at
+            FROM gab_approvals
+            WHERE principal_id = %s AND action_hash = %s AND status = 'pending' AND used_at IS NULL AND expires_at >= %s
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (principal_id, action_hash, now),
+        )
+        return None if row is None else _approval_row(row)
+
+    def list_approvals(self, principal_id: str) -> list[dict[str, Any]]:
+        rows = self._all(
+            """
+            SELECT approval_id, principal_id, action_hash, action_document, status, expires_at, used_at, created_at
+            FROM gab_approvals WHERE principal_id = %s ORDER BY created_at
+            """,
+            (principal_id,),
+        )
+        return [_approval_row(row) for row in rows]
+
+    def get_approval(self, approval_id: str) -> dict[str, Any] | None:
+        row = self._one(
+            """
+            SELECT approval_id, principal_id, action_hash, action_document, status, expires_at, used_at, created_at
+            FROM gab_approvals WHERE approval_id = %s
+            """,
+            (approval_id,),
+        )
+        return None if row is None else _approval_row(row)
+
+    def save_approval(self, record: dict[str, Any]) -> None:
+        self._execute(
+            """
+            UPDATE gab_approvals
+            SET status = %s, action_document = %s, used_at = %s
+            WHERE approval_id = %s
+            """,
+            (
+                record["status"],
+                None if record.get("action") is None else json.dumps(record["action"]),
+                record.get("used_at"),
+                record["approval_id"],
+            ),
+        )
+
     def _ensure(self) -> None:
         if self._ready:
             return
@@ -895,6 +1091,59 @@ class PostgresRepo:
         self._ensure()
         with self._connect() as conn:
             return conn.execute(sql, params).fetchall()
+
+
+def _passkey_row(row) -> dict[str, Any]:
+    return {
+        "credential_id": row[0],
+        "principal_id": row[1],
+        "public_key": row[2],
+        "sign_count": row[3],
+        "label": row[4],
+        "created_at": row[5],
+        "last_used_at": row[6],
+    }
+
+
+def _challenge_row(row) -> dict[str, Any]:
+    return {
+        "challenge_id": row[0],
+        "principal_id": row[1],
+        "kind": row[2],
+        "challenge": row[3],
+        "rp_id": row[4],
+        "origin": row[5],
+        "expires_at": row[6],
+        "used_at": row[7],
+    }
+
+
+def _push_row(row) -> dict[str, Any]:
+    return {
+        "device_id": row[0],
+        "principal_id": row[1],
+        "endpoint": row[2],
+        "p256dh": row[3],
+        "auth_secret": row[4],
+        "consent_at": row[5],
+        "created_at": row[6],
+    }
+
+
+def _approval_row(row) -> dict[str, Any]:
+    document = row[3]
+    if isinstance(document, str) and document:
+        document = json.loads(document)
+    return {
+        "approval_id": row[0],
+        "principal_id": row[1],
+        "action_hash": row[2],
+        "action": document,
+        "status": row[4],
+        "expires_at": row[5],
+        "used_at": row[6],
+        "created_at": row[7],
+    }
 
 
 def _key_row(row) -> dict[str, Any]:

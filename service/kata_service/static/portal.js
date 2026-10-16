@@ -1,6 +1,7 @@
 (function () {
   const tokenKey = "gab-portal-token";
   const $ = (id) => document.getElementById(id);
+  let installEvent = null;
 
   function setStatus(text) {
     $("portal-status").textContent = text;
@@ -38,52 +39,163 @@
     return p;
   }
 
+  function bytesToBase64url(buffer) {
+    const bytes = new Uint8Array(buffer);
+    let raw = "";
+    bytes.forEach((item) => {
+      raw += String.fromCharCode(item);
+    });
+    return btoa(raw).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  }
+
+  function base64urlToBytes(value) {
+    const padded = value.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((value.length + 3) % 4);
+    const raw = atob(padded);
+    const bytes = new Uint8Array(raw.length);
+    for (let index = 0; index < raw.length; index += 1) bytes[index] = raw.charCodeAt(index);
+    return bytes.buffer;
+  }
+
+  function publicKeyOptions(options) {
+    const next = Object.assign({}, options);
+    next.challenge = base64urlToBytes(options.challenge);
+    if (options.user) {
+      next.user = Object.assign({}, options.user, { id: base64urlToBytes(options.user.id) });
+    }
+    const list = options.excludeCredentials || options.allowCredentials;
+    const key = options.excludeCredentials ? "excludeCredentials" : "allowCredentials";
+    if (list) {
+      next[key] = list.map((item) => Object.assign({}, item, { id: base64urlToBytes(item.id) }));
+    }
+    return next;
+  }
+
+  function credentialJSON(credential) {
+    const response = credential.response;
+    const body = {
+      id: credential.id,
+      rawId: bytesToBase64url(credential.rawId),
+      type: credential.type,
+      response: { clientDataJSON: bytesToBase64url(response.clientDataJSON) },
+    };
+    if (response.attestationObject) {
+      body.response.attestationObject = bytesToBase64url(response.attestationObject);
+    } else {
+      body.response.authenticatorData = bytesToBase64url(response.authenticatorData);
+      body.response.signature = bytesToBase64url(response.signature);
+      if (response.userHandle) body.response.userHandle = bytesToBase64url(response.userHandle);
+    }
+    return body;
+  }
+
+  async function assertion() {
+    const options = await api("/v1/portal/passkeys/assert/options", { method: "POST", headers: headers() });
+    const credential = await navigator.credentials.get({ publicKey: publicKeyOptions(options) });
+    return credentialJSON(credential);
+  }
+
   async function load() {
     $("portal-login").hidden = true;
     $("portal-app").hidden = false;
     $("portal-who").textContent = "Signed in.";
+    const devices = await api("/v1/portal/devices", { headers: headers() });
+    const deviceBox = $("portal-devices");
+    deviceBox.innerHTML = "";
+    if (!devices.devices.length) deviceBox.append(line("No device is registered yet."));
+    devices.devices.forEach((item) => {
+      const row = document.createElement("div");
+      row.className = "device";
+      row.append(line(item.label + " · " + item.created_at));
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "ghost";
+      button.textContent = "Remove device";
+      button.addEventListener("click", async () => {
+        const proof = await assertion();
+        await api("/v1/portal/devices/" + encodeURIComponent(item.credential_id) + "/remove", {
+          method: "POST",
+          headers: headers(),
+          body: JSON.stringify({ assertion: proof }),
+        });
+        await load();
+      });
+      row.append(button);
+      deviceBox.append(row);
+    });
+    const pushBox = $("portal-push");
+    pushBox.innerHTML = "";
+    devices.push_devices.forEach((item) => {
+      const row = document.createElement("div");
+      row.className = "device";
+      row.append(line("Notices · " + item.endpoint));
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "ghost";
+      button.textContent = "Remove notices";
+      button.addEventListener("click", async () => {
+        const proof = await assertion();
+        await api("/v1/portal/push/" + encodeURIComponent(item.device_id) + "/remove", {
+          method: "POST",
+          headers: headers(),
+          body: JSON.stringify({ assertion: proof }),
+        });
+        await load();
+      });
+      row.append(button);
+      pushBox.append(row);
+    });
+    const approvalBox = $("portal-approvals");
+    approvalBox.innerHTML = "";
+    try {
+      const approvals = await api("/v1/portal/approvals", { headers: headers() });
+      if (!approvals.length) approvalBox.append(line("No approval is waiting."));
+      approvals.forEach((item) => {
+        const card = document.createElement("article");
+        card.className = "agent-card";
+        card.append(line(item.approval_id + " · " + item.status + " · until " + item.expires_at));
+        if (item.action) card.append(line(JSON.stringify(item.action)));
+        if (item.status === "pending") {
+          ["approve", "reject"].forEach((decision) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = decision === "reject" ? "ghost" : "";
+            button.textContent = decision === "approve" ? "Approve" : "Reject";
+            button.addEventListener("click", async () => {
+              const proof = await assertion();
+              await api("/v1/portal/approvals/" + encodeURIComponent(item.approval_id) + "/" + decision, {
+                method: "POST",
+                headers: headers(),
+                body: JSON.stringify({ assertion: proof }),
+              });
+              await load();
+            });
+            card.append(button);
+          });
+        }
+        approvalBox.append(card);
+      });
+    } catch (error) {
+      approvalBox.append(line(error.status === 404 ? "Approval notices are off on this host." : error.message));
+    }
     const agents = await api("/v1/portal/agents", { headers: headers() });
     const agentBox = $("portal-agents");
     agentBox.innerHTML = "";
-    if (!agents.length) {
-      agentBox.append(line("No agents are bound to this principal."));
-    }
+    if (!agents.length) agentBox.append(line("No agents are bound to this principal."));
     for (const agent of agents) {
       const card = document.createElement("article");
       card.className = "agent-card";
       card.append(
-        line(
-          agent.agent_id +
-            " · " +
-            agent.status +
-            " · claim " +
-            agent.verification_level +
-            " · assurance " +
-            (agent.assurance_level || "")
-        )
+        line(agent.agent_id + " · " + agent.status + " · claim " + agent.verification_level + " · assurance " + (agent.assurance_level || ""))
       );
-      const score = document.createElement("p");
-      score.className = "score";
-      const figure = document.createElement("strong");
-      figure.id = "portal-score";
-      figure.textContent = String(agent.score);
-      score.append(figure, document.createTextNode(" / 1000 · risk " + String(agent.risk)));
-      card.append(score);
-      const reasons = document.createElement("ol");
-      reasons.id = "portal-reasons";
-      (agent.score_reasons || []).forEach((item) => {
-        const row = document.createElement("li");
-        row.textContent = item.code + " (" + item.points + ") " + item.detail;
-        reasons.append(row);
-      });
-      card.append(reasons);
       const revoke = document.createElement("button");
       revoke.type = "button";
       revoke.textContent = "Revoke agent";
       revoke.addEventListener("click", async () => {
+        const proof = await assertion();
         await api("/v1/portal/agents/" + encodeURIComponent(agent.agent_id) + "/revoke", {
           method: "POST",
           headers: headers(),
+          body: JSON.stringify({ assertion: proof }),
         });
         await load();
       });
@@ -100,9 +212,11 @@
         button.className = "ghost";
         button.textContent = "Revoke intent";
         button.addEventListener("click", async () => {
+          const proof = await assertion();
           await api("/v1/portal/agreements/" + encodeURIComponent(item.agreement_id) + "/revoke", {
             method: "POST",
             headers: headers(),
+            body: JSON.stringify({ assertion: proof }),
           });
           await load();
         });
@@ -128,18 +242,14 @@
     const inquiries = await api("/v1/portal/inquiries", { headers: headers() });
     const inquiryBox = $("portal-inquiries");
     inquiryBox.innerHTML = "";
-    if (!inquiries.length) {
-      inquiryBox.append(line("No inquiries yet."));
-    }
+    if (!inquiries.length) inquiryBox.append(line("No inquiries yet."));
     inquiries.forEach((item) => {
       inquiryBox.append(line(item.at + " · " + item.organization + " · " + item.purpose_code + " · " + item.agent_id));
     });
     const disputes = await api("/v1/portal/disputes", { headers: headers() });
     const disputeBox = $("portal-disputes");
     disputeBox.innerHTML = "";
-    if (!disputes.length) {
-      disputeBox.append(line("No disputes filed."));
-    }
+    if (!disputes.length) disputeBox.append(line("No disputes filed."));
     disputes.forEach((item) => {
       const outcome = item.outcome ? " · " + item.outcome : "";
       disputeBox.append(line(item.dispute_id + " · " + item.status + outcome + " · " + item.report_id));
@@ -155,6 +265,26 @@
         body: JSON.stringify({ email: $("portal-email").value.trim() }),
       });
       setStatus("If that address can sign in, a link was sent. In the demo, open the development mailbox.");
+    } catch (error) {
+      setStatus(error.message);
+    }
+  });
+
+  $("portal-passkey").addEventListener("click", async () => {
+    try {
+      const options = await api("/v1/portal/passkeys/authenticate/options", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const credential = await navigator.credentials.get({ publicKey: publicKeyOptions(options) });
+      const session = await api("/v1/portal/passkeys/authenticate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ credential: credentialJSON(credential) }),
+      });
+      sessionStorage.setItem(tokenKey, session.token);
+      await load();
+      setStatus("");
     } catch (error) {
       setStatus(error.message);
     }
@@ -182,16 +312,63 @@
     $("portal-login").hidden = false;
   });
 
+  $("device-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    try {
+      const options = await api("/v1/portal/passkeys/register/options", { method: "POST", headers: headers() });
+      const credential = await navigator.credentials.create({ publicKey: publicKeyOptions(options) });
+      await api("/v1/portal/passkeys", {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({ label: $("device-label").value.trim(), credential: credentialJSON(credential) }),
+      });
+      await load();
+    } catch (error) {
+      setStatus(error.message);
+    }
+  });
+
+  $("push-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!$("push-consent").checked) {
+      setStatus("Approval notices stay off until you agree.");
+      return;
+    }
+    try {
+      const key = await api("/v1/portal/push/key", { headers: headers() });
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: base64urlToBytes(key.public_key),
+      });
+      const json = subscription.toJSON();
+      await api("/v1/portal/push", {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({
+          consent: true,
+          endpoint: json.endpoint,
+          keys: json.keys,
+        }),
+      });
+      await load();
+    } catch (error) {
+      setStatus(error.message);
+    }
+  });
+
   $("dispute-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     const node = $("dispute-result");
     try {
+      const proof = await assertion();
       const filed = await api("/v1/portal/disputes", {
         method: "POST",
         headers: headers(),
         body: JSON.stringify({
           report_id: $("dispute-report").value.trim(),
           statement: $("dispute-statement").value.trim(),
+          assertion: proof,
         }),
       });
       node.hidden = false;
@@ -202,6 +379,24 @@
       node.textContent = error.message;
     }
   });
+
+  window.addEventListener("beforeinstallprompt", (event) => {
+    event.preventDefault();
+    installEvent = event;
+    $("portal-install").hidden = false;
+  });
+
+  $("portal-install").addEventListener("click", async () => {
+    if (!installEvent) return;
+    installEvent.prompt();
+    await installEvent.userChoice;
+    installEvent = null;
+    $("portal-install").hidden = true;
+  });
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  }
 
   const hash = new URLSearchParams(location.hash.replace(/^#/, ""));
   const token = hash.get("token");

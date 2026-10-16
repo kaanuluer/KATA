@@ -169,7 +169,11 @@ Acceptance: revoking an agent after an https subscription stores a signed `kata_
 - The token is stored as a hash. The link lifetime is 15 minutes. The session lifetime is 12 hours.
 - The development mailbox (`GAB_DEV_MAILBOX=1` or `GAB_DEMO=1`) keeps the latest link in memory. `GET /v1/dev/mailbox` is 404 when that flag is off.
 - Organization magic links also always return `{"sent": true}` and send only when the email was registered in advance, so the response does not reveal whether the address exists.
-- The portal lists the principal's agents with assurance level, score, and risk, plus authorizations, inquiries, incident reports, and disputes, and accepts revoke and dispute.
+- The portal lists the principal's agents with assurance level, authorizations, inquiries, incident reports, and disputes. It does not return a trust score, a risk figure, or score reasons, and it does not score the individual.
+- A passkey can sign in. The email link remains. Registering a device is explicit. The individual can list devices and remove one with a fresh passkey assertion.
+- Revoking an agent, revoking an intent, and filing a dispute each require that same passkey assertion.
+- Push registration is refused unless `consent` is true. Approval notices stay off unless `GAB_STEP_UP_APPROVAL` is set. The push sentence is fixed: `an agent is waiting for your approval, open to review`.
+- The portal page states what is stored: the email and principal id, the public half of each passkey, a push address only after consent, and a short-lived approval only while that flow is on.
 
 Acceptance: after the login row is bound to the registered principal, the portal lists the agent, the inquiry, and the report, and a principal revoke makes verify return `AGENT_NOT_ACTIVE`.
 
@@ -331,12 +335,18 @@ Set secrets in the host. Do not commit values.
 | `GAB_REQUIRE_PROOFING` | No | no | Default on, including when `GAB_DEFENSES=0`. `0` scores the claimed verification level without the evidence gate. |
 | `GAB_SCORE_WEIGHTS` | No | no | Optional JSON override of the `gab-score-1` weights published at `GET /v1/score-model`. Invalid JSON or an out-of-range value is a configuration error. |
 | `GAB_CONSORTIUM_MATCH_THRESHOLD` | No | no | Default 2. Other members who have sighted a fingerprint before a match response includes the count. |
+| `GAB_STEP_UP_APPROVAL` | No | no | Default off. `1` opens a short-lived approval when verify returns STEP_UP for an individual. |
+| `GAB_STEP_UP_TTL_SECONDS` | No | no | Default 300. Capped at 900. |
+| `GAB_VAPID_PUBLIC_KEY` | No | no | Public key for approval notices. Push stays quiet until this and the private key are set. |
+| `GAB_VAPID_PRIVATE_KEY` | No | yes | Private key for approval notices. Do not commit it. |
+| `GAB_VAPID_SUBJECT` | No | no | Contact on the push claim. Default is the bureau mail address. |
 
 Supabase is not part of this deployment. There is no `SUPABASE_URL`, anon key, or service-role key.
 
 ## 8. Known limits of this version
 
 - Mail is SMTP when the four SMTP variables are set, and otherwise sends nothing. The development mailbox is in memory and is not shared across serverless instances.
+- Step-up approval notices stay off unless `GAB_STEP_UP_APPROVAL=1`. The push sentence is fixed and does not name a merchant, an amount, or an agent. The individual portal does not show a trust score.
 - A person who already has a principal id must have that email registered against it, including through `principal_email` at agent registration. A brand-new magic link creates a new principal id and will not see another principal's agents. An existing binding is not moved.
 - Anti-gaming adds a transaction link, reporter reputation, a settled-credit cap, cluster ring detection, adaptive velocity denial, re-registration history, and an evidence gate on operator and institution claims. It does not convert currencies. The evidence hash is not confirmed by an outside issuer. `/simulation` publishes one synthetic stress test, labeled `SYNTHETIC TEST DATA – not real customers`: 73% of adaptive attempted fraud dollars stopped ($0.71M executed) and 78% when attackers do not know the rules ($0.68M executed).
 - Score-drop alerting uses a 50-point threshold and does not page a human.
