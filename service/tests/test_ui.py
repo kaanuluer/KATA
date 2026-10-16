@@ -203,6 +203,12 @@ def test_static_assets_are_served():
     gab = client.get("/assets/gab-logo.svg")
     assert gab.status_code == 200
     assert "Global Agent Bureau" in gab.text
+    wordmark = client.get("/assets/gab-logo.png")
+    assert wordmark.status_code == 200
+    assert wordmark.headers["content-type"].startswith("image/png")
+    assert wordmark.content.startswith(b"\x89PNG\r\n\x1a\n")
+    assert int.from_bytes(wordmark.content[16:20], "big") == 1484
+    assert int.from_bytes(wordmark.content[20:24], "big") == 792
     assert client.get("/assets/secret.txt").status_code == 404
     poster = client.get("/assets/gab-explainer-poster.jpg")
     assert poster.status_code == 200

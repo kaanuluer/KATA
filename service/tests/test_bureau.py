@@ -625,5 +625,12 @@ def test_smtp_is_off_unless_configured_and_does_not_print_the_password():
         assert "call" not in part.lower()
     assert f'href="{link}"' in rich
     assert "?token=" not in rich
+    assert 'src="https://globalagentbureau.com/assets/gab-logo.png"' in rich
+    assert 'alt="GAB_"' in rich
+    assert 'width="371"' in rich
+    assert 'height="198"' in rich
+    assert "data:" not in rich
+    assert ".svg" not in rich
+    assert "src=\"/" not in rich
     assert "test-smtp-secret" not in plain
     assert "test-smtp-secret" not in rich
