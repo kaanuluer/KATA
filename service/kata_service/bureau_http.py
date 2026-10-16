@@ -10,7 +10,7 @@ from typing import Any
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from kata_service.bureau import Auth, BureauError, reset_test_mode, use_test_mode
+from kata_service.bureau import Auth, BureauError, reject_deep_json, reset_test_mode, use_test_mode
 
 
 def build_router() -> APIRouter:
@@ -272,6 +272,8 @@ async def _run(request: Request, action, *, read_body: bool = True, anonymous: b
                 auth = Auth()
         mode = use_test_mode(bool(getattr(auth, "test", False)))
         try:
+            if read_body and request.method != "GET":
+                reject_deep_json(body)
             result = action(auth, body)
         finally:
             reset_test_mode(mode)
