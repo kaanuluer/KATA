@@ -101,6 +101,12 @@ DOCUMENTS: tuple[tuple[str, str, str, str], ...] = (
         "UCP research",
         "What the Universal Commerce Protocol is, and what the bureau could consume. No implementation.",
     ),
+    (
+        "amex-intent-mapping",
+        "amex-intent-mapping.md",
+        "AmEx intent mapping",
+        "Field mapping from the public AmEx Intent Intelligence framework into the KATA agreement. No implementation.",
+    ),
 )
 
 _FILE_TO_SLUG = {filename: slug for slug, filename, _label, _blurb in DOCUMENTS}
