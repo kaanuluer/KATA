@@ -189,6 +189,10 @@ def create_app(
             "chart-final-3-fake-reports.png": "image/png",
             "chart-final-4-loss-by-attacker.png": "image/png",
             "chart-final-5-friction-sybils.png": "image/png",
+            "gab-explainer-1080.mp4": "video/mp4",
+            "gab-explainer-720.mp4": "video/mp4",
+            "gab-explainer-poster.jpg": "image/jpeg",
+            "gab-explainer.vtt": "text/vtt",
         }.get(name)
         if media is None:
             return _error(404, "asset was not found")

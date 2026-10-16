@@ -1,0 +1,43 @@
+WEBVTT
+
+00:00:00.250 --> 00:00:04.250
+AI agents now pay on our behalf. But merchants and banks can't tell a good agent from a bad one.
+
+00:00:04.500 --> 00:00:08.750
+Same API call, same JSON. GAB is an independent trust layer for agent payments.
+
+00:00:09.250 --> 00:00:12.250
+The agent and its owner sign an intent together: max amount, scope, expiry.
+
+00:00:12.500 --> 00:00:16.250
+A payment request triggers a GAB inquiry. GAB returns a score with reason codes.
+
+00:00:16.500 --> 00:00:20.750
+Score ≥ 650: ALLOW. 500-649: STEP-UP. Below 500: DENY. Every decision is explainable.
+
+00:00:21.000 --> 00:00:24.000
+Step-up = ask the owner or add verification. Every decision carries reason codes, so it can be audited and disputed.
+
+00:00:24.250 --> 00:00:29.500
+The score (gab-score-1) uses transaction-linked reports, weighted by reporter reputation, plus capped settled-credit points.
+
+00:00:29.750 --> 00:00:36.000
+Assurance level adjusts the tier. Risk = 1000 - score. Every score returns reason codes.
+
+00:00:36.250 --> 00:00:41.750
+Defenses: velocity limits that DENY, and ring detection using strongly connected components and shared signals.
+
+00:00:42.000 --> 00:00:47.750
+Re-registration linking inherits history. Thin links are discounted. Unlinked reports are rejected.
+
+00:00:48.250 --> 00:00:53.000
+Synthetic stress test: 10,000 agents, 100,000 transactions, 90 days. 78% of fraud dollars stopped, 73% against adaptive attackers.
+
+00:00:53.250 --> 00:00:58.750
+0.15% of legit agents denied. Switch off velocity limits and leaked fraud rises from $0.71M to $0.98M.
+
+00:00:59.250 --> 00:01:06.000
+Open gaps: rings with one-way reports, new-signal identities, cheap link fabrication, and step-up friction.
+
+00:01:06.250 --> 00:01:13.250
+Global Agent Bureau, an agent bureau, powered by KATA (PolyForm Noncommercial).
