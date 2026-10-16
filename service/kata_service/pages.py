@@ -95,6 +95,12 @@ DOCUMENTS: tuple[tuple[str, str, str, str], ...] = (
         "Interoperability",
         "Field mapping from Verifiable Intent, AP2, TAP, and AGNTCY into KATA objects.",
     ),
+    (
+        "ucp-research",
+        "ucp-research.md",
+        "UCP research",
+        "What the Universal Commerce Protocol is, and what the bureau could consume. No implementation.",
+    ),
 )
 
 _FILE_TO_SLUG = {filename: slug for slug, filename, _label, _blurb in DOCUMENTS}
