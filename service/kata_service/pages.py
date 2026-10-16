@@ -24,6 +24,18 @@ DOCUMENTS: tuple[tuple[str, str, str, str], ...] = (
         "Functional and non-functional requirements for the Global Agent Bureau.",
     ),
     (
+        "sandbox",
+        "sandbox.md",
+        "Sandbox",
+        "Test keys on the same API. Test rows do not change a production score.",
+    ),
+    (
+        "uptime",
+        "uptime.md",
+        "Uptime",
+        "How to watch /health and /v1/health from outside the host.",
+    ),
+    (
         "design",
         "intent-agreement.md",
         "Design",
@@ -264,6 +276,37 @@ def api_reference() -> str:
     return shell("API reference — KATA", "KATA service endpoints.", "".join(blocks), current="/docs")
 
 
+def status_page(report: dict[str, str]) -> str:
+    """Human-readable result of the same check /health returns."""
+
+    database = report.get("database", "unavailable")
+    ok = report.get("status") == "ok"
+    if database == "memory":
+        detail = "This process is using the in-memory store. A database URL is not in use."
+    elif database == "ok":
+        detail = "The database answered a connectivity check."
+    else:
+        detail = "The database connectivity check did not succeed."
+    state = "Operating" if ok else "Unavailable"
+    body = (
+        '<section class="hero"><p class="kicker">Service</p><h1>Status</h1>'
+        f'<p class="lede">{html.escape(state)}. {html.escape(detail)}</p>'
+        "<p>JSON probes: <a href=\"/health\"><code>/health</code></a> and "
+        "<a href=\"/v1/health\"><code>/v1/health</code></a>. "
+        "Uptime guidance is in <a href=\"/docs/uptime\">the uptime note</a>.</p>"
+        "<dl>"
+        f"<dt>Service</dt><dd>{html.escape(report.get('status', 'unavailable'))}</dd>"
+        f"<dt>Database</dt><dd>{html.escape(database)}</dd>"
+        "</dl></section>"
+    )
+    return shell(
+        "Status — Global Agent Bureau",
+        "Whether the Global Agent Bureau service and its database check are answering.",
+        body,
+        current="/status",
+    )
+
+
 def history_section() -> str:
     return (
         "<section id=\"history\">"
@@ -364,6 +407,7 @@ def _nav(current: str) -> str:
         ("/history", "History", "/history"),
         ("/simulation", "Simulation", "/simulation"),
         ("/docs", "Docs", "/docs"),
+        ("/status", "Status", "/status"),
         ("/#operations", "Live status", ""),
         (GITHUB, "GitHub", "github"),
     ]
@@ -560,6 +604,20 @@ _MILESTONES = (
 
 
 _ENDPOINTS: tuple[dict[str, str], ...] = (
+    {
+        "method": "GET",
+        "path": "/health",
+        "summary": "Service probe. No API key. Same body as /v1/health.",
+        "response": '{\n  "status": "ok",\n  "database": "ok"\n}',
+        "errors": '503 {"status": "unavailable", "database": "unavailable"} when the database check fails. The body has no error text.',
+    },
+    {
+        "method": "GET",
+        "path": "/v1/health",
+        "summary": "Service probe on the versioned API. No API key. Same body as /health.",
+        "response": '{\n  "status": "ok",\n  "database": "ok"\n}',
+        "errors": '503 {"status": "unavailable", "database": "unavailable"} when the database check fails. The body has no error text.',
+    },
     {
         "method": "GET",
         "path": "/v1/revocations",

@@ -29,6 +29,7 @@ from kata_service.pages import (
     render_document,
     schema_bytes,
     schema_index,
+    status_page,
 )
 
 from kata_intent.canonical import canonical_bytes
@@ -86,6 +87,19 @@ def create_app(
     def portal():
         return HTMLResponse(portal_page())
 
+    @app.get("/health")
+    def health():
+        return _health_response(app)
+
+    @app.get("/v1/health")
+    def health_v1():
+        return _health_response(app)
+
+    @app.get("/status")
+    def status():
+        _code, body = probe_database(app.state.settings)
+        return HTMLResponse(status_page(body))
+
     @app.get("/docs")
     def docs():
         return _page(documentation_index)
@@ -134,7 +148,7 @@ def create_app(
     @app.middleware("http")
     async def bureau_guard(request: Request, call_next):
         path = request.url.path
-        if not path.startswith("/v1"):
+        if path in {"/health", "/v1/health"} or not path.startswith("/v1"):
             return await call_next(request)
         try:
             bureau = ensure_bureau(app)
@@ -406,6 +420,7 @@ def ensure_bureau(app: FastAPI):
             public_base_url=settings.public_base_url,
             policy=settings.score_policy,
             consortium_match_threshold=settings.consortium_match_threshold,
+            deployment_env=settings.deployment_env,
         )
         if settings.demo:
             from kata_service.seed import seed_demo
@@ -436,6 +451,7 @@ def ensure_bureau(app: FastAPI):
         public_base_url=settings.public_base_url,
         policy=settings.score_policy,
         consortium_match_threshold=settings.consortium_match_threshold,
+        deployment_env=settings.deployment_env,
     )
     app.state.bureau = service
     return service
@@ -492,6 +508,28 @@ def _endpoint_rate_cap(method: str, path: str, settings) -> int | None:
         "/v1/reports": settings.report_rate_limit_per_minute,
     }
     return caps.get(path)
+
+
+def probe_database(settings: Settings) -> tuple[int, dict[str, str]]:
+    """Ping the database when one is configured. Never include the address or the driver error."""
+
+    if settings.demo or not settings.database_url:
+        return 200, {"status": "ok", "database": "memory"}
+    try:
+        import psycopg
+
+        with psycopg.connect(settings.database_url, connect_timeout=3) as conn:
+            row = conn.execute("SELECT 1").fetchone()
+        if row is None or row[0] != 1:
+            return 503, {"status": "unavailable", "database": "unavailable"}
+    except Exception:
+        return 503, {"status": "unavailable", "database": "unavailable"}
+    return 200, {"status": "ok", "database": "ok"}
+
+
+def _health_response(app: FastAPI) -> JSONResponse:
+    status, body = probe_database(app.state.settings)
+    return JSONResponse(body, status_code=status)
 
 
 def _error(status: int, message: str) -> JSONResponse:

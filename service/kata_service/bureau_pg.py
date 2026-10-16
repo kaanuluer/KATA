@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from kata_service.bureau import BureauError, email_hash
+from kata_service.bureau import BureauError, email_hash, in_test_mode
 from kata_service.store import dump_doc, load_doc
 
 _MIGRATIONS = Path(__file__).resolve().parent / "migrations"
@@ -59,8 +59,9 @@ class PostgresRepo:
     def create_key(self, record: dict[str, Any]) -> None:
         self._execute(
             """
-            INSERT INTO gab_api_keys (key_id, org_id, name, prefix, secret_hash, scopes, created_at, revoked_at, rotated_from)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO gab_api_keys (
+              key_id, org_id, name, prefix, secret_hash, scopes, created_at, revoked_at, rotated_from, environment
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 record["key_id"],
@@ -72,6 +73,7 @@ class PostgresRepo:
                 record["created_at"],
                 record.get("revoked_at"),
                 record.get("rotated_from"),
+                "test" if record.get("environment") == "test" or str(record.get("prefix") or "").startswith("gab_test_") else "live",
             ),
         )
 
@@ -84,7 +86,7 @@ class PostgresRepo:
     def get_key(self, key_id: str) -> dict[str, Any] | None:
         row = self._one(
             """
-            SELECT key_id, org_id, name, prefix, secret_hash, scopes, created_at, revoked_at, rotated_from
+            SELECT key_id, org_id, name, prefix, secret_hash, scopes, created_at, revoked_at, rotated_from, environment
             FROM gab_api_keys WHERE key_id = %s
             """,
             (key_id,),
@@ -96,7 +98,7 @@ class PostgresRepo:
     def list_keys(self, org_id: str) -> list[dict[str, Any]]:
         rows = self._all(
             """
-            SELECT key_id, org_id, name, prefix, secret_hash, scopes, created_at, revoked_at, rotated_from
+            SELECT key_id, org_id, name, prefix, secret_hash, scopes, created_at, revoked_at, rotated_from, environment
             FROM gab_api_keys WHERE org_id = %s ORDER BY created_at
             """,
             (org_id,),
@@ -771,7 +773,10 @@ class PostgresRepo:
     def _connect(self):
         import psycopg
 
-        return psycopg.connect(self.database_url)
+        conn = psycopg.connect(self.database_url)
+        if in_test_mode():
+            conn.execute("SET search_path TO gab_sandbox, public")
+        return conn
 
     def _execute(self, sql: str, params: tuple) -> None:
         self._ensure()
@@ -800,6 +805,7 @@ def _key_row(row) -> dict[str, Any]:
         "created_at": row[6],
         "revoked_at": row[7],
         "rotated_from": row[8],
+        "environment": row[9] if len(row) > 9 else "live",
     }
 
 

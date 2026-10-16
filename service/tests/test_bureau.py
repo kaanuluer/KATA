@@ -634,3 +634,127 @@ def test_smtp_is_off_unless_configured_and_does_not_print_the_password():
     assert "src=\"/" not in rich
     assert "test-smtp-secret" not in plain
     assert "test-smtp-secret" not in rich
+
+
+def test_test_keys_use_the_same_api_without_changing_production_scores():
+    from kata_service.bureau import token_hash
+    from kata_service.settings import settings_from_env
+
+    assert settings_from_env({}).deployment_env == "production"
+    assert settings_from_env({"GAB_ENV": "sandbox"}).deployment_env == "sandbox"
+    assert settings_from_env({"GAB_ENV": "lab"}).config_error == "GAB_ENV must be production or sandbox"
+
+    client = _client()
+    operator = _org(client, "Harbor Agents", "agent_operator")
+    merchant = _org(client, "Techstore", "merchant")
+    live_operator = _key(client, operator["org_id"], "live")
+    issued = client.post(
+        f"/v1/orgs/{operator['org_id']}/keys",
+        headers=_auth("admin-test-token"),
+        json={"name": "sandbox", "environment": "test"},
+    )
+    assert issued.status_code == 200, issued.text
+    test_operator = issued.json()["token"]
+    assert test_operator.startswith("gab_test_")
+    assert issued.json()["environment"] == "test"
+    listed = client.get(f"/v1/orgs/{operator['org_id']}/keys", headers=_auth("admin-test-token"))
+    assert test_operator not in listed.text
+    assert test_operator.rsplit("_", 1)[-1] not in listed.text
+    live_merchant = _key(client, merchant["org_id"], "merchant-live")
+    test_merchant = client.post(
+        f"/v1/orgs/{merchant['org_id']}/keys",
+        headers=_auth("admin-test-token"),
+        json={"name": "merchant-sandbox", "environment": "test"},
+    ).json()["token"]
+
+    live_agent = _register(client, live_operator)
+    test_agent_key = private_key_from_seed(hashlib.sha256(b"bureau-agent-sandbox").digest())
+    registered = client.post(
+        "/v1/agents",
+        headers=_auth(test_operator),
+        json={
+            "agent_id": "shopper-01",
+            "principal_id": "prn_person",
+            "public_key": test_agent_key.public.to_jwk(),
+            "verification_level": "operator_verified",
+        },
+    )
+    assert registered.status_code == 200, registered.text
+    assert registered.json()["environment"] == "test"
+    assert registered.json()["fingerprint"] != live_agent["fingerprint"]
+    again = client.get("/v1/agents/shopper-01", headers=_auth(live_operator))
+    assert again.json()["environment"] == "live"
+    assert again.json()["fingerprint"] == live_agent["fingerprint"]
+
+    stored = client.post(
+        "/v1/agents/shopper-01/intents",
+        headers={**_auth(live_operator), "Content-Type": "application/json"},
+        content=_agreement().to_json(),
+    )
+    assert stored.status_code == 200, stored.text
+    allowed = client.post(
+        "/v1/verify",
+        headers=_auth(live_merchant),
+        json={"agent_id": "shopper-01", "action": _action(10, "act_live")},
+    )
+    assert allowed.json()["verdict"] == "ALLOW"
+    evidence = "sha256:" + "ab" * 32
+    filed = client.post(
+        "/v1/reports",
+        headers=_auth(live_merchant),
+        json={"agent_id": "shopper-01", "kind": "fraud_incident", "evidence_hash": evidence, "summary": "Disputed charge"},
+    )
+    assert filed.status_code == 200, filed.text
+    live_after = client.get("/v1/agents/shopper-01", headers=_auth(live_operator)).json()
+    test_after = client.get("/v1/agents/shopper-01", headers=_auth(test_operator)).json()
+    assert live_after["score"] < test_after["score"]
+    live_reports = client.get("/v1/agents/shopper-01/reports", headers=_auth(live_merchant))
+    test_reports = client.get("/v1/agents/shopper-01/reports", headers=_auth(test_merchant))
+    assert live_reports.json()["counts"]["fraud_incident"] == 1
+    assert test_reports.json()["counts"]["fraud_incident"] == 0
+    rotated = client.post(f"/v1/keys/{issued.json()['key_id']}/rotate", headers=_auth("admin-test-token"))
+    assert rotated.status_code == 200
+    assert rotated.json()["environment"] == "test"
+    assert rotated.json()["token"].startswith("gab_test_")
+    assert rotated.json()["token"] != test_operator
+
+    sandbox = _client(deployment_env="sandbox")
+    sandbox_org = _org(sandbox, "Harbor Agents", "agent_operator")
+    refused = sandbox.post(
+        f"/v1/orgs/{sandbox_org['org_id']}/keys",
+        headers=_auth("admin-test-token"),
+        json={"name": "live", "environment": "live"},
+    )
+    assert refused.status_code == 403
+    only = sandbox.post(
+        f"/v1/orgs/{sandbox_org['org_id']}/keys",
+        headers=_auth("admin-test-token"),
+        json={"name": "sandbox"},
+    )
+    assert only.status_code == 200
+    assert only.json()["token"].startswith("gab_test_")
+    sandbox.app.state.bureau.repo.create_key(
+        {
+            "key_id": "key_live_fixture",
+            "org_id": sandbox_org["org_id"],
+            "name": "live fixture",
+            "prefix": "ffffeeee",
+            "environment": "live",
+            "secret_hash": token_hash("gab_ffffeeee_fixture"),
+            "scopes": ["registry:read"],
+            "created_at": "2026-10-16T00:00:00Z",
+            "revoked_at": None,
+            "rotated_from": None,
+        }
+    )
+    assert sandbox.get("/v1/agents/shopper-01", headers=_auth("gab_ffffeeee_fixture")).status_code == 403
+    page = client.get("/docs/sandbox")
+    assert page.status_code == 200
+    assert "gab_test_" in page.text
+    assert "GAB_ENV" in page.text
+    assert "agent bureau" in page.text.lower()
+    assert "open source" not in page.text.lower()
+    assert "credit bureau" not in page.text.lower()
+    assert "call" not in page.text.lower()
+    joined = "\n".join(migration_statements())
+    assert "CREATE SCHEMA IF NOT EXISTS gab_sandbox" in joined

@@ -350,6 +350,116 @@ def test_demo_allows_denies_and_steps_up():
     assert rejected.status_code == 400
 
 
+def test_health_and_status_when_the_process_uses_memory():
+    client = _client()
+    for path in ("/health", "/v1/health"):
+        page = client.get(path)
+        assert page.status_code == 200
+        assert page.json() == {"status": "ok", "database": "memory"}
+    status = client.get("/status")
+    assert status.status_code == 200
+    assert "Operating" in status.text
+    assert "memory" in status.text
+    assert 'href="/status"' in status.text
+    assert 'aria-current="page"' in status.text
+    assert "agent bureau" in status.text.lower()
+    assert "PolyForm Noncommercial" in status.text
+    for banned in ("open source", "open-source", "credit bureau", "call"):
+        assert banned not in status.text.lower()
+    note = client.get("/docs/uptime")
+    assert note.status_code == 200
+    assert "/health" in note.text
+    assert "/v1/health" in note.text
+    assert "once a minute" in note.text.lower()
+    assert "503" in note.text
+    assert "agent bureau" in note.text.lower()
+    for banned in ("open source", "open-source", "credit bureau", "call"):
+        assert banned not in note.text.lower()
+    api = client.get("/docs/api")
+    assert "/health" in api.text
+    assert "/v1/health" in api.text
+
+
+def test_health_stays_on_memory_in_demo_mode():
+    settings = Settings(
+        "postgres://secret-host.example/db",
+        "postgres://secret-host.example/db",
+        None,
+        None,
+        None,
+        (),
+        "https://fx.test",
+        demo=True,
+    )
+    client = TestClient(create_app(settings, MemoryStore()))
+    page = client.get("/health")
+    assert page.status_code == 200
+    assert page.json() == {"status": "ok", "database": "memory"}
+    assert "secret-host" not in page.text
+
+
+def test_health_pings_the_database_and_hides_failures(monkeypatch):
+    seen = {}
+
+    class Connection:
+        def execute(self, sql):
+            seen["sql"] = sql
+            return self
+
+        def fetchone(self):
+            return (1,)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    import psycopg
+
+    def connect(url, connect_timeout=None):
+        seen["url"] = url
+        seen["timeout"] = connect_timeout
+        return Connection()
+
+    monkeypatch.setattr(psycopg, "connect", connect)
+    settings = Settings(
+        "postgres://secret-host.example/db",
+        "postgres://secret-host.example/db",
+        None,
+        None,
+        None,
+        (),
+        "https://fx.test",
+    )
+    client = TestClient(create_app(settings, MemoryStore()))
+    page = client.get("/v1/health")
+    assert page.status_code == 200
+    assert page.json() == {"status": "ok", "database": "ok"}
+    assert seen["sql"] == "SELECT 1"
+    assert seen["timeout"] == 3
+    assert "secret-host" not in page.text
+    status = client.get("/status")
+    assert "Operating" in status.text
+    assert ">ok<" in status.text
+    assert "secret-host" not in status.text
+
+    def fail(url, connect_timeout=None):
+        raise RuntimeError(f"could not reach {url} password=s3cret")
+
+    monkeypatch.setattr(psycopg, "connect", fail)
+    failed = client.get("/health")
+    assert failed.status_code == 503
+    assert failed.json() == {"status": "unavailable", "database": "unavailable"}
+    assert "secret" not in failed.text
+    assert "password" not in failed.text
+    assert "s3cret" not in failed.text
+    down = client.get("/status")
+    assert down.status_code == 200
+    assert "Unavailable" in down.text
+    assert "secret" not in down.text
+
+
 def _payment(amount: int, item: str = "Laptop", include_expiry: bool = True) -> dict:
     return {
         "intent": {
