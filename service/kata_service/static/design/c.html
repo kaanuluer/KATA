@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Path — Global Agent Bureau</title>
+  <meta name="description" content="Design direction C. Know the agent before the payment goes through.">
+  <meta name="color-scheme" content="dark light">
+  <link rel="icon" href="/assets/gab-icon.svg" type="image/svg+xml">
+  <style>
+    :root {
+      --bg: #13203B;
+      --ink: #F3F7F7;
+      --body: #E7F1F2;
+      --card: #0C4E57;
+      --paper: #F3F7F7;
+      --paper-ink: #12343A;
+      --mint: #4FE0C2;
+      --line: rgba(79, 224, 194, 0.35);
+      --button: #4FE0C2;
+      --button-ink: #12343A;
+      --field: #12343A;
+      --field-ink: #F3F7F7;
+      color-scheme: dark;
+    }
+    [data-theme="light"] {
+      --bg: #F3F7F7;
+      --ink: #12343A;
+      --body: #3E5C63;
+      --card: #FFFFFF;
+      --paper: #FFFFFF;
+      --paper-ink: #12343A;
+      --mint: #0F6570;
+      --line: rgba(15, 101, 112, 0.28);
+      --button: #0F6570;
+      --button-ink: #FFFFFF;
+      --field: #FFFFFF;
+      --field-ink: #12343A;
+      color-scheme: light;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Avenir Next", "Segoe UI", Inter, "Liberation Sans", sans-serif;
+      font-size: 18px;
+      line-height: 1.5;
+    }
+    a { color: var(--mint); }
+    :focus-visible { outline: 3px solid var(--mint); outline-offset: 3px; }
+    .skip { position: absolute; left: 12px; top: -48px; background: var(--button); color: var(--button-ink); padding: 10px 14px; z-index: 5; text-decoration: none; }
+    .skip:focus { top: 12px; }
+    header.top { padding: 22px 20px 0; text-align: center; }
+    .plate { display: inline-flex; background: #F3F7F7; border-radius: 12px; padding: 6px 10px; line-height: 0; }
+    .plate img { height: 52px; width: auto; display: block; }
+    .switch { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px 16px; margin: 14px 0 0; align-items: center; }
+    .switch a { color: var(--body); text-decoration: none; padding: 10px 2px; }
+    .switch a[aria-current="page"] { color: var(--ink); font-weight: 800; }
+    button.mode, button.preset, button.go { min-height: 48px; border: 0; cursor: pointer; font: inherit; font-weight: 750; }
+    button.mode { background: transparent; color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 0 16px; }
+    main { width: min(760px, calc(100% - 36px)); margin: 0 auto; padding: 48px 0 28px; }
+    .kicker { margin: 0; color: var(--mint); font-size: 13px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; }
+    .hero-kicker { text-align: center; }
+    h1 { margin: 12px 0 0; font-size: clamp(40px, 6vw, 64px); font-weight: 620; letter-spacing: -0.04em; line-height: 1.02; text-align: center; }
+    .lede { margin: 18px auto 0; max-width: 36em; text-align: center; color: var(--body); }
+    .actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+    a.button { display: inline-flex; align-items: center; min-height: 48px; padding: 0 18px; border-radius: 999px; background: var(--button); color: var(--button-ink); text-decoration: none; font-weight: 750; }
+    a.ghost { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--line); }
+    ol.path { list-style: none; margin: 56px 0 0; padding: 0; position: relative; }
+    ol.path::before { content: ""; position: absolute; left: 23px; top: 12px; bottom: 12px; width: 2px; background: var(--mint); }
+    li.step { display: grid; grid-template-columns: 48px 1fr; gap: 16px; margin: 0 0 28px; position: relative; }
+    .dot {
+      width: 48px; height: 48px; border-radius: 50%; background: #4FE0C2; color: #12343A;
+      display: grid; place-items: center; font-weight: 800; position: relative; z-index: 1;
+    }
+    .card { background: var(--card); border-radius: 28px; padding: 22px 22px 20px; }
+    .card h2 { margin: 6px 0 8px; font-size: 28px; letter-spacing: -0.03em; line-height: 1.15; }
+    .card p { margin: 0; color: var(--body); }
+    .pass {
+      margin-top: 16px; background: var(--paper); color: var(--paper-ink); border-radius: 22px; padding: 18px 18px 14px;
+    }
+    .pass p, .pass dd, .pass dt { color: var(--paper-ink); }
+    .pass .quiet { color: #3E5C63; }
+    .who { margin: 4px 0 10px; font-size: 32px; letter-spacing: -0.03em; font-weight: 700; }
+    .rows { margin: 0; }
+    .rows div { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid rgba(15, 101, 112, 0.2); }
+    .rows dt { color: #3E5C63; }
+    .rows dd { margin: 0; font-weight: 750; text-align: right; }
+    .say { margin: 12px 0 0; font-size: 20px; letter-spacing: -0.02em; line-height: 1.35; }
+    video { width: 100%; height: auto; display: block; margin-top: 14px; background: #12343A; border-radius: 18px; }
+    .stamps { display: grid; gap: 8px; margin-top: 14px; }
+    .stamp { border-radius: 18px; padding: 14px 14px 12px; }
+    .stamp strong { display: block; font-size: 18px; letter-spacing: 0.04em; }
+    .stamp p { margin: 4px 0 0; }
+    .allow { background: #D8F7EE; color: #0C5C4A; }
+    .stepup { background: #FFF1D6; color: #8A5A10; }
+    .deny { background: #FDE2E4; color: #8D2430; }
+    .banner { display: inline-block; margin: 12px 0; padding: 6px 10px; background: #FFF1D6; color: #8A5A10; font-weight: 800; font-size: 14px; }
+    label { display: block; margin: 12px 0 6px; font-size: 14px; font-weight: 750; color: var(--ink); }
+    input, select, textarea {
+      width: 100%; min-height: 48px; border-radius: 14px; border: 1px solid var(--line);
+      background: var(--field); color: var(--field-ink); font: inherit; padding: 10px 12px;
+    }
+    textarea { min-height: 96px; resize: vertical; }
+    .check { display: flex; align-items: center; gap: 10px; }
+    .check input { width: 20px; height: 20px; min-height: 20px; }
+    .presets { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    button.preset, button.go { border-radius: 999px; padding: 0 16px; }
+    button.go { background: var(--button); color: var(--button-ink); }
+    button.preset { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--line); }
+    button.preset[aria-pressed="true"] { background: var(--button); color: var(--button-ink); box-shadow: none; }
+    .outcome { margin-top: 12px; border-radius: 18px; padding: 14px; }
+    .outcome p { margin: 6px 0 0; }
+    .pubs { display: grid; gap: 8px; margin-top: 12px; }
+    .pubs article { background: var(--paper); color: var(--paper-ink); border-radius: 18px; padding: 14px; }
+    .pubs h3 { margin: 0 0 4px; font-size: 18px; }
+    .pubs p { margin: 0; color: #3E5C63; }
+    .pubs code { color: #0F6570; font-size: 13px; }
+    footer.site { width: min(760px, calc(100% - 36px)); margin: 0 auto 48px; color: var(--body); text-align: center; }
+    footer.site p { margin: 0 0 8px; }
+    @media (max-width: 640px) {
+      h1, .hero-kicker { text-align: left; }
+      .lede, header.top, .actions { text-align: left; }
+      .actions, .switch { justify-content: flex-start; }
+      .rows div { display: block; }
+      .rows dd { text-align: left; }
+      main { padding-top: 28px; }
+    }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#top">Skip to content</a>
+  <header class="top">
+    <a href="/design"><span class="plate"><img src="/assets/gab-logo.svg" alt="GAB_"></span></a>
+    <nav class="switch" aria-label="Directions">
+      <a href="/design/a">Chapters</a>
+      <a href="/design/b">Desk</a>
+      <a href="/design/c" aria-current="page">Path</a>
+      <a href="/">Current site</a>
+      <button class="mode" id="theme-toggle" type="button" aria-pressed="true">Light mode</button>
+    </nav>
+  </header>
+  <main id="top">
+    <p class="kicker hero-kicker">Global Agent Bureau</p>
+    <h1>Know the agent before the payment goes through.</h1>
+    <p class="lede">An agent bureau for one question at a time. Who is acting, who signed, what they may do, and whether this payment matches. Powered by KATA — Know And Trust Agents. A valid identity is not the same thing as a valid action.</p>
+    <p class="actions">
+      <a class="button" href="#demo">Try the specimen</a>
+      <a class="button ghost" href="/#demo">Open the live check</a>
+    </p>
+
+    <ol class="path">
+      <li class="step" id="identity">
+        <span class="dot">1</span>
+        <article class="card">
+          <p class="kicker">Agent identity</p>
+          <h2>Who is the agent?</h2>
+          <p>Identity and provenance of the agent that wants to act. The public sample is shopper-01, authorized by K. Uluer. Assurance can be key-bound, operator-verified, or unverified. A trust score, when one is kept, belongs to the agent. Individuals are not scored.</p>
+          <div class="pass">
+            <p class="quiet">Agent</p>
+            <p class="who">shopper-01</p>
+            <dl class="rows">
+              <div><dt>Principal</dt><dd>K. Uluer</dd></div>
+              <div><dt>Assurance</dt><dd>Operator verified</dd></div>
+              <div><dt>Subject</dt><dd>The agent, not a person</dd></div>
+            </dl>
+          </div>
+        </article>
+      </li>
+      <li class="step" id="intent">
+        <span class="dot">2</span>
+        <article class="card">
+          <p class="kicker">Authorization</p>
+          <h2>Who authorized it, and to do what?</h2>
+          <p>The principal signs the delegation and the intent: purpose, ceiling, currency, merchants, and expiry. The payment is checked against that signed record.</p>
+          <div class="pass">
+            <p class="quiet">Signed intent</p>
+            <p class="say">Find and buy a laptop for me, maximum CAD 1,500.</p>
+            <dl class="rows">
+              <div><dt>Purpose</dt><dd>purchase</dd></div>
+              <div><dt>Ceiling</dt><dd>CAD 1,500</dd></div>
+              <div><dt>Category</dt><dd>electronics</dd></div>
+              <div><dt>Merchant</dt><dd>Any, unless named</dd></div>
+              <div><dt>Expiry</dt><dd>A date, or ask for approval</dd></div>
+            </dl>
+          </div>
+        </article>
+      </li>
+      <li class="step" id="explainer-section">
+        <span class="dot">3</span>
+        <article class="card">
+          <p class="kicker">Explainer</p>
+          <h2>Watch the four questions</h2>
+          <p id="explainer-note">How the check works. 73.5 seconds, silent, with captions on the picture and an English text track. It stays paused until you press play.</p>
+          <video id="explainer" controls playsinline preload="metadata" poster="/assets/gab-explainer-poster.jpg" width="1920" height="1080" aria-describedby="explainer-note">
+            <source src="/assets/gab-explainer-720.mp4" type="video/mp4" media="(max-width: 900px)">
+            <source src="/assets/gab-explainer-1080.mp4" type="video/mp4">
+            <track kind="captions" src="/assets/gab-explainer.vtt" srclang="en" label="English">
+          </video>
+        </article>
+      </li>
+      <li class="step" id="demo">
+        <span class="dot">4</span>
+        <article class="card" data-specimen data-verdict="allow">
+          <p class="kicker">Live demo</p>
+          <h2>Does this behavior match?</h2>
+          <p>Specimen of the public check. It illustrates allow, step-up, and deny. It does not spend money. The working check signs the intent on the current site.</p>
+          <form>
+            <label for="item">Item</label>
+            <input id="item" data-field="item" value="Laptop">
+            <label for="amount">Amount the agent proposes</label>
+            <input id="amount" data-field="amount" type="number" value="1300">
+            <label for="ceiling">Ceiling the principal signed</label>
+            <input id="ceiling" data-field="ceiling" type="number" value="1500">
+            <label for="merchant">Merchant</label>
+            <input id="merchant" value="techstore.example">
+            <label class="check" for="expiry"><input id="expiry" data-field="expiry" type="checkbox" checked> Include an expiry</label>
+            <div class="presets">
+              <button class="go" type="submit">See this outcome</button>
+              <button class="preset" type="button" data-preset="allow" aria-pressed="true">CAD 1,300 laptop</button>
+              <button class="preset" type="button" data-preset="deny" aria-pressed="false">CAD 4,200 laptop</button>
+              <button class="preset" type="button" data-preset="step" aria-pressed="false">No expiry</button>
+            </div>
+            <div class="outcome allow" data-outcome="allow">
+              <strong>ALLOW</strong>
+              <p>Identity, authorization, intent, and this payment agree.</p>
+            </div>
+            <div class="outcome deny" data-outcome="deny" hidden>
+              <strong>DENY</strong>
+              <p>Above the signed ceiling. The action is blocked. The grant is not revoked.</p>
+            </div>
+            <div class="outcome stepup" data-outcome="step" hidden>
+              <strong>STEP-UP</strong>
+              <p>No expiry. The check asks for approval.</p>
+            </div>
+          </form>
+          <p style="margin-top:12px"><a href="/#demo">Open the live check</a></p>
+        </article>
+      </li>
+      <li class="step" id="evidence">
+        <span class="dot">5</span>
+        <article class="card">
+          <p class="kicker">Dispute evidence</p>
+          <h2>What the dispute keeps</h2>
+          <p>Evidence stays with the agent: the signed intent, the payment, and the outcome. A report that is not linked to an agent is rejected. An inquiry uses a purpose code and does not change the score.</p>
+          <div class="stamps">
+            <div class="stamp allow"><strong>Linked to shopper-01</strong><p>The laptop payment at techstore.example, the CAD 1,500 ceiling, and the outcome.</p></div>
+            <div class="stamp deny"><strong>No agent, no record</strong><p>An unlinked report is rejected.</p></div>
+          </div>
+        </article>
+      </li>
+      <li class="step" id="score">
+        <span class="dot">6</span>
+        <article class="card">
+          <p class="kicker">Trust score</p>
+          <h2>Allow, step-up, or deny</h2>
+          <p>The score belongs to the agent. Individuals are not scored. Deny blocks the action. It does not revoke the grant.</p>
+          <div class="stamps">
+            <div class="stamp allow"><strong>ALLOW</strong><p>CAD 1,300 sits inside the signed intent.</p></div>
+            <div class="stamp stepup"><strong>STEP-UP</strong><p>The check asks for approval. A missing expiry is one reason.</p></div>
+            <div class="stamp deny"><strong>DENY</strong><p>CAD 4,200 is above the ceiling.</p></div>
+          </div>
+          <p class="banner">SYNTHETIC TEST DATA – not real customers</p>
+          <p>Latest synthetic stress test: 10,000 synthetic agents and 100,000 synthetic transactions over 90 days. Against adaptive attackers, 73% of attempted fraud dollars are stopped and $0.71M is executed. When attackers do not know the rules, 78% is stopped and $0.68M is executed. Legitimate agents denied at day 90 are 0.15% and 0.16%.</p>
+          <p style="margin-top:10px"><a href="/simulation">See the simulation</a></p>
+        </article>
+      </li>
+      <li class="step" id="log">
+        <span class="dot">7</span>
+        <article class="card">
+          <p class="kicker">Transparency log</p>
+          <h2>What anyone can read</h2>
+          <p>The deployment publishes the revocation list, the keys, and a signed tree head. A deny is not a revocation.</p>
+          <div class="pubs">
+            <article><h3>Revocation list</h3><p>Grants that have ended. Cached for five minutes.</p><p><code>GET /v1/revocations</code></p></article>
+            <article><h3>Published keys</h3><p>The log public key and any extra records.</p><p><code>/.well-known/kata-keys.json</code></p></article>
+            <article><h3>Signed tree head</h3><p>Entries can be proved back to the transparency log.</p><p><code>GET /v1/log/head</code></p></article>
+          </div>
+          <p style="margin-top:12px"><a href="/#operations">See the live publication</a></p>
+        </article>
+      </li>
+    </ol>
+  </main>
+  <footer class="site">
+    <p>Global Agent Bureau is an agent bureau. Powered by KATA — Know And Trust Agents. PolyForm Noncommercial. Copyright 2026 Kaan Uluer.</p>
+    <p><a href="/design">All directions</a> · <a href="/dashboard">Dashboard</a> · <a href="/portal">Portal</a> · <a href="/docs">Docs</a></p>
+  </footer>
+  <script src="/design/behavior.js"></script>
+</body>
+</html>
