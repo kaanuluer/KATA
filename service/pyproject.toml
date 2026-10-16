@@ -19,7 +19,7 @@ dev = ["pytest>=8", "httpx>=0.27"]
 include = ["kata_service*"]
 
 [tool.setuptools.package-data]
-kata_service = ["static/*", "migrations/*.sql"]
+kata_service = ["static/*", "static/design/*", "migrations/*.sql"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
