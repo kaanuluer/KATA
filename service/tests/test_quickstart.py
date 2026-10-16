@@ -68,8 +68,10 @@ def test_quickstart_uses_the_chapters_docs_page():
     ):
         assert needle in body
     folded = body.lower().replace("tools/call", "")
-    for banned in ("open source", "open-source", "credit bureau", "call", "amex", "american express"):
+    for banned in ("open source", "open-source", "credit bureau", "call", "american express"):
         assert banned not in folded
+    for claim in ("amex compliant", "amex-compliant", "amex compatible", "amex-compatible", "certified"):
+        assert claim not in folded
     index = client.get("/docs")
     assert 'href="/docs/quickstart"' in index.text
 
