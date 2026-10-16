@@ -145,6 +145,23 @@ def create_app(
 
     app.include_router(build_router())
 
+    @app.post("/mcp")
+    async def mcp_post(request: Request):
+        from kata_service.mcp_http import handle_mcp
+
+        return await handle_mcp(request, app)
+
+    @app.api_route("/mcp", methods=["GET", "DELETE", "PUT", "PATCH"])
+    def mcp_method_not_allowed():
+        return JSONResponse(
+            {
+                "jsonrpc": "2.0",
+                "error": {"code": -32601, "message": "Method not found"},
+            },
+            status_code=405,
+            headers={"Allow": "POST"},
+        )
+
     @app.middleware("http")
     async def bureau_guard(request: Request, call_next):
         path = request.url.path

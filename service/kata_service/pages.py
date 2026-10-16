@@ -30,6 +30,12 @@ DOCUMENTS: tuple[tuple[str, str, str, str], ...] = (
         "Test keys on the same API. Test rows do not change a production score.",
     ),
     (
+        "mcp",
+        "mcp.md",
+        "MCP",
+        "Remote MCP server for verify, inquire, report, revocation, and a signed log entry.",
+    ),
+    (
         "uptime",
         "uptime.md",
         "Uptime",
