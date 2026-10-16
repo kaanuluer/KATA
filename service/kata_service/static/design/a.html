@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chapters — Global Agent Bureau</title>
+  <meta name="description" content="Design direction A. Know the agent before the payment goes through.">
+  <meta name="color-scheme" content="dark light">
+  <link rel="icon" href="/assets/gab-icon.svg" type="image/svg+xml">
+  <style>
+    :root {
+      --bg: #13203B;
+      --ink: #F3F7F7;
+      --body: #E7F1F2;
+      --card: #0C4E57;
+      --card-ink: #F3F7F7;
+      --wash: #12343A;
+      --mint: #4FE0C2;
+      --teal: #0F6570;
+      --paper: #F3F7F7;
+      --line: rgba(79, 224, 194, 0.32);
+      --button: #4FE0C2;
+      --button-ink: #12343A;
+      --field: #12343A;
+      --field-ink: #F3F7F7;
+      --muted: #D8F7EE;
+      color-scheme: dark;
+    }
+    [data-theme="light"] {
+      --bg: #F3F7F7;
+      --ink: #12343A;
+      --body: #3E5C63;
+      --card: #FFFFFF;
+      --card-ink: #12343A;
+      --wash: #E7F1F2;
+      --mint: #0F6570;
+      --teal: #0C4E57;
+      --paper: #FFFFFF;
+      --line: rgba(15, 101, 112, 0.28);
+      --button: #0F6570;
+      --button-ink: #FFFFFF;
+      --field: #FFFFFF;
+      --field-ink: #12343A;
+      --muted: #3E5C63;
+      color-scheme: light;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Avenir Next", "Segoe UI", Inter, "Liberation Sans", sans-serif;
+      font-size: 17px;
+      line-height: 1.5;
+    }
+    img { max-width: 100%; }
+    a { color: var(--mint); }
+    a:hover { text-decoration-thickness: 2px; }
+    :focus-visible { outline: 3px solid var(--mint); outline-offset: 3px; }
+    .skip {
+      position: absolute; left: 12px; top: -48px; background: var(--button); color: var(--button-ink);
+      padding: 10px 14px; z-index: 5; text-decoration: none;
+    }
+    .skip:focus { top: 12px; }
+    .wrap { width: min(1180px, calc(100% - 48px)); margin: 0 auto; }
+    header.top {
+      position: sticky; top: 0; z-index: 4;
+      background: var(--bg);
+      border-bottom: 1px solid var(--line);
+    }
+    .bar {
+      display: flex; align-items: center; justify-content: space-between; gap: 20px;
+      min-height: 76px;
+    }
+    .brand { display: flex; align-items: center; gap: 14px; color: inherit; text-decoration: none; }
+    .plate { display: inline-flex; background: #F3F7F7; border-radius: 10px; padding: 4px 8px; line-height: 0; }
+    .plate img { height: 46px; width: auto; display: block; }
+    .brand small { display: block; color: var(--muted); font-size: 13px; letter-spacing: 0.04em; }
+    nav.switch { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; }
+    nav.switch a { color: var(--body); text-decoration: none; font-size: 15px; padding: 10px 0; }
+    nav.switch a[aria-current="page"] { color: var(--ink); font-weight: 700; box-shadow: inset 0 -2px 0 var(--mint); }
+    button.mode, button.preset, button.go {
+      min-height: 44px; border: 0; cursor: pointer; font: inherit; font-weight: 700;
+    }
+    button.mode {
+      background: transparent; color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 0 16px;
+    }
+    .hero { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 56px; align-items: end; padding: 72px 0 36px; }
+    .kicker {
+      margin: 0 0 16px; color: var(--mint); font-size: 14px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase;
+    }
+    h1 {
+      margin: 0; font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Liberation Serif", serif;
+      font-size: clamp(46px, 5.5vw, 78px); font-weight: 500; letter-spacing: -0.035em; line-height: 0.98;
+    }
+    .lede { margin: 22px 0 0; max-width: 38em; color: var(--body); font-size: 19px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+    a.button, button.go {
+      display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 20px;
+      background: var(--button); color: var(--button-ink); text-decoration: none; border-radius: 999px; font-weight: 700;
+    }
+    a.ghost { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
+    .slip {
+      background: var(--card); color: var(--card-ink); border-radius: 28px; padding: 22px 22px 18px;
+      box-shadow: 0 30px 70px rgba(18, 52, 58, 0.28);
+    }
+    .slip header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .slip p { margin: 0; }
+    .mono { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
+    .badge { display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; border-radius: 999px; font-weight: 800; letter-spacing: 0.06em; }
+    .badge.allow { background: #D8F7EE; color: #0C5C4A; }
+    .badge.deny { background: #FDE2E4; color: #8D2430; }
+    .badge.step { background: #FFF1D6; color: #8A5A10; }
+    .amount { margin-top: 22px; font-family: "Iowan Old Style", Palatino, Georgia, "Liberation Serif", serif; font-size: 42px; letter-spacing: -0.03em; line-height: 1; }
+    .amount span { color: var(--muted); font-size: 18px; }
+    .meter { height: 8px; margin: 16px 0 18px; background: rgba(243, 247, 247, 0.2); border-radius: 999px; overflow: hidden; }
+    [data-theme="light"] .meter { background: #E7F1F2; }
+    .meter i { display: block; width: 86%; height: 100%; background: #4FE0C2; }
+    .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 18px; margin: 0; }
+    .facts div { border-top: 1px solid var(--line); padding-top: 8px; }
+    .facts dt { color: var(--muted); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; }
+    .facts dd { margin: 2px 0 0; font-weight: 700; }
+    .slip footer { margin-top: 16px; color: var(--muted); font-size: 14px; }
+    .film { display: grid; grid-template-columns: 1.5fr 0.7fr; gap: 28px; align-items: center; padding-bottom: 64px; }
+    video { width: 100%; height: auto; display: block; background: #12343A; border-radius: 22px; }
+    .film h2 { margin: 0 0 8px; font-family: "Iowan Old Style", Palatino, Georgia, "Liberation Serif", serif; font-size: 32px; font-weight: 500; letter-spacing: -0.03em; }
+    .questions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 22px; margin: 0; padding: 28px 0 8px; list-style: none; border-top: 1px solid var(--line); }
+    .questions li { margin: 0; }
+    .questions em { display: block; font-family: "Iowan Old Style", Palatino, Georgia, "Liberation Serif", serif; font-style: normal; font-size: 28px; color: var(--mint); }
+    .questions strong { display: block; margin: 8px 0 6px; font-size: 18px; }
+    .questions p { margin: 0; color: var(--body); }
+    section.chapter { padding: 84px 0; border-top: 1px solid var(--line); }
+    .split { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 48px; align-items: start; }
+    .split h2 {
+      margin: 8px 0 12px; font-family: "Iowan Old Style", Palatino, Georgia, "Liberation Serif", serif;
+      font-size: clamp(36px, 4vw, 56px); font-weight: 500; letter-spacing: -0.03em; line-height: 1.02;
+    }
+    .split .prose p { margin: 0; color: var(--body); font-size: 18px; max-width: 36em; }
+    .credential, .document, .stack, .panel, .pubs article {
+      background: var(--card); color: var(--card-ink); border-radius: 24px;
+    }
+    .credential { padding: 28px; }
+    .credential .who { font-family: "Iowan Old Style", Palatino, Georgia, "Liberation Serif", serif; font-size: 40px; margin: 8px 0 18px; letter-spacing: -0.03em; }
+    .rows { margin: 0; }
+    .rows div { display: grid; grid-template-columns: 140px 1fr; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+    .rows dt { color: var(--muted); }
+    .rows dd { margin: 0; font-weight: 700; }
+    .document { padding: 28px 28px 22px; }
+    .document h3 { margin: 8px 0 18px; font-family: "Iowan Old Style", Palatino, Georgia, "Liberation Serif", serif; font-size: 32px; font-weight: 500; }
+    .quote { margin: 16px 0 0; padding-top: 14px; border-top: 1px solid var(--line); font-family: "Iowan Old Style", Palatino, Georgia, "Liberation Serif", serif; font-size: 22px; line-height: 1.35; }
+    .stack { padding: 12px; display: grid; gap: 10px; }
+    .stack article { background: var(--wash); border-radius: 18px; padding: 18px 18px 16px; }
+    [data-theme="light"] .stack article { background: #F3F7F7; }
+    .stack h3 { margin: 6px 0; font-size: 20px; }
+    .stack p { margin: 0; color: var(--body); }
+    .verdicts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .verdicts article { background: var(--card); border-radius: 24px; padding: 22px; min-height: 220px; }
+    .verdicts h3 { margin: 14px 0 8px; font-family: "Iowan Old Style", Palatino, Georgia, "Liberation Serif", serif; font-size: 32px; font-weight: 500; }
+    .verdicts p { margin: 0; color: var(--body); }
+    .synthetic { margin-top: 22px; background: var(--wash); border-radius: 24px; padding: 22px 24px; }
+    [data-theme="light"] .synthetic { background: #FFFFFF; box-shadow: inset 0 0 0 1px var(--line); }
+    .banner { display: inline-block; margin: 0 0 12px; padding: 6px 10px; background: #FFF1D6; color: #8A5A10; font-weight: 800; letter-spacing: 0.02em; }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 8px; }
+    .stats strong { display: block; font-family: "Iowan Old Style", Palatino, Georgia, "Liberation Serif", serif; font-size: 40px; font-weight: 500; letter-spacing: -0.03em; color: var(--ink); }
+    .stats span { color: var(--body); font-size: 14px; }
+    .panel { padding: 28px; }
+    .panel h2 { margin: 8px 0 8px; font-family: "Iowan Old Style", Palatino, Georgia, "Liberation Serif", serif; font-size: 48px; font-weight: 500; letter-spacing: -0.03em; }
+    .grids { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 18px; }
+    fieldset { border: 0; margin: 0; padding: 0; }
+    legend { font-weight: 800; padding: 0; margin-bottom: 8px; }
+    label { display: block; margin: 12px 0 6px; font-size: 14px; font-weight: 700; }
+    input, select, textarea {
+      width: 100%; min-height: 44px; padding: 10px 12px; border-radius: 12px;
+      border: 1px solid var(--line); background: var(--field); color: var(--field-ink); font: inherit;
+    }
+    textarea { min-height: 96px; resize: vertical; }
+    .check { display: flex; align-items: center; gap: 10px; font-weight: 650; }
+    .check input { width: 20px; height: 20px; min-height: 20px; }
+    .presets { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+    button.preset { background: transparent; color: var(--ink); border-radius: 999px; padding: 0 14px; box-shadow: inset 0 0 0 1px var(--line); }
+    button.preset[aria-pressed="true"] { background: var(--button); color: var(--button-ink); box-shadow: none; }
+    .outcome { margin-top: 16px; padding: 16px; border-radius: 16px; background: var(--wash); }
+    [data-theme="light"] .outcome { background: #F3F7F7; }
+    .outcome p { margin: 8px 0 0; }
+    .pubs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .pubs article { padding: 22px; }
+    .pubs h3 { margin: 8px 0; font-family: "Iowan Old Style", Palatino, Georgia, "Liberation Serif", serif; font-size: 28px; font-weight: 500; }
+    .pubs p { margin: 0; color: var(--body); }
+    .pubs code { color: var(--mint); font-size: 13px; }
+    footer.site { border-top: 1px solid var(--line); padding: 28px 0 48px; color: var(--body); }
+    footer.site p { margin: 0 0 8px; }
+    @media (max-width: 900px) {
+      .wrap { width: min(1180px, calc(100% - 32px)); }
+      .bar { align-items: flex-start; flex-direction: column; padding: 12px 0; }
+      .hero, .film, .split, .grids, .questions, .verdicts, .stats, .pubs { grid-template-columns: 1fr; }
+      .hero { padding-top: 36px; gap: 28px; }
+      h1 { font-size: 44px; }
+      section.chapter { padding: 48px 0; }
+      .rows div { grid-template-columns: 1fr; gap: 2px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#top">Skip to content</a>
+  <header class="top">
+    <div class="wrap bar">
+      <a class="brand" href="/design">
+        <span class="plate"><img src="/assets/gab-logo.svg" alt="GAB_"></span>
+        <small>Direction A · Chapters</small>
+      </a>
+      <nav class="switch" aria-label="Directions">
+        <a href="/design/a" aria-current="page">Chapters</a>
+        <a href="/design/b">Desk</a>
+        <a href="/design/c">Path</a>
+        <a href="/">Current site</a>
+        <button class="mode" id="theme-toggle" type="button" aria-pressed="true">Light mode</button>
+      </nav>
+    </div>
+  </header>
+  <main id="top">
+    <div class="wrap">
+      <section class="hero" aria-labelledby="promise">
+        <div>
+          <p class="kicker">Global Agent Bureau</p>
+          <h1 id="promise">Know the agent before the payment goes through.</h1>
+          <p class="lede">Global Agent Bureau is an independent agent bureau. A participant can see who the agent is, what a principal signed, and whether this payment matches. The checks are powered by KATA — Know And Trust Agents. A valid identity is not the same thing as a valid action.</p>
+          <p class="actions">
+            <a class="button" href="#demo">Try the specimen</a>
+            <a class="button ghost" href="/#demo">Open the live check</a>
+          </p>
+        </div>
+        <article class="slip" aria-label="Sample decision">
+          <header>
+            <p class="mono">Sample check</p>
+            <p class="badge allow">ALLOW</p>
+          </header>
+          <p class="amount">CAD 1,300 <span>of 1,500</span></p>
+          <div class="meter" aria-hidden="true"><i></i></div>
+          <dl class="facts">
+            <div><dt>Agent</dt><dd>shopper-01</dd></div>
+            <div><dt>Principal</dt><dd>K. Uluer</dd></div>
+            <div><dt>Merchant</dt><dd>techstore.example</dd></div>
+            <div><dt>Purpose</dt><dd>purchase</dd></div>
+          </dl>
+          <footer>Identity, authorization, intent, and this payment agree. It does not spend money.</footer>
+        </article>
+      </section>
+
+      <section class="film" id="explainer-section" aria-labelledby="film-title">
+        <figure style="margin:0">
+          <video id="explainer" controls playsinline preload="metadata" poster="/assets/gab-explainer-poster.jpg" width="1920" height="1080" aria-describedby="explainer-note">
+            <source src="/assets/gab-explainer-720.mp4" type="video/mp4" media="(max-width: 900px)">
+            <source src="/assets/gab-explainer-1080.mp4" type="video/mp4">
+            <track kind="captions" src="/assets/gab-explainer.vtt" srclang="en" label="English">
+          </video>
+        </figure>
+        <div>
+          <p class="kicker">Explainer</p>
+          <h2 id="film-title">How the check works</h2>
+          <p id="explainer-note" class="lede">73.5 seconds, silent, with captions on the picture and an English text track in the player. It stays paused until you press play.</p>
+        </div>
+      </section>
+
+      <ol class="questions" id="questions">
+        <li><em>01</em><strong>Who is the agent?</strong><p>Identity and provenance of the agent that wants to act.</p></li>
+        <li><em>02</em><strong>Who authorized it?</strong><p>The principal who signed the delegation and the intent.</p></li>
+        <li><em>03</em><strong>What was it authorized to do?</strong><p>Purpose, ceiling, currency, merchants, and expiry.</p></li>
+        <li><em>04</em><strong>Does this behavior match?</strong><p>The payment is checked against that signed record.</p></li>
+      </ol>
+
+      <section class="chapter" id="identity">
+        <div class="split">
+          <div class="prose">
+            <p class="kicker">Agent identity</p>
+            <h2>The actor has a name before it has a payment.</h2>
+            <p>An agent is registered with a provenance. The public sample is shopper-01, authorized by K. Uluer. Assurance can be key-bound, operator-verified, or unverified. When a trust score is kept, it belongs to the agent. Individuals are not scored.</p>
+          </div>
+          <article class="credential">
+            <p class="mono">Agent record</p>
+            <p class="who">shopper-01</p>
+            <dl class="rows">
+              <div><dt>Principal</dt><dd>K. Uluer</dd></div>
+              <div><dt>Assurance</dt><dd>Operator verified</dd></div>
+              <div><dt>Subject of a score</dt><dd>The agent, not a person</dd></div>
+              <div><dt>What it is not</dt><dd>Permission to spend</dd></div>
+            </dl>
+          </article>
+        </div>
+      </section>
+
+      <section class="chapter" id="intent">
+        <div class="split">
+          <div class="prose">
+            <p class="kicker">Authorization</p>
+            <h2>The principal signs the intent. The payment has to match it.</h2>
+            <p>The signed record names the purpose, the ceiling, the currency, the merchants, and the expiry. KATA checks the proposed payment against that record. A registered agent can still be outside what was signed.</p>
+          </div>
+          <article class="document">
+            <p class="mono">Signed intent</p>
+            <h3>Laptop, within CAD 1,500</h3>
+            <dl class="rows">
+              <div><dt>Purpose</dt><dd>purchase</dd></div>
+              <div><dt>Ceiling</dt><dd>CAD 1,500</dd></div>
+              <div><dt>Category</dt><dd>electronics</dd></div>
+              <div><dt>Merchant</dt><dd>Any, unless one is named</dd></div>
+              <div><dt>Expiry</dt><dd>A date, or the check asks for approval</dd></div>
+            </dl>
+            <p class="quote">Find and buy a laptop for me, maximum CAD 1,500.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="chapter" id="evidence">
+        <div class="split">
+          <div class="prose">
+            <p class="kicker">Dispute evidence</p>
+            <h2>A dispute keeps the signed record with the agent.</h2>
+            <p>Evidence is the intent, the payment, and the outcome, linked to the agent. A report that is not linked to an agent is rejected. Participants can inquire for dispute resolution with a purpose code.</p>
+          </div>
+          <div class="stack">
+            <article>
+              <p class="badge allow">Linked</p>
+              <h3>Chargeback on shopper-01</h3>
+              <p>The signed ceiling, the CAD 1,300 payment at techstore.example, and the outcome stay on the same agent.</p>
+            </article>
+            <article>
+              <p class="badge deny">Rejected</p>
+              <h3>Report with no agent</h3>
+              <p>An unlinked report is not evidence. It does not enter the record.</p>
+            </article>
+            <article>
+              <p class="badge step">Inquiry</p>
+              <h3>Purpose code required</h3>
+              <p>Dispute resolution is one purpose. The inquiry does not change the score.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="chapter" id="score">
+        <p class="kicker">Trust score</p>
+        <h2 style="margin:8px 0 18px;font-family:'Iowan Old Style',Palatino,Georgia,serif;font-size:clamp(36px,4vw,56px);font-weight:500;letter-spacing:-0.03em;">Three decisions. The score stays on the agent.</h2>
+        <div class="verdicts">
+          <article>
+            <p class="badge allow">ALLOW</p>
+            <h3>Inside the intent</h3>
+            <p>Identity, authorization, intent, and this payment agree. CAD 1,300 is under the CAD 1,500 ceiling.</p>
+          </article>
+          <article>
+            <p class="badge step">STEP-UP</p>
+            <h3>Ask for approval</h3>
+            <p>The check does not have what it needs. An intent with no expiry is one case.</p>
+          </article>
+          <article>
+            <p class="badge deny">DENY</p>
+            <h3>Block the action</h3>
+            <p>CAD 4,200 is above the signed ceiling. Deny does not revoke the grant.</p>
+          </article>
+        </div>
+        <div class="synthetic">
+          <p class="banner">SYNTHETIC TEST DATA – not real customers</p>
+          <p style="margin:0 0 8px;color:var(--body)">Latest synthetic stress test: 10,000 synthetic agents and 100,000 synthetic transactions over 90 days.</p>
+          <div class="stats">
+            <p><strong>73%</strong><span>Adaptive fraud dollars stopped. $0.71M executed.</span></p>
+            <p><strong>78%</strong><span>Stopped when attackers do not know the rules. $0.68M executed.</span></p>
+            <p><strong>0.15%</strong><span>Legitimate agents denied at day 90, adaptive case.</span></p>
+            <p><strong>0.16%</strong><span>Legitimate agents denied at day 90, unaware case.</span></p>
+          </div>
+          <p style="margin:14px 0 0"><a href="/simulation">See the simulation</a></p>
+        </div>
+      </section>
+
+      <section class="chapter" id="demo">
+        <div class="panel" data-specimen data-verdict="allow">
+          <p class="kicker">Live demo</p>
+          <h2>Try a signed intent</h2>
+          <p class="lede" style="margin-top:0">Specimen of the public check for K. Uluer and shopper-01. These buttons illustrate the three decisions. They do not spend money. The working check signs the intent on the current site.</p>
+          <form>
+            <div class="grids">
+              <fieldset>
+                <legend>Intent the principal signs</legend>
+                <label for="ceiling">Maximum amount</label>
+                <input id="ceiling" data-field="ceiling" type="number" min="0" step="0.01" value="1500">
+                <label for="purpose">Purpose</label>
+                <select id="purpose"><option>purchase</option><option>payment</option><option>transfer</option></select>
+                <label for="instruction">Instruction</label>
+                <textarea id="instruction">Find and buy a laptop for me, maximum CAD 1,500.</textarea>
+                <label class="check" for="expiry"><input id="expiry" data-field="expiry" type="checkbox" checked> Include an expiry</label>
+              </fieldset>
+              <fieldset>
+                <legend>Payment the agent proposes</legend>
+                <label for="item">Item</label>
+                <input id="item" data-field="item" value="Laptop">
+                <label for="amount">Amount</label>
+                <input id="amount" data-field="amount" type="number" min="0" step="0.01" value="1300">
+                <label for="merchant">Merchant</label>
+                <input id="merchant" value="techstore.example">
+                <div class="presets">
+                  <button class="go" type="submit">See this outcome</button>
+                  <button class="preset" type="button" data-preset="allow" aria-pressed="true">CAD 1,300 laptop</button>
+                  <button class="preset" type="button" data-preset="deny" aria-pressed="false">CAD 4,200 laptop</button>
+                  <button class="preset" type="button" data-preset="step" aria-pressed="false">No expiry</button>
+                </div>
+              </fieldset>
+            </div>
+            <div class="outcome" data-outcome="allow">
+              <p class="badge allow">ALLOW</p>
+              <p>Identity, authorization, intent, and this payment agree. CAD 1,300 at techstore.example is under the CAD 1,500 ceiling.</p>
+            </div>
+            <div class="outcome" data-outcome="deny" hidden>
+              <p class="badge deny">DENY</p>
+              <p>The payment is above the signed ceiling. Deny blocks the action. It does not revoke the grant.</p>
+            </div>
+            <div class="outcome" data-outcome="step" hidden>
+              <p class="badge step">STEP-UP</p>
+              <p>The intent has no expiry, so the check asks for approval before the payment goes through.</p>
+            </div>
+          </form>
+          <p style="margin:16px 0 0"><a href="/#demo">Open the live check</a></p>
+        </div>
+      </section>
+
+      <section class="chapter" id="log">
+        <p class="kicker">Transparency log</p>
+        <h2 style="margin:8px 0 18px;font-family:'Iowan Old Style',Palatino,Georgia,serif;font-size:clamp(36px,4vw,56px);font-weight:500;letter-spacing:-0.03em;">What this deployment publishes.</h2>
+        <div class="pubs">
+          <article>
+            <p class="mono">List</p>
+            <h3>Revocation list</h3>
+            <p>Grants that have ended. Cached for five minutes. A deny is not a revocation.</p>
+            <p style="margin-top:10px"><code>GET /v1/revocations</code></p>
+          </article>
+          <article>
+            <p class="mono">Keys</p>
+            <h3>Published keys</h3>
+            <p>The log public key and any extra records, so a reader can verify the signatures.</p>
+            <p style="margin-top:10px"><code>/.well-known/kata-keys.json</code></p>
+          </article>
+          <article>
+            <p class="mono">Log</p>
+            <h3>Signed tree head</h3>
+            <p>The transparency log publishes a signed tree head. An entry can be proved back to it.</p>
+            <p style="margin-top:10px"><code>GET /v1/log/head</code></p>
+          </article>
+        </div>
+        <p style="margin:18px 0 0"><a href="/#operations">See the live publication</a></p>
+      </section>
+    </div>
+  </main>
+  <footer class="site">
+    <div class="wrap">
+      <p>Global Agent Bureau is an agent bureau. Powered by KATA — Know And Trust Agents. PolyForm Noncommercial. Copyright 2026 Kaan Uluer.</p>
+      <p><a href="/design">All directions</a> · <a href="/">Current site</a> · <a href="/dashboard">Dashboard</a> · <a href="/portal">Portal</a> · <a href="/simulation">Simulation</a> · <a href="/docs">Docs</a></p>
+    </div>
+  </footer>
+  <script src="/design/behavior.js"></script>
+</body>
+</html>

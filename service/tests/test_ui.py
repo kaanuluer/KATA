@@ -301,6 +301,42 @@ def test_dashboard_and_portal_pages():
         assert "credit bureau" not in page.lower()
 
 
+def test_home_directions_are_mockups_and_leave_the_live_pages_alone():
+    client = _client()
+    home = client.get("/")
+    assert home.status_code == 200
+    assert 'id="demo-form"' in home.text
+    assert "/design/a" not in home.text
+    index = client.get("/design")
+    assert index.status_code == 200
+    assert "Three directions for the home page." in index.text
+    script = client.get("/design/behavior.js")
+    assert script.status_code == 200
+    assert "text/javascript" in script.headers["content-type"]
+    assert client.get("/design/missing").status_code == 404
+    for slug in ("a", "b", "c"):
+        page = client.get(f"/design/{slug}")
+        assert page.status_code == 200
+        body = page.text
+        assert "Know the agent before the payment goes through." in body
+        assert 'id="explainer"' in body
+        assert "gab-explainer-1080.mp4" in body
+        assert "autoplay" not in body.lower()
+        assert "SYNTHETIC TEST DATA – not real customers" in body
+        assert "73%" in body and "$0.71M" in body and "78%" in body and "$0.68M" in body
+        assert "step-up" in body.lower()
+        assert "deny" in body.lower()
+        assert "dispute" in body.lower()
+        assert "Transparency" in body
+        assert "agent bureau" in body.lower()
+        assert "PolyForm Noncommercial" in body
+        assert 'alt="GAB_"' in body
+        assert "credit bureau" not in body.lower()
+        assert "open source" not in body.lower()
+        assert "open-source" not in body.lower()
+        assert "call" not in body.lower()
+
+
 def test_demo_allows_denies_and_steps_up():
     client = _client()
     allowed = client.post("/demo/check", json=_payment(1300))

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Home directions — Global Agent Bureau</title>
+  <meta name="description" content="Three home-page directions for Global Agent Bureau. The current site is unchanged.">
+  <meta name="color-scheme" content="dark light">
+  <link rel="icon" href="/assets/gab-icon.svg" type="image/svg+xml">
+  <style>
+    :root { --bg:#13203B; --ink:#F3F7F7; --body:#E7F1F2; --card:#0C4E57; --mint:#4FE0C2; --line:rgba(79,224,194,.32); color-scheme:dark; }
+    [data-theme="light"] { --bg:#F3F7F7; --ink:#12343A; --body:#3E5C63; --card:#FFFFFF; --mint:#0F6570; --line:rgba(15,101,112,.28); color-scheme:light; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); font-family:"Avenir Next","Segoe UI",Inter,"Liberation Sans",sans-serif; line-height:1.5; }
+    a { color: var(--mint); }
+    :focus-visible { outline: 3px solid var(--mint); outline-offset: 3px; }
+    .wrap { width: min(1080px, calc(100% - 40px)); margin: 0 auto; padding: 28px 0 64px; }
+    header { display:flex; justify-content:space-between; gap:16px; align-items:center; flex-wrap:wrap; }
+    .plate { display:inline-flex; background:#F3F7F7; border-radius:10px; padding:4px 8px; line-height:0; }
+    .plate img { height:46px; width:auto; display:block; }
+    button { min-height:44px; border-radius:999px; border:1px solid var(--line); background:transparent; color:var(--ink); font:inherit; font-weight:700; padding:0 16px; cursor:pointer; }
+    h1 { font-family:"Iowan Old Style",Palatino,Georgia,"Liberation Serif",serif; font-weight:500; font-size:clamp(36px,5vw,58px); letter-spacing:-.03em; line-height:1.02; margin:28px 0 12px; }
+    .lede { margin:0 0 28px; max-width:46em; color:var(--body); font-size:18px; }
+    .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+    article { background:var(--card); border-radius:20px; padding:20px; display:flex; flex-direction:column; gap:12px; }
+    h2 { margin:0; font-size:28px; letter-spacing:-.03em; }
+    p { margin:0; color:var(--body); }
+    a.go { display:inline-flex; align-items:center; justify-content:center; min-height:48px; margin-top:auto; border-radius:999px; background:#4FE0C2; color:#12343A; text-decoration:none; font-weight:800; }
+    [data-theme="light"] a.go { background:#0F6570; color:#FFFFFF; }
+    @media (max-width: 860px) { .grid { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <a href="/"><span class="plate"><img src="/assets/gab-logo.svg" alt="GAB_"></span></a>
+      <button id="theme-toggle" type="button" aria-pressed="true">Light mode</button>
+    </header>
+    <main>
+      <h1>Three directions for the home page.</h1>
+      <p class="lede">The current site is unchanged. These are static mockups of the home page only, in the existing GAB palette, for a choice. Nothing here is the production page.</p>
+      <div class="grid">
+        <article>
+          <h2>A · Chapters</h2>
+          <p>Chapters is an editorial product page. A large serif headline carries the one-line promise, and a decision slip beside it shows the laptop check already resolved to allow, so the product is visible in the first screen. Below the silent explainer, the page walks in full chapters through agent identity, the signed intent, dispute evidence, the trust score’s allow, step-up, and deny outcomes, a specimen of the live check, and the public transparency log. Space, type, and one component per chapter do the hierarchy.</p>
+          <a class="go" href="/design/a">See Chapters</a>
+        </article>
+        <article>
+          <h2>B · Desk</h2>
+          <p>Desk is an operations surface. A fixed rail and a tight grid put identity, the signed intent, and the verdict on one screen, with the trust score and the three decisions as instruments rather than a story. The explainer, dispute evidence, the specimen check, and the transparency log are modules in that same desk, labeled in monospace and set on a hard grid. It is for someone who wants to see the check the way a participant would work it.</p>
+          <a class="go" href="/design/b">See Desk</a>
+        </article>
+        <article>
+          <h2>C · Path</h2>
+          <p>Path is a verification journey. The value proposition is centered, and everything after it is one vertical sequence: who the agent is, who authorized it, what the intent allows, the explainer, the specimen check, the evidence a dispute keeps, the allow, step-up, and deny decision, and the public log. Round steps and a paper identity card make the four questions the structure of the page, closer to an identity product than to a dashboard.</p>
+          <a class="go" href="/design/c">See Path</a>
+        </article>
+      </div>
+    </main>
+  </div>
+  <script src="/design/behavior.js"></script>
+</body>
+</html>

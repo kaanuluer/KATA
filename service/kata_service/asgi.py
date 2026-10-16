@@ -86,6 +86,21 @@ def create_app(
     def portal():
         return HTMLResponse(portal_page())
 
+    @app.get("/design")
+    @app.get("/design/{slug}")
+    def design_direction(slug: str = "index"):
+        filename = {
+            "index": "index.html",
+            "a": "a.html",
+            "b": "b.html",
+            "c": "c.html",
+            "behavior.js": "behavior.js",
+        }.get(slug)
+        if filename is None:
+            return _error(404, "design direction was not found")
+        media = "text/javascript" if filename.endswith(".js") else "text/html"
+        return FileResponse(pages / "design" / filename, media_type=media)
+
     @app.get("/docs")
     def docs():
         return _page(documentation_index)
