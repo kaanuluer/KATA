@@ -144,6 +144,10 @@ def create_app(
         )
 
     app.include_router(build_router())
+    if resolved.deployment_env == "sandbox":
+        from kata_service.amex_http import register_sandbox_routes
+
+        register_sandbox_routes(app)
 
     @app.post("/mcp")
     async def mcp_post(request: Request):
