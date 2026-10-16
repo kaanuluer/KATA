@@ -170,6 +170,42 @@ def test_well_known_publishes_the_log_key_and_not_the_seed(log_key, notifier):
         assert "d" not in record["public_key"]
 
 
+def test_security_txt_is_public_and_retired_hosts_are_absent():
+    from kata_service.pages import repo_root
+    from kata_service.settings import Settings
+
+    client = TestClient(
+        create_app(
+            Settings(None, None, None, None, None, (), "https://fx.test"),
+            MemoryStore(),
+        )
+    )
+    note = client.get("/.well-known/security.txt")
+    assert note.status_code == 200
+    assert note.headers["content-type"].startswith("text/plain")
+    assert note.text == (
+        "Contact: mailto:info@globalagentbureau.com\n"
+        "Expires: 2027-10-15T00:00:00.000Z\n"
+        "Preferred-Languages: en\n"
+        "Canonical: https://globalagentbureau.com/.well-known/security.txt\n"
+    )
+    banned = ("kata-service-omega.vercel.app", "www.globalagentbureau.com")
+    for path in ("/", "/docs", "/history", "/simulation", "/portal", "/dashboard", "/docs/api"):
+        page = client.get(path)
+        assert page.status_code == 200
+        for host in banned:
+            assert host not in page.text
+    root = repo_root()
+    files = [root / "README.md", root / "service" / "README.md"]
+    files.extend((root / "docs").rglob("*.md"))
+    files.extend((root / "service" / "kata_service" / "static").rglob("*.html"))
+    files.extend((root / "service" / "kata_service" / "static").rglob("*.js"))
+    for item in files:
+        text = item.read_text(encoding="utf-8")
+        for host in banned:
+            assert host not in text, f"{host} in {item.relative_to(root)}"
+
+
 def test_fx_uses_the_fetcher_once_and_then_the_store(log_key, notifier):
     fx = CountingFx()
     client = _client(log_key, notifier, fx)
