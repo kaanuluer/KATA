@@ -176,6 +176,30 @@ TOOLS: tuple[dict[str, Any], ...] = (
             "required": ["entry"],
         },
     },
+    {
+        "name": "verify_checkout",
+        "title": "Check a UCP checkout",
+        "description": (
+            "Check a Universal Commerce Protocol v2026-08-25 checkout against the "
+            "stored intent agreement, the bureau score, and revocation status. "
+            "The result is ALLOW, DENY, or STEP_UP. Checkout signals are not "
+            "buyer claims and are not used as evidence. Sandbox and a gab_test_ "
+            "key only. The bureau does not host checkout."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "agent_id": {"type": "string", "description": "Registered agent id."},
+                "version": {"type": "string", "description": "UCP release. The first consumer accepts 2026-08-25."},
+                "checkout": {"type": "object", "description": "Checkout object already held by the merchant or institution."},
+                "agreement_id": {"type": "string", "description": "Stored agreement to check. Required when more than one is active."},
+                "intent_id": {"type": "string", "description": "Intent id inside the agreement, when the checkout names one."},
+            },
+            "required": ["agent_id", "version", "checkout"],
+        },
+        "outputSchema": _OUTPUT,
+    },
 )
 
 _TOOL_SCOPE = {
@@ -184,11 +208,13 @@ _TOOL_SCOPE = {
     "report": "report",
     "check_revocation": None,
     "fetch_signed_receipt": None,
+    "verify_checkout": "verify",
 }
 _TOOL_RATE = {
     "verify_agent": "/v1/verify",
     "inquire": "/v1/inquiries",
     "report": "/v1/reports",
+    "verify_checkout": "/v1/verify",
 }
 _LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
@@ -208,13 +234,19 @@ class _ToolFailure(Exception):
         self.message = message
 
 
-def tools_for(auth) -> list[dict[str, Any]]:
+def tools_for(auth, *, sandbox: bool = False) -> list[dict[str, Any]]:
     visible: list[dict[str, Any]] = []
     for tool in TOOLS:
+        if tool["name"] == "verify_checkout" and not _checkout_visible(auth, sandbox):
+            continue
         scope = _TOOL_SCOPE[tool["name"]]
         if scope is None or auth.admin or scope in auth.scopes:
             visible.append(tool)
     return visible
+
+
+def _checkout_visible(auth, sandbox: bool) -> bool:
+    return bool(sandbox and getattr(auth, "kind", None) == "key" and getattr(auth, "test", False))
 
 
 async def handle_mcp(request: Request, app: FastAPI) -> Response:
@@ -254,7 +286,7 @@ async def handle_mcp(request: Request, app: FastAPI) -> Response:
         _limit(request, bureau, settings, token, payload.get("method"), name)
         method = payload.get("method")
         if method == "server/discover":
-            result = _discover()
+            result = _discover(settings.deployment_env == "sandbox")
             status = 200
         elif method == "initialize":
             raise _RpcFailure(
@@ -264,7 +296,7 @@ async def handle_mcp(request: Request, app: FastAPI) -> Response:
             )
         elif method == "tools/list":
             auth = _api_key(request, bureau, settings, token)
-            result = _tool_list(auth)
+            result = _tool_list(auth, sandbox=settings.deployment_env == "sandbox")
             status = 200
         elif method == "tools/call":
             auth = _api_key(request, bureau, settings, token)
@@ -295,36 +327,44 @@ async def handle_mcp(request: Request, app: FastAPI) -> Response:
     return response
 
 
-def _discover() -> dict[str, Any]:
+def _discover(sandbox: bool = False) -> dict[str, Any]:
+    instructions = (
+        "Global Agent Bureau is an agent bureau. "
+        "verify_agent checks an action. inquire reads an agent. report files an outcome. "
+        "check_revocation reads the public revocation list. "
+        "fetch_signed_receipt reads one signed log entry. "
+        "A gab_test_ key stays in the test partition and does not change a production score."
+    )
+    if sandbox:
+        instructions += (
+            " verify_checkout checks a v2026-08-25 checkout for a gab_test_ key. "
+            "The bureau does not host checkout."
+        )
     return {
         "resultType": "complete",
         "supportedVersions": [PROTOCOL_VERSION],
         "capabilities": {"tools": {}},
-        "instructions": (
-            "Global Agent Bureau is an agent bureau. "
-            "verify_agent checks an action. inquire reads an agent. report files an outcome. "
-            "check_revocation reads the public revocation list. "
-            "fetch_signed_receipt reads one signed log entry. "
-            "A gab_test_ key stays in the test partition and does not change a production score."
-        ),
+        "instructions": instructions,
         "ttlMs": 3_600_000,
         "cacheScope": "public",
         "_meta": _SERVER_INFO,
     }
 
 
-def _tool_list(auth) -> dict[str, Any]:
+def _tool_list(auth, *, sandbox: bool = False) -> dict[str, Any]:
     return {
         "resultType": "complete",
-        "tools": tools_for(auth),
+        "tools": tools_for(auth, sandbox=sandbox),
         "ttlMs": 300_000,
         "cacheScope": "private",
     }
 
 
 def _tool_call(app: FastAPI, bureau, auth, name: str | None, payload: dict[str, Any], token: str) -> dict[str, Any]:
-    if name not in _TOOL_SCOPE:
+    if name not in _TOOL_SCOPE or (name == "verify_checkout" and app.state.settings.deployment_env != "sandbox"):
         raise _RpcFailure(400, -32602, f"Unknown tool: {name}")
+    if name == "verify_checkout" and (auth.kind != "key" or not auth.test):
+        raise _RpcFailure(403, -32001, "this route accepts test keys")
     scope = _TOOL_SCOPE[name]
     if scope is not None and not auth.admin and scope not in auth.scopes:
         raise _RpcFailure(403, -32001, "missing scope")
@@ -340,6 +380,8 @@ def _tool_call(app: FastAPI, bureau, auth, name: str | None, payload: dict[str, 
     try:
         if name == "verify_agent":
             produced = bureau.verify(auth, _verify_body(arguments))
+        elif name == "verify_checkout":
+            produced = bureau.verify_checkout(auth, _checkout_body(arguments))
         elif name == "inquire":
             produced = bureau.inquire(auth, _inquire_body(arguments))
         elif name == "report":
@@ -365,6 +407,23 @@ def _verify_body(arguments: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(action, dict):
         raise _ToolFailure("action must be an object")
     body: dict[str, Any] = {"agent_id": _text(arguments, "agent_id"), "action": action}
+    if "agreement_id" in arguments:
+        body["agreement_id"] = _text(arguments, "agreement_id")
+    if "intent_id" in arguments:
+        body["intent_id"] = _text(arguments, "intent_id")
+    return body
+
+
+def _checkout_body(arguments: dict[str, Any]) -> dict[str, Any]:
+    _only(arguments, {"agent_id", "version", "checkout", "agreement_id", "intent_id"})
+    checkout = arguments.get("checkout")
+    if not isinstance(checkout, dict):
+        raise _ToolFailure("checkout must be an object")
+    body: dict[str, Any] = {
+        "agent_id": _text(arguments, "agent_id"),
+        "version": _text(arguments, "version"),
+        "checkout": checkout,
+    }
     if "agreement_id" in arguments:
         body["agreement_id"] = _text(arguments, "agreement_id")
     if "intent_id" in arguments:

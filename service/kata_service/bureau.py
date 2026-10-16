@@ -1453,6 +1453,54 @@ class BureauService:
         payload["agreement_id"] = record["agreement_id"]
         return payload
 
+    def verify_checkout(self, auth: Auth, body: dict[str, Any]) -> dict[str, Any]:
+        """Check a UCP checkout as an action. Sandbox test keys only."""
+
+        self._scope(auth, "verify")
+        if auth.kind != "key" or not auth.test:
+            raise BureauError(403, "this route accepts test keys")
+        version = str(body.get("version") or "")
+        if version != "2026-08-25":
+            raise BureauError(400, "version must be 2026-08-25")
+        checkout = body.get("checkout")
+        if not isinstance(checkout, dict):
+            raise BureauError(400, "checkout must be an object")
+        from kata_service.ucp_checkout import CheckoutRejected, translate_checkout
+
+        try:
+            translated = translate_checkout(checkout, at=self.stamp())
+        except CheckoutRejected as exc:
+            raise BureauError(exc.status, exc.message) from exc
+        agent_id = str(body.get("agent_id") or "")
+        agent = self._agent(agent_id)
+        extra = {
+            "trust_score": {
+                "score": agent.get("score"),
+                "risk": self.policy.weights.risk(int(agent.get("score") or 0)),
+                "model_version": self.policy.weights.model_version,
+                "cold_start": agent.get("cold_start"),
+            },
+            "revocations": _checkout_revocations(self, agent),
+            "ucp": translated.report,
+        }
+        if translated.deny_code:
+            return {
+                "verdict": "DENY",
+                "kata_decision": "BLOCK",
+                "reasons": [translated.deny_code],
+                "messages": [translated.deny_message],
+                "agent_id": agent_id,
+                **extra,
+            }
+        forwarded: dict[str, Any] = {"agent_id": agent_id, "action": translated.action}
+        if body.get("agreement_id"):
+            forwarded["agreement_id"] = body.get("agreement_id")
+        if body.get("intent_id"):
+            forwarded["intent_id"] = body.get("intent_id")
+        outcome = self.verify(auth, forwarded)
+        outcome.update(extra)
+        return outcome
+
     def report(self, auth: Auth, body: dict[str, Any]) -> dict[str, Any]:
         self._scope(auth, "report")
         org = self._caller_org(auth)
@@ -2527,6 +2575,16 @@ def _email(value: str) -> str:
     if not _EMAIL.match(text):
         raise BureauError(400, "email is invalid")
     return text
+
+
+def _checkout_revocations(service: BureauService, agent: dict[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    if agent.get("status") == "revoked":
+        rows.append({"kind": "agent", "id": agent.get("agent_id"), "at": agent.get("updated_at")})
+    for agreement in service.repo.list_agreements(str(agent.get("agent_id") or "")):
+        if agreement.get("status") == "revoked":
+            rows.append({"kind": "agreement", "id": agreement.get("agreement_id"), "at": agreement.get("updated_at")})
+    return rows
 
 
 def _webhook(value: str) -> str:

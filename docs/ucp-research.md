@@ -1,8 +1,8 @@
 # UCP research
 
-**Status: research note. Nothing here is implemented.**
+**Status: research note, plus one sandbox consumer.** The bureau does not host checkout. `POST /v1/sandbox/ucp/verify-checkout` and the MCP tool `verify_checkout` exist only when `GAB_ENV` is `sandbox`, and only for a `gab_test_` key.
 
-Global Agent Bureau is an agent bureau and a technology company. The license is PolyForm Noncommercial 1.0.0. This note names one protocol, the pages opened for it, and what the bureau could consume later. It does not add a route, a profile, or a schema.
+Global Agent Bureau is an agent bureau and a technology company. The license is PolyForm Noncommercial 1.0.0. This note names one protocol, the pages opened for it, and what the bureau could consume later. It does not add a merchant profile or a checkout schema.
 
 ## Which UCP
 
@@ -57,7 +57,13 @@ When `dev.ucp.common.payment.ap2_mandate` is active, the checkout is a signed ag
 
 Checkout `signals` are the slot a platform can use for outside evidence. A signed bureau result could ride there only as a third-party attestation the platform relays, under a reverse-domain key. None of the pages opened assign a key to Global Agent Bureau. `com.example.risk_score` in the overview is an example, not a bureau field.
 
-The MCP binding and a bureau MCP server are different tool lists. UCP's tools create and complete a checkout. A bureau tool list reads and checks an agent. A shopping agent can use the merchant's UCP endpoint for the cart and a bureau endpoint for the check. This note does not merge those lists. The bureau MCP server is a separate pull request and is not part of this document's branch.
+The MCP binding and a bureau MCP server are different tool lists. UCP's tools create and complete a checkout. A bureau tool list reads and checks an agent. A shopping agent can use the merchant's UCP endpoint for the cart and a bureau endpoint for the check. This note does not merge those lists.
+
+## Sandbox consumer
+
+`POST /v1/sandbox/ucp/verify-checkout` and the MCP tool `verify_checkout` are the first bureau consumer. A merchant or an institution submits a checkout it already holds. The bureau checks that object against the stored intent agreement, the stored agent score, and revocation status. The answer is `ALLOW`, `STEP_UP`, or `DENY`. Completing the session stays with the business.
+
+`signals` are not evidence. A buyer-asserted signal is `DENY`. `context` stays provisional and is not the amount. `ap2.checkout_mandate` is not a grant. Amounts stay minor units until the assumed scale converts them. The path `totals` with `type` `total`, the `currency` path, and the currency scale table are assumed. They are marked assumed on the response. `com.example.risk_score` is ignored. The response `compatibility_claim` is `none`.
 
 ## What the bureau should not expose
 
