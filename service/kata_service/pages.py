@@ -624,16 +624,6 @@ _MILESTONES = (
         "dollars are stopped and $0.71M is executed. When attackers do not know the rules, 78% is stopped "
         "and $0.68M is executed. The home page states that same headline.</p>",
     ),
-    _mile(
-        "2026-10-16",
-        "Remote MCP, sandbox isolation, and the current checks",
-        "<p>The service publishes a remote MCP server at <code>POST /mcp</code> with 5 tools over streamable HTTP, "
-        "gab_test_ keys isolated from live rows, <code>/health</code> and <code>/status</code>, "
-        "and 429 responses that include Retry-After. Malformed input is denied, and responses include security headers. "
-        "Sandbox checkout verification treats a Universal Commerce Protocol checkout as an action. "
-        "The bureau does not host checkout. The AmEx Intent Intelligence note is an assumed mapping. "
-        "The latest test round is 316 checks. SYNTHETIC TEST DATA – not real customers.</p>",
-    ),
 )
 
 

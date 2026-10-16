@@ -151,7 +151,7 @@
   </div>
   <div class="synthetic" id="stress-test">
     <p class="sim-banner">SYNTHETIC TEST DATA – not real customers</p>
-    <p class="lede">This synthetic stress test of the trust score uses 10,000 synthetic agents and 100,000 synthetic transactions over 90 days. Against adaptive attackers, 73% of attempted fraud dollars are stopped and $0.71M is executed. When attackers do not know the rules, 78% is stopped and $0.68M is executed. Legitimate agents denied at day 90 are 0.15% and 0.16%. The latest test round is 316 checks. SYNTHETIC TEST DATA – not real customers. Tables and charts are on the <a href="/simulation">Simulation</a> page. Global Agent Bureau is an agent bureau and a technology company. Learn more at <a href="https://globalagentbureau.com">globalagentbureau.com</a>.</p>
+    <p class="lede">This synthetic stress test of the trust score uses 10,000 synthetic agents and 100,000 synthetic transactions over 90 days. Against adaptive attackers, 73% of attempted fraud dollars are stopped and $0.71M is executed. When attackers do not know the rules, 78% is stopped and $0.68M is executed. Legitimate agents denied at day 90 are 0.15% and 0.16%. Tables and charts are on the <a href="/simulation">Simulation</a> page. Global Agent Bureau is an agent bureau and a technology company. Learn more at <a href="https://globalagentbureau.com">globalagentbureau.com</a>.</p>
     <div class="stats">
       <p><strong>73%</strong><span>Adaptive fraud dollars stopped. $0.71M executed.</span></p>
       <p><strong>78%</strong><span>Stopped when attackers do not know the rules. $0.68M executed.</span></p>
@@ -185,11 +185,6 @@
       <p class="mono">Limits</p>
       <h3>Retry-After on 429</h3>
       <p>Defaults are 60 verifies, 30 inquiries, and 10 reports each minute, and 120 requests overall. A limit answers 429 with Retry-After: 60.</p>
-    </article>
-    <article>
-      <p class="mono">Hardening</p>
-      <h3>Malformed input is denied</h3>
-      <p>A non-numeric amount is denied. A document nested past 32 levels is refused. A control character in an agent id is refused. Responses include security headers.</p>
     </article>
     <article>
       <p class="mono">UCP</p>

@@ -90,9 +90,9 @@ def test_public_text_files_name_the_mcp_endpoint():
     assert "gab_test_" in llms.text
     assert "Retry-After" in llms.text
     assert "assumed mapping" in llms.text
-    assert "316 checks" in llms.text
     assert "does not host checkout" in llms.text
-    assert "Malformed input is denied" in llms.text
+    for banned in ("316 checks", "latest test round", "malformed input", "security headers", "synthetic test data"):
+        assert banned not in llms.text.lower()
 
 
 def test_vercel_headers_keep_the_site_assets():
