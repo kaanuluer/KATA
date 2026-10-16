@@ -83,7 +83,16 @@ def test_public_text_files_name_the_mcp_endpoint():
         assert "open source" not in page.lower()
         assert "credit bureau" not in page.lower()
     assert "agent bureau" in llms.text.lower()
+    assert "technology company" in llms.text.lower()
     assert "PolyForm Noncommercial" in llms.text
+    assert "5 tools" in llms.text
+    assert "streamable HTTP" in llms.text
+    assert "gab_test_" in llms.text
+    assert "Retry-After" in llms.text
+    assert "assumed mapping" in llms.text
+    assert "316 checks" in llms.text
+    assert "does not host checkout" in llms.text
+    assert "Malformed input is denied" in llms.text
 
 
 def test_vercel_headers_keep_the_site_assets():
