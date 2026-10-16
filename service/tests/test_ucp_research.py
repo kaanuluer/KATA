@@ -22,7 +22,12 @@ def test_ucp_research_page_cites_the_spec_and_stays_a_note():
     assert "https://ucp.dev/2026-08-25/specification/payment/extensions/ap2-mandates/" in text
     assert "agent bureau" in text.lower()
     assert "PolyForm Noncommercial" in text
-    assert "Nothing here is implemented" in text
+    assert "sandbox consumer" in text.lower()
+    assert "does not host checkout" in text.lower()
+    assert "/v1/sandbox/ucp/verify-checkout" in text
+    assert "Nothing here is implemented" not in text
+    hidden = client.post("/v1/sandbox/ucp/verify-checkout", json={})
+    assert hidden.status_code == 404
     assert "## Verified" in text or "Verified" in text
     assert "Assumed" in text
     folded = text.lower().replace("tools/call", "")

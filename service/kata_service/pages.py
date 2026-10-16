@@ -105,7 +105,7 @@ DOCUMENTS: tuple[tuple[str, str, str, str], ...] = (
         "ucp-research",
         "ucp-research.md",
         "UCP research",
-        "What the Universal Commerce Protocol is, and what the bureau could consume. No implementation.",
+        "What the Universal Commerce Protocol is, and the sandbox checkout check. The bureau does not host checkout.",
     ),
     (
         "amex-intent-mapping",

@@ -50,6 +50,7 @@ A `gab_test_` key sets the sandbox test partition for that request. On a deploym
 | Tool | What it does |
 | --- | --- |
 | `verify_agent` | Checks `action` against the stored intent agreement. Result is `ALLOW`, `DENY`, or `STEP_UP`. |
+| `verify_checkout` | Checks a v2026-08-25 checkout as an action. Registered only when `GAB_ENV` is `sandbox`, and only for a `gab_test_` key. The bureau does not host checkout. |
 | `inquire` | Reads status, authorizations, revocation notes, incident counts, and the trust score for a purpose code. The read does not change the score. |
 | `report` | Files `transaction_outcome`, `fraud_incident`, `chargeback`, or `policy_violation`. `evidence_hash` is `sha256:` and 64 hex characters. |
 | `check_revocation` | Reads the public revocation list. Optional `agent_id` also returns that agent's status in this key's partition. |
@@ -59,7 +60,7 @@ A business-rule failure (unknown agent, bad purpose code, missing evidence) is H
 
 ## Limits
 
-Tool requests share the HTTP rate limits. `verify_agent` counts toward `GAB_VERIFY_RATE_LIMIT_PER_MINUTE` (default 60). `inquire` counts toward `GAB_INQUIRY_RATE_LIMIT_PER_MINUTE` (default 30). `report` counts toward `GAB_REPORT_RATE_LIMIT_PER_MINUTE` (default 10). Every `POST /mcp` also counts toward `GAB_RATE_LIMIT_PER_MINUTE` (default 120). Over the limit the response is HTTP 429 and `rate limit exceeded`.
+Tool requests share the HTTP rate limits. `verify_agent` and `verify_checkout` count toward `GAB_VERIFY_RATE_LIMIT_PER_MINUTE` (default 60). `inquire` counts toward `GAB_INQUIRY_RATE_LIMIT_PER_MINUTE` (default 30). `report` counts toward `GAB_REPORT_RATE_LIMIT_PER_MINUTE` (default 10). Every `POST /mcp` also counts toward `GAB_RATE_LIMIT_PER_MINUTE` (default 120). Over the limit the response is HTTP 429 and `rate limit exceeded`.
 
 ## Example
 
