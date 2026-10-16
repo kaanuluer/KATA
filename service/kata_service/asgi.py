@@ -178,6 +178,7 @@ def create_app(
             "dashboard.js": "text/javascript",
             "portal.js": "text/javascript",
             "gab-logo.svg": "image/svg+xml",
+            "gab-logo.png": "image/png",
             "gab-icon.svg": "image/svg+xml",
             "gab-icon-180.png": "image/png",
             "favicon-32.png": "image/png",

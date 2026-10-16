@@ -185,7 +185,7 @@ def _magic_link_html(url: str, *, expiry: str, ignore: str) -> str:
 <td style="padding:28px 28px 8px 28px;">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" bgcolor="#F3F7F7" style="background:#F3F7F7;border-radius:10px;">
 <tr>
-<td style="padding:10px 14px;font-family:Georgia,'Palatino Linotype',Palatino,serif;font-size:28px;line-height:1;letter-spacing:0.04em;color:#13203B;font-weight:bold;">GAB_</td>
+<td style="padding:8px 10px;line-height:0;font-size:0;"><img src="https://globalagentbureau.com/assets/gab-logo.png" width="371" height="198" alt="GAB_" border="0" style="display:block;width:371px;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;"></td>
 </tr>
 </table>
 </td>
