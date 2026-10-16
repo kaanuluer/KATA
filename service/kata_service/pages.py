@@ -276,7 +276,7 @@ def shell(title: str, description: str, body: str, *, current: str, script: bool
         tags.append(f'<script src="/assets/{html.escape(src)}"></script>')
     script_tag = "".join(tags)
     return f"""<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -285,6 +285,12 @@ def shell(title: str, description: str, body: str, *, current: str, script: bool
   <link rel="icon" href="/assets/gab-icon.svg" type="image/svg+xml">
   <link rel="icon" href="/assets/favicon-32.png" type="image/png" sizes="32x32">
   <link rel="apple-touch-icon" href="/assets/gab-icon-180.png">
+  <script>
+    try {{
+      var savedTheme = localStorage.getItem("gab-theme");
+      if (savedTheme === "light" || savedTheme === "dark") document.documentElement.setAttribute("data-theme", savedTheme);
+    }} catch (e) {{}}
+  </script>
   <link rel="stylesheet" href="/assets/app.css">
 </head>
 <body>
@@ -295,7 +301,10 @@ def shell(title: str, description: str, body: str, *, current: str, script: bool
         <img class="logo" src="/assets/gab-logo.svg" alt="GAB_ global.agent.bureau" width="142" height="76">
         <span>Powered by KATA · Know And Trust Agents</span>
       </a>
-      {_nav(current)}
+      <div class="header-tools">
+        {_nav(current)}
+        <button type="button" class="theme-toggle" id="theme-toggle">Light mode</button>
+      </div>
     </header>
     <main id="top">
       {_docs_nav(current)}
@@ -307,6 +316,24 @@ def shell(title: str, description: str, body: str, *, current: str, script: bool
     </footer>
   </div>
   {script_tag}
+  <script>
+    (function () {{
+      var root = document.documentElement;
+      var button = document.getElementById("theme-toggle");
+      function label() {{
+        var dark = root.getAttribute("data-theme") !== "light";
+        if (button) button.textContent = dark ? "Light mode" : "Dark mode";
+      }}
+      label();
+      if (!button) return;
+      button.addEventListener("click", function () {{
+        var next = root.getAttribute("data-theme") === "light" ? "dark" : "light";
+        root.setAttribute("data-theme", next);
+        try {{ localStorage.setItem("gab-theme", next); }} catch (e) {{}}
+        label();
+      }});
+    }})();
+  </script>
 </body>
 </html>
 """
