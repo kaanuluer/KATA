@@ -240,6 +240,20 @@ def test_simulation_page_labels_every_figure_as_synthetic():
     assert 'href="/simulation"' in home.text
 
 
+def test_trust_score_abuse_note_is_public():
+    page = _client().get("/docs/trust-score-abuse")
+    assert page.status_code == 200
+    body = page.text
+    assert "Trust-score abuse" in body
+    assert "Individuals are not scored" in body
+    assert "agent bureau" in body.lower()
+    assert "RING_DISCOUNTED" in body
+    assert "DISPUTE_HOLD" in body
+    assert "open source" not in body.lower()
+    assert "open-source" not in body.lower()
+    assert "credit bureau" not in body.lower()
+
+
 def test_dashboard_and_portal_pages():
     client = _client()
     dashboard = client.get("/dashboard")

@@ -2,7 +2,7 @@
 
 **Status: framework note.** The Global Agent Bureau service is live. This page is the design note, not a customer or performance claim.
 
-This is a conceptual threat model for KATA as an evaluation framework. It identifies what must be protected, who might attack it, and how the framework's layers map to mitigations. It is not a product security review.
+This is a conceptual threat model for KATA as an evaluation framework. It identifies what must be protected, who might attack it, and how the framework's layers map to mitigations. It is not a product security review. The live score has a separate note in [trust-score-abuse.md](trust-score-abuse.md).
 
 ## Assets
 
