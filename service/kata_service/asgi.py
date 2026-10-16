@@ -331,6 +331,16 @@ def create_app(
             keys.append(dict(record))
         return {"keys": keys}
 
+    @app.get("/.well-known/security.txt")
+    def security_txt():
+        body = (
+            "Contact: mailto:info@globalagentbureau.com\n"
+            "Expires: 2027-10-15T00:00:00.000Z\n"
+            "Preferred-Languages: en\n"
+            "Canonical: https://globalagentbureau.com/.well-known/security.txt\n"
+        )
+        return Response(body, media_type="text/plain; charset=utf-8")
+
     @app.get("/v1/fx")
     def fx_rate(currency: str, day: str | None = None, reference: str | None = None, reference_currency: str | None = None):
         target = reference_currency or reference or "USD"
