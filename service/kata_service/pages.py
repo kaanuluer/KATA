@@ -111,7 +111,7 @@ DOCUMENTS: tuple[tuple[str, str, str, str], ...] = (
         "amex-intent-mapping",
         "amex-intent-mapping.md",
         "AmEx intent mapping",
-        "Field mapping from the public AmEx Intent Intelligence framework into the KATA agreement. No implementation.",
+        "Assumed mapping from the public AmEx Intent Intelligence framework into the KATA agreement.",
     ),
 )
 
@@ -139,7 +139,7 @@ def home_page() -> str:
     fragment = fragment.replace("<!--HISTORY-->", history_section())
     return shell(
         "Global Agent Bureau",
-        "Global Agent Bureau registers agents and checks signed intents. Powered by KATA.",
+        "Global Agent Bureau is an agent bureau and a technology company. Powered by KATA.",
         fragment,
         current="",
         script=True,
@@ -391,7 +391,7 @@ def shell(title: str, description: str, body: str, *, current: str, script: bool
       {body}
     </main>
     <footer class="site">
-      <p>Global Agent Bureau is an agent bureau. Powered by <img class="mark" src="/assets/kata-logo.svg" alt="KATA">. Copyright 2026 Kaan Uluer. PolyForm Noncommercial License. <a href="/simulation">Simulation</a>. <a href="{GITHUB}">GitHub</a>.</p>
+      <p>Global Agent Bureau is an agent bureau and a technology company. Powered by <img class="mark" src="/assets/kata-logo.svg" alt="KATA">. Copyright 2026 Kaan Uluer. PolyForm Noncommercial License. <a href="/docs">Explore the site</a>. <a href="/simulation">Simulation</a>. <a href="{GITHUB}">GitHub</a>.</p>
       <p><img src="/assets/kata-icon.svg" alt="" width="28" height="28"> The demo seed is public and is not a production signing key. Verdicts here are allow, deny, or step-up. Deny means block the action. It does not revoke the grant.</p>
     </footer>
   </div>
@@ -623,6 +623,16 @@ _MILESTONES = (
         "SYNTHETIC TEST DATA – not real customers. Against adaptive attackers, 73% of attempted fraud "
         "dollars are stopped and $0.71M is executed. When attackers do not know the rules, 78% is stopped "
         "and $0.68M is executed. The home page states that same headline.</p>",
+    ),
+    _mile(
+        "2026-10-16",
+        "Remote MCP, sandbox isolation, and the current checks",
+        "<p>The service publishes a remote MCP server at <code>POST /mcp</code> with 5 tools over streamable HTTP, "
+        "gab_test_ keys isolated from live rows, <code>/health</code> and <code>/status</code>, "
+        "and 429 responses that include Retry-After. Malformed input is denied, and responses include security headers. "
+        "Sandbox checkout verification treats a Universal Commerce Protocol checkout as an action. "
+        "The bureau does not host checkout. The AmEx Intent Intelligence note is an assumed mapping. "
+        "The latest test round is 316 checks. SYNTHETIC TEST DATA – not real customers.</p>",
     ),
 )
 

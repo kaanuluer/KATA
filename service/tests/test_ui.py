@@ -57,6 +57,21 @@ def test_home_page_explains_kata_in_english():
     assert '/assets/kata-logo.svg' in body
     assert '/assets/kata-icon.svg' in body
     assert "credit bureau" not in body.lower()
+    assert "an agent bureau and a technology company" in body.lower()
+    assert "Explore the site" in body
+    assert "5 tools" in body
+    assert "streamable HTTP" in body
+    assert "gab_test_" in body
+    assert "Retry-After" in body
+    assert "/health" in body
+    assert 'href="/status"' in body
+    assert "assumed mapping" in body
+    assert "316 checks" in body
+    assert "does not host checkout" in body
+    assert "Malformed input is denied" in body
+    assert "security headers" in body
+    for banned in ("compatible", "compliant", "certified"):
+        assert banned not in body.lower()
 
 
 def test_home_links_github_history_and_docs():

@@ -2,8 +2,8 @@
   <div>
     <p class="kicker">Global Agent Bureau</p>
     <h1 id="promise">Know the agent before the payment goes through.</h1>
-    <p class="lede">Global Agent Bureau is an independent agent bureau. Participants register agents, check signed intents, inquire with a purpose code, and report incidents. The checks are powered by KATA — Know And Trust Agents. A valid identity is not the same thing as a valid action.</p>
-    <p class="actions"><a class="button" href="#demo">Try a signed intent</a> <a class="button ghost" href="/dashboard">Organization dashboard</a> <a class="button ghost" href="/portal">Individual portal</a></p>
+    <p class="lede">Global Agent Bureau is an independent agent bureau and a technology company. Participants register agents, check signed intents, inquire with a purpose code, and report incidents. The checks are powered by KATA — Know And Trust Agents — the framework underneath this service, under the PolyForm Noncommercial License. A valid identity is not the same thing as a valid action.</p>
+    <p class="actions"><a class="button" href="#demo">Try a signed intent</a> <a class="button ghost" href="/docs">Explore the site</a> <a class="button ghost" href="/dashboard">Organization dashboard</a> <a class="button ghost" href="/portal">Individual portal</a></p>
   </div>
   <article class="slip" aria-label="Sample decision">
     <header>
@@ -151,13 +151,56 @@
   </div>
   <div class="synthetic" id="stress-test">
     <p class="sim-banner">SYNTHETIC TEST DATA – not real customers</p>
-    <p class="lede">This is the latest synthetic stress test of the trust score: 10,000 synthetic agents and 100,000 synthetic transactions over 90 days. Against adaptive attackers, 73% of attempted fraud dollars are stopped and $0.71M is executed. When attackers do not know the rules, 78% is stopped and $0.68M is executed. Legitimate agents denied at day 90 are 0.15% and 0.16%. Tables and charts are on the <a href="/simulation">Simulation</a> page. Global Agent Bureau is an agent bureau. Learn more at <a href="https://globalagentbureau.com">globalagentbureau.com</a>.</p>
+    <p class="lede">This synthetic stress test of the trust score uses 10,000 synthetic agents and 100,000 synthetic transactions over 90 days. Against adaptive attackers, 73% of attempted fraud dollars are stopped and $0.71M is executed. When attackers do not know the rules, 78% is stopped and $0.68M is executed. Legitimate agents denied at day 90 are 0.15% and 0.16%. The latest test round is 316 checks. SYNTHETIC TEST DATA – not real customers. Tables and charts are on the <a href="/simulation">Simulation</a> page. Global Agent Bureau is an agent bureau and a technology company. Learn more at <a href="https://globalagentbureau.com">globalagentbureau.com</a>.</p>
     <div class="stats">
       <p><strong>73%</strong><span>Adaptive fraud dollars stopped. $0.71M executed.</span></p>
       <p><strong>78%</strong><span>Stopped when attackers do not know the rules. $0.68M executed.</span></p>
       <p><strong>0.15%</strong><span>Legitimate agents denied at day 90, adaptive case.</span></p>
       <p><strong>0.16%</strong><span>Legitimate agents denied at day 90, unaware case.</span></p>
     </div>
+  </div>
+</section>
+
+<section class="chapter" id="surface">
+  <p class="kicker">The service</p>
+  <h2>Explore the site for what is published now.</h2>
+  <p class="lede">Documentation, status, and the simulation are on this site. KATA is the framework underneath the checks, licensed under PolyForm Noncommercial.</p>
+  <div class="ops">
+    <article>
+      <p class="mono">MCP</p>
+      <h3>5 tools, remote</h3>
+      <p>POST /mcp is a remote MCP server over streamable HTTP. The 5 tools are verify agent, inquire, report, check revocation, and fetch a signed receipt. The tools require a bearer API key.</p>
+    </article>
+    <article>
+      <p class="mono">Sandbox</p>
+      <h3>gab_test_ keys</h3>
+      <p>Test keys use the gab_test_ prefix. Live keys use the gab_ prefix. Live and test rows stay isolated. A test report does not change a live score. When GAB_ENV is sandbox, only a gab_test_ key is accepted.</p>
+    </article>
+    <article>
+      <p class="mono">Health</p>
+      <h3>/health and /status</h3>
+      <p>GET /health and GET /v1/health need no API key. The same reading is on <a href="/status">/status</a>.</p>
+    </article>
+    <article>
+      <p class="mono">Limits</p>
+      <h3>Retry-After on 429</h3>
+      <p>Defaults are 60 verifies, 30 inquiries, and 10 reports each minute, and 120 requests overall. A limit answers 429 with Retry-After: 60.</p>
+    </article>
+    <article>
+      <p class="mono">Hardening</p>
+      <h3>Malformed input is denied</h3>
+      <p>A non-numeric amount is denied. A document nested past 32 levels is refused. A control character in an agent id is refused. Responses include security headers.</p>
+    </article>
+    <article>
+      <p class="mono">UCP</p>
+      <h3>Sandbox checkout check</h3>
+      <p>In the sandbox, the bureau verifies a Universal Commerce Protocol checkout as an action. It does not host checkout. The path accepts a gab_test_ key only.</p>
+    </article>
+    <article>
+      <p class="mono">AmEx</p>
+      <h3>Assumed mapping</h3>
+      <p>The AmEx Intent Intelligence note is an assumed mapping into the KATA agreement. Read it in the <a href="/docs/amex-intent-mapping">mapping note</a>.</p>
+    </article>
   </div>
 </section>
 
