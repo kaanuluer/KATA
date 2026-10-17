@@ -115,7 +115,7 @@ def register_device(service, auth, body: dict[str, Any], origin: str) -> dict[st
 
 
 def authentication_challenge(service, origin: str) -> dict[str, Any]:
-    challenge, options = authentication_options(origin, [])
+    challenge, options = authentication_options(origin, [], discoverable=True)
     _store_challenge(service, None, "authenticate", challenge, origin)
     return options
 
@@ -133,6 +133,7 @@ def authenticate_device(service, credential: dict[str, Any], origin: str) -> dic
         credential,
         decode_key(record["public_key"]),
         int(record["sign_count"]),
+        require_user_verification=False,
     )
     service.repo.update_passkey_use(record["credential_id"], int(verified.new_sign_count), service.stamp())
     session = service._session("portal", record["principal_id"])
@@ -298,8 +299,8 @@ def _consume_challenge(service, principal_id: str | None, kind: str, origin: str
 
         client_data = json.loads(base64url_to_bytes(raw["clientDataJSON"]))
         challenge = str(client_data.get("challenge") or "")
-    except Exception as exc:
-        raise BureauError(401, "passkey challenge is not valid") from exc
+    except Exception:
+        raise BureauError(401, "passkey challenge is not valid") from None
     stored = service.repo.take_challenge(kind, challenge, principal_id, origin, service.stamp())
     if stored is None:
         raise BureauError(401, "passkey challenge is not valid")

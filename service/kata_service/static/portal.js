@@ -62,12 +62,60 @@
     if (options.user) {
       next.user = Object.assign({}, options.user, { id: base64urlToBytes(options.user.id) });
     }
-    const list = options.excludeCredentials || options.allowCredentials;
-    const key = options.excludeCredentials ? "excludeCredentials" : "allowCredentials";
-    if (list) {
-      next[key] = list.map((item) => Object.assign({}, item, { id: base64urlToBytes(item.id) }));
-    }
+    ["excludeCredentials", "allowCredentials"].forEach((key) => {
+      const list = options[key];
+      if (list && list.length) {
+        next[key] = list.map((item) => Object.assign({}, item, { id: base64urlToBytes(item.id) }));
+      } else {
+        delete next[key];
+      }
+    });
     return next;
+  }
+
+  function passkeyHintsSupported() {
+    if (typeof PublicKeyCredential === "undefined") return false;
+    if (typeof PublicKeyCredential.parseRequestOptionsFromJSON !== "function") return false;
+    try {
+      const parsed = PublicKeyCredential.parseRequestOptionsFromJSON({
+        challenge: "AA",
+        hints: ["client-device"],
+      });
+      return Array.isArray(parsed.hints) && parsed.hints.indexOf("client-device") !== -1;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function withClientHint(options) {
+    const next = Object.assign({}, options);
+    delete next.hints;
+    if (passkeyHintsSupported()) next.hints = ["client-device"];
+    return next;
+  }
+
+  function ceremonyOptions(options) {
+    return publicKeyOptions(withClientHint(options));
+  }
+
+  const PASSKEY_MISS = "No passkey was found for this device. Email me a sign-in link. After you sign in, create a passkey on this device.";
+
+  function showPasskeyMiss() {
+    const miss = $("portal-passkey-miss");
+    if (miss) miss.hidden = false;
+    setStatus(PASSKEY_MISS);
+    const email = $("portal-email");
+    if (email) email.focus();
+  }
+
+  function passkeySignInFailed(error) {
+    const name = error && error.name;
+    const cancelled = name === "NotAllowedError" || name === "AbortError" || name === "NotSupportedError";
+    if (cancelled || (error && error.status === 401)) {
+      showPasskeyMiss();
+      return;
+    }
+    setStatus(error && error.status ? error.message : "Sign-in did not finish. Email me a sign-in link. After you sign in, create a passkey on this device.");
   }
 
   function credentialJSON(credential) {
@@ -94,22 +142,98 @@
     return credentialJSON(credential);
   }
 
+  let conditionalAbort = null;
+  let conditionalTimer = null;
+
+  function stopConditional() {
+    if (conditionalTimer) {
+      clearTimeout(conditionalTimer);
+      conditionalTimer = null;
+    }
+    if (conditionalAbort) {
+      conditionalAbort.abort();
+      conditionalAbort = null;
+    }
+  }
+
+  async function conditionalAvailable() {
+    if (!window.PublicKeyCredential || typeof PublicKeyCredential.isConditionalMediationAvailable !== "function") {
+      return false;
+    }
+    try {
+      return await PublicKeyCredential.isConditionalMediationAvailable();
+    } catch (error) {
+      return false;
+    }
+  }
+
+  async function finishPasskey(credential) {
+    const session = await api("/v1/portal/passkeys/authenticate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ credential: credentialJSON(credential) }),
+    });
+    stopConditional();
+    sessionStorage.setItem(tokenKey, session.token);
+    await load();
+    setStatus("");
+  }
+
+  async function startConditional() {
+    if (sessionStorage.getItem(tokenKey)) return;
+    stopConditional();
+    conditionalAbort = new AbortController();
+    const signal = conditionalAbort.signal;
+    conditionalTimer = setTimeout(() => {
+      if (!sessionStorage.getItem(tokenKey)) startConditional();
+    }, 240000);
+    if (!(await conditionalAvailable())) {
+      if (!signal.aborted) stopConditional();
+      return;
+    }
+    if (signal.aborted || sessionStorage.getItem(tokenKey)) return;
+    try {
+      const options = await api("/v1/portal/passkeys/authenticate/options", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (signal.aborted) return;
+      const credential = await navigator.credentials.get({
+        mediation: "conditional",
+        signal: signal,
+        publicKey: ceremonyOptions(options),
+      });
+      if (!credential || signal.aborted) return;
+      await finishPasskey(credential);
+    } catch (error) {
+      if (signal.aborted || (error && error.name === "AbortError")) return;
+    }
+  }
+
   async function load() {
+    stopConditional();
     $("portal-login").hidden = true;
     $("portal-app").hidden = false;
     $("portal-who").textContent = "Signed in.";
     const devices = await api("/v1/portal/devices", { headers: headers() });
     const deviceBox = $("portal-devices");
     deviceBox.innerHTML = "";
-    if (!devices.devices.length) deviceBox.append(line("No device is registered yet."));
+    const offer = $("portal-passkey-offer");
+    if (!devices.devices.length) {
+      deviceBox.append(line("No passkey is registered yet."));
+      if (offer) offer.textContent = "No passkey is registered yet. Create a passkey on this device.";
+    } else if (offer) {
+      offer.textContent = "Passkeys on this account. Create another on this device, or remove one.";
+    }
     devices.devices.forEach((item) => {
       const row = document.createElement("div");
       row.className = "device";
-      row.append(line(item.label + " · " + item.created_at));
+      const used = item.last_used_at ? " · last used " + item.last_used_at : "";
+      row.append(line(item.label + " · added " + item.created_at + used));
       const button = document.createElement("button");
       button.type = "button";
       button.className = "ghost";
-      button.textContent = "Remove device";
+      button.textContent = "Remove passkey";
       button.addEventListener("click", async () => {
         const proof = await assertion();
         await api("/v1/portal/devices/" + encodeURIComponent(item.credential_id) + "/remove", {
@@ -239,6 +363,12 @@
       });
       agentBox.append(card);
     }
+    if (!devices.devices.length) {
+      const create = $("portal-create-passkey");
+      const account = $("portal-account");
+      if (account && account.scrollIntoView) account.scrollIntoView();
+      if (create) create.focus();
+    }
     const inquiries = await api("/v1/portal/inquiries", { headers: headers() });
     const inquiryBox = $("portal-inquiries");
     inquiryBox.innerHTML = "";
@@ -271,22 +401,25 @@
   });
 
   $("portal-passkey").addEventListener("click", async () => {
+    stopConditional();
     try {
+      if (!window.PublicKeyCredential || !navigator.credentials) {
+        showPasskeyMiss();
+        return;
+      }
       const options = await api("/v1/portal/passkeys/authenticate/options", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
-      const credential = await navigator.credentials.get({ publicKey: publicKeyOptions(options) });
-      const session = await api("/v1/portal/passkeys/authenticate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ credential: credentialJSON(credential) }),
-      });
-      sessionStorage.setItem(tokenKey, session.token);
-      await load();
-      setStatus("");
+      const credential = await navigator.credentials.get({ publicKey: ceremonyOptions(options) });
+      if (!credential) {
+        showPasskeyMiss();
+        return;
+      }
+      await finishPasskey(credential);
     } catch (error) {
-      setStatus(error.message);
+      passkeySignInFailed(error);
+      if (!sessionStorage.getItem(tokenKey)) startConditional();
     }
   });
 
@@ -310,21 +443,32 @@
     sessionStorage.removeItem(tokenKey);
     $("portal-app").hidden = true;
     $("portal-login").hidden = false;
+    startConditional();
   });
 
   $("device-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     try {
       const options = await api("/v1/portal/passkeys/register/options", { method: "POST", headers: headers() });
-      const credential = await navigator.credentials.create({ publicKey: publicKeyOptions(options) });
+      const credential = await navigator.credentials.create({ publicKey: ceremonyOptions(options) });
+      if (!credential) {
+        setStatus("The passkey was not created.");
+        return;
+      }
       await api("/v1/portal/passkeys", {
         method: "POST",
         headers: headers(),
         body: JSON.stringify({ label: $("device-label").value.trim(), credential: credentialJSON(credential) }),
       });
       await load();
+      setStatus("Passkey saved on this account.");
     } catch (error) {
-      setStatus(error.message);
+      const name = error && error.name;
+      if (name === "NotAllowedError" || name === "AbortError") {
+        setStatus("Passkey creation was cancelled. You can create a passkey on this device when you are ready.");
+        return;
+      }
+      setStatus(error && error.status ? error.message : "The passkey was not created.");
     }
   });
 
@@ -411,5 +555,7 @@
     }).catch((error) => setStatus(error.message));
   } else if (sessionStorage.getItem(tokenKey)) {
     load().catch(() => sessionStorage.removeItem(tokenKey));
+  } else {
+    startConditional();
   }
 })();
