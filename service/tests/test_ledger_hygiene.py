@@ -25,7 +25,7 @@ _KEK = b"SYNTHETIC TEST DATA local-kek!!!"
 assert len(_HMAC) == len(_KEK) == 32
 
 
-def test_production_requires_a_directory_and_the_allow_list_rejects_contact_fields():
+def test_production_stores_data_keys_in_the_database_and_the_allow_list_rejects_contact_fields():
     ring = json.dumps(
         {"sub-1": {"secret": base64.b64encode(_HMAC).decode(), "purposes": ["subject"], "active": True}}
     )
@@ -37,7 +37,8 @@ def test_production_requires_a_directory_and_the_allow_list_rejects_contact_fiel
             "GAB_HMAC_KEYS": ring,
         }
     )
-    assert "GAB_DEK_STORE_DIR" in (refused.config_error or "")
+    assert "gab_subject_deks" in (refused.config_error or "")
+    assert "DATABASE_URL" in (refused.config_error or "")
     with pytest.raises(LedgerBodyError):
         check_body({"agent_id": "shopper-01", "email": "synthetic-test-data@example.com"})
     check_body({"agent_id": "shopper-01", "evidence_hash": "ab" * 32, "record_hash": "sha256:" + "cd" * 32})

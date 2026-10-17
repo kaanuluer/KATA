@@ -72,8 +72,9 @@ Set these in the host environment. The current proof-of-concept host is a Vercel
 | `GAB_REQUIRE_PROOFING` | no | no | Default on, including when `GAB_DEFENSES=0`. `0` scores the claimed verification level. `POST /v1/agents/{id}/proofing` files an operator review or an institution attestation hash. |
 | `GAB_SCORE_WEIGHTS` | no | no | Optional JSON override of the weights at `GET /v1/score-model`. Invalid JSON or an out-of-range value makes `/v1` return 500. |
 | `GAB_CONSORTIUM_MATCH_THRESHOLD` | no | no | Default 2 other members. Below that, `POST /v1/consortium/match` returns `matched: false` and omits the count. |
-| `GAB_KEY_PROVIDER` | no | no | Unset by default. `aws-kms` uses a KMS master key. `env` is non-production (tests and the PoC) and needs `GAB_ALLOW_ENV_KEYS=1` when `GAB_ENV` is production. |
-| `GAB_ALLOW_ENV_KEYS` | no | no | `1` acknowledges the non-production env provider on the PoC. It does not make those keys production custody. |
+| `GAB_KEY_PROVIDER` | no | no | Unset by default. A `GAB_MASTER_KEY` with no provider name selects `env`, the proof-of-concept default for synthetic data. `aws-kms` is used only when this is set to `aws-kms`. |
+| `GAB_MASTER_KEY` | for the env provider | yes | 32-byte key, base64. On Vercel, mark it Sensitive. It wraps per-person data keys. It is not written to the database. |
+| `GAB_SYNTHETIC_DATA` | with `env` when `GAB_ENV` is production | no | `1` confirms the database holds synthetic rows. Real customer personal data requires a KMS decision and the hosting migration first. |
 | `GAB_HMAC_KEYS` | with `env` | yes | JSON map of key id to 32-byte secret. Never commit a value. |
 | `GAB_HMAC_ACTIVE_KID` | no | no | Active key id, or a JSON object of purpose to key id. |
 | `GAB_KMS_KEY_ID` | with `aws-kms` | no | Master key id or ARN. The key itself stays in KMS. |
@@ -87,8 +88,7 @@ Set these in the host environment. The current proof-of-concept host is a Vercel
 | `GAB_CONSENT_NETWORK` | no | no | Default off. Requires consent events. On: a network signal needs a granted network consent event. |
 | `GAB_ENTITY_ONLY` | no | no | Default off. On: verify, report, and dispute reject unknown fields and email or phone patterns in free text, and registration requires `entity_kind` of `business` or `personal`. The plan's suggested default of on is not applied here. |
 | `GAB_NETWORK_STEP_UP` | no | no | Default off. On: a DENY whose reasons are only network-signal reasons becomes STEP_UP. Velocity and mandate DENY stay DENY. |
-| `GAB_LEDGER_HYGIENE` | no | no | Default off. On: ledger bodies are limited to identifiers, hashes, and timestamps. Payloads are envelope-encrypted. Needs a key provider. |
-| `GAB_DEK_STORE_DIR` | with hygiene in production | no | Directory for wrapped data keys. It must stay outside the database backup. The directory is not a secret, but the files in it are. |
+| `GAB_LEDGER_HYGIENE` | no | no | Default off. On: ledger bodies are limited to identifiers, hashes, and timestamps. Payloads are envelope-encrypted. Ciphertext goes in `gab_payloads`. The wrapped data key goes in `gab_subject_deks`. Needs a key provider, and `DATABASE_URL` when `GAB_ENV` is production. |
 
 Generate a log seed, a push notifier, and an append token:
 

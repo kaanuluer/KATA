@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 
 from kata_service.bureau import BureauError, BureauService, HttpWebhookSender, MemoryRepo, RecordingSender, mailer_from_settings
 from kata_service.identifiers import rate_limit_subject
-from kata_service.keys import FileDekStore, InProcessDekStore, KeyCustodyError
+from kata_service.keys import DatabaseDekStore, FileDekStore, InProcessDekStore, KeyCustodyError, shred_subject
 from kata_service.bureau_http import build_router
 from kata_service.demo import run_demo
 from kata_service.pages import (
@@ -63,7 +63,11 @@ def create_app(
     app = FastAPI(title="Global Agent Bureau", docs_url="/docs/openapi", redoc_url=None)
     app.state.settings = resolved
     app.state.store = store
-    if resolved.dek_store_dir:
+    if resolved.ledger_hygiene and resolved.database_url:
+        import psycopg
+
+        app.state.dek_store = DatabaseDekStore(lambda: psycopg.connect(resolved.database_url))
+    elif resolved.dek_store_dir:
         app.state.dek_store = FileDekStore(resolved.dek_store_dir)
     elif resolved.ledger_hygiene:
         app.state.dek_store = InProcessDekStore()
@@ -406,7 +410,11 @@ def create_app(
         store = app.state.dek_store
         if store is None:
             return _error(500, "ledger hygiene needs a data-key store")
-        destroyed = bool(store.destroy(str(payload["subject_id"]).strip()))
+        subject_id = str(payload["subject_id"]).strip()
+        if settings_now.key_provider is None:
+            destroyed = bool(store.destroy(subject_id))
+        else:
+            destroyed = shred_subject(settings_now.key_provider, store, subject_id)
         return {"destroyed": destroyed}
 
     @app.get("/v1/log/entries/{sequence}")

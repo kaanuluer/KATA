@@ -2,14 +2,14 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """Key providers for keyed HMAC and envelope encryption.
 
-The production custody model is a KMS master key (KEK) that wraps per-subject
-data keys (DEKs). The master key is not exported into this process. AWS KMS is
-the first implementation of that interface. Another provider can implement the
-same ``KmsClient`` methods later. Nothing here assumes a particular app host.
+The proof of concept keeps one master key in the host environment
+(``GAB_MASTER_KEY``) and stores each person's wrapped data key in the database,
+apart from the ciphertext. Deleting that wrapped key is the shred. AWS KMS
+implements the same wrap and unwrap calls and is not the default.
 
-``EnvKeyProvider`` is NON-PRODUCTION. It holds key bytes from the process
-environment. It exists for unit tests and for the current PoC, which has no
-KMS account. Do not describe it as production key custody.
+``EnvKeyProvider`` is for synthetic data and unit tests. It is not production
+custody. Real customer personal data requires a KMS decision and the hosting
+migration first.
 
 HMAC outputs use ``v1:<kid>:<hex>``. The message is
 ``gab-hmac-v1 || NUL || purpose || NUL || value``. ``token_hash`` of high-entropy
@@ -26,13 +26,16 @@ import hmac
 import json
 import os
 import threading
+import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Protocol
 
 ENV_PROVIDER_NOTICE = (
-    "NON-PRODUCTION: this provider holds key material from the environment. "
-    "It is for unit tests and the PoC host only. Production custody is a KMS "
-    "master key that wraps per-subject data keys."
+    "NON-PRODUCTION and SYNTHETIC DATA ONLY. The master key is read from the process environment. "
+    "This is the proof-of-concept default, not production custody. "
+    "Real customer personal data requires a KMS decision and the hosting migration first. "
+    "If the host account that holds the environment is compromised, the master key is compromised too."
 )
 
 _HMAC_VERSION = "v1"
@@ -95,8 +98,88 @@ def hmac_encryption_context(purpose: str, kid: str) -> dict[str, str]:
     return {"gab": "hmac-key", "purpose": purpose, "kid": kid}
 
 
+def opaque_subject(subject_id: str) -> str:
+    """One-way subject reference. Encryption context and the DEK table store this, not the raw id."""
+
+    text = _subject(subject_id)
+    return hashlib.sha256(b"gab-subject-v1\x00" + text.encode("utf-8")).hexdigest()
+
+
 def dek_encryption_context(subject_id: str) -> dict[str, str]:
-    return {"gab": "subject-dek", "purpose": "subject-dek", "subject_id": _subject(subject_id)}
+    return {"gab": "subject-dek", "purpose": "subject-dek", "subject_ref": opaque_subject(subject_id)}
+
+
+@dataclass(frozen=True)
+class KeyUsageEvent:
+    """One key operation. No plaintext, no key bytes, and no raw subject id."""
+
+    operation: str
+    purpose: str
+    kid: str
+    subject_ref: str
+    cache: str
+    latency_ms: float
+
+
+class _DekCache:
+    def __init__(self) -> None:
+        self._items: dict[tuple[str, bytes], bytes] = {}
+        self._lock = threading.Lock()
+
+    def get(self, subject_ref: str, wrapped: bytes) -> bytes | None:
+        key = (subject_ref, hashlib.sha256(wrapped).digest())
+        with self._lock:
+            item = self._items.get(key)
+            return None if item is None else bytes(item)
+
+    def put(self, subject_ref: str, wrapped: bytes, dek: bytes) -> None:
+        key = (subject_ref, hashlib.sha256(wrapped).digest())
+        with self._lock:
+            self._items[key] = bytes(dek)
+
+    def forget(self, subject_ref: str) -> None:
+        with self._lock:
+            for key in [item for item in self._items if item[0] == subject_ref]:
+                self._items.pop(key, None)
+
+
+class _UsageLog:
+    def __init__(self) -> None:
+        self._events: list[KeyUsageEvent] = []
+        self._lock = threading.Lock()
+
+    def add(self, event: KeyUsageEvent) -> None:
+        with self._lock:
+            self._events.append(event)
+            if len(self._events) > 200:
+                del self._events[: len(self._events) - 200]
+
+    def events(self) -> list[KeyUsageEvent]:
+        with self._lock:
+            return list(self._events)
+
+
+def _record(
+    log: _UsageLog,
+    operation: str,
+    started: float,
+    *,
+    purpose: str = "",
+    kid: str = "",
+    subject_id: str = "",
+    cache: str = "none",
+) -> None:
+    ref = opaque_subject(subject_id) if subject_id else ""
+    log.add(
+        KeyUsageEvent(
+            operation,
+            purpose,
+            kid,
+            ref,
+            cache,
+            (time.perf_counter() - started) * 1000,
+        )
+    )
 
 
 def parse_hmac_token(token: str) -> HmacToken | None:
@@ -116,10 +199,12 @@ def parse_hmac_token(token: str) -> HmacToken | None:
 
 
 class EnvKeyProvider:
-    """NON-PRODUCTION key ring read from ``GAB_HMAC_KEYS``.
+    """Master key and HMAC keys read from the process environment.
 
-    HMAC secrets and the local KEK live in process memory. A KMS master key
-    does not. ``production_custody`` is always false.
+    This is the proof-of-concept provider. It is for synthetic data and tests.
+    ``production_custody`` is always false. ``GAB_MASTER_KEY`` is the wrapping
+    key when it is set. A ring entry with purpose ``kek`` is the fallback for
+    tests that do not set a master key.
     """
 
     provider = "env"
@@ -131,7 +216,10 @@ class EnvKeyProvider:
         active: dict[str, str] | None = None,
         *,
         active_strict: bool = True,
+        master_key: bytes | None = None,
     ) -> None:
+        self._dek_cache = _DekCache()
+        self._usage = _UsageLog()
         self._keys: dict[str, bytes] = {}
         self._purposes: dict[str, list[str]] = {}
         self._active: dict[str, str] = {}
@@ -150,6 +238,14 @@ class EnvKeyProvider:
             active,
             strict=active_strict,
         )
+        if master_key is not None:
+            if len(master_key) != 32:
+                raise KeyCustodyError("GAB_MASTER_KEY must be 32 bytes")
+            self._keys["master"] = bytes(master_key)
+            kids = self._purposes.setdefault("kek", [])
+            if "master" not in kids:
+                kids.append("master")
+            self._active["kek"] = "master"
         if not self._keys:
             raise KeyCustodyError("the env key ring is empty")
 
@@ -181,8 +277,17 @@ class EnvKeyProvider:
         _purpose(purpose)
         return list(self._purposes.get(purpose, []))
 
+    def usage(self) -> list[KeyUsageEvent]:
+        return self._usage.events()
+
+    def forget_dek(self, subject_id: str) -> None:
+        self._dek_cache.forget(opaque_subject(subject_id))
+
     def hmac(self, value: str, *, purpose: str) -> HmacToken:
-        return self._hmac_kid(self.active_kid(purpose), value, purpose)
+        started = time.perf_counter()
+        token = self._hmac_kid(self.active_kid(purpose), value, purpose)
+        _record(self._usage, "hmac", started, purpose=purpose, kid=token.kid)
+        return token
 
     def hmac_tokens(self, value: str, *, purpose: str) -> list[HmacToken]:
         active = self.active_kid(purpose)
@@ -200,35 +305,54 @@ class EnvKeyProvider:
     def issue_dek(self, subject_id: str) -> tuple[bytes, bytes]:
         """Return ``(plaintext_dek, wrapped_blob)``. The caller wipes the plaintext."""
 
+        started = time.perf_counter()
         subject = _subject(subject_id)
+        ref = opaque_subject(subject)
         kek, kek_id = self._kek()
         dek = os.urandom(32)
-        wrapped = _wrap_with_aes(kek, kek_id, dek, _dek_aad(subject))
+        wrapped = _wrap_with_aes(kek, kek_id, dek, _dek_aad(ref))
+        self._dek_cache.put(ref, wrapped, dek)
+        _record(self._usage, "issue_dek", started, purpose="kek", kid=kek_id, subject_id=subject)
         return dek, wrapped
 
     def unwrap_dek(self, subject_id: str, wrapped: bytes) -> bytes:
+        started = time.perf_counter()
         subject = _subject(subject_id)
+        ref = opaque_subject(subject)
+        cached = self._dek_cache.get(ref, wrapped)
+        if cached is not None:
+            _record(self._usage, "unwrap_dek", started, purpose="kek", subject_id=subject, cache="hit")
+            return cached
         kek_id, nonce, ciphertext = _split_wrapped(wrapped)
         kek = self._keys.get(kek_id)
         if kek is None or kek_id not in self._purposes.get("kek", []):
             raise KeyCustodyError("wrapped data key does not match a local kek")
-        return _open_aes(kek, nonce, ciphertext, _dek_aad(subject))
+        plain = _open_aes(kek, nonce, ciphertext, _dek_aad(ref))
+        self._dek_cache.put(ref, wrapped, plain)
+        _record(self._usage, "unwrap_dek", started, purpose="kek", kid=kek_id, subject_id=subject, cache="miss")
+        return plain
 
     def seal(self, plaintext: bytes, *, subject_id: str) -> str:
+        started = time.perf_counter()
         subject = _subject(subject_id)
         dek, wrapped = self.issue_dek(subject)
         try:
-            return _encode_seal(subject, dek, plaintext, wrapped)
+            encoded = _encode_seal(opaque_subject(subject), dek, plaintext, wrapped)
         finally:
             _wipe(dek)
+        _record(self._usage, "seal", started, subject_id=subject)
+        return encoded
 
     def unseal(self, encoded: str, *, subject_id: str) -> bytes:
+        started = time.perf_counter()
         subject, dek_wrapped, nonce, ciphertext = _decode_seal(encoded, subject_id)
-        dek = self.unwrap_dek(subject, dek_wrapped)
+        dek = self.unwrap_dek(subject_id, dek_wrapped)
         try:
-            return _open_aes(dek, nonce, ciphertext, _seal_aad(subject))
+            opened = _open_aes(dek, nonce, ciphertext, _seal_aad(subject))
         finally:
             _wipe(dek)
+        _record(self._usage, "unseal", started, subject_id=subject_id)
+        return opened
 
     def _hmac_kid(self, kid: str, value: str, purpose: str) -> HmacToken:
         if purpose == "kek" or kid not in self._purposes.get(purpose, []):
@@ -270,6 +394,8 @@ class AwsKmsEnvelopeProvider:
         self._client = client
         self._lock = threading.Lock()
         self._cache: dict[str, bytes] = {}
+        self._dek_cache = _DekCache()
+        self._usage = _UsageLog()
         self._wrapped: dict[str, list[dict[str, str]]] = {}
         self._active: dict[str, str] = {}
         for purpose, records in (wrapped_hmac or {}).items():
@@ -302,8 +428,8 @@ class AwsKmsEnvelopeProvider:
 
     def notice(self) -> str:
         return (
-            "Master key stays in AWS KMS and wraps per-subject data keys. "
-            "This is key-custody machinery, not a certification."
+            "AWS KMS is available when GAB_KEY_PROVIDER=aws-kms. It is not the proof-of-concept default. "
+            "The master key stays in KMS and wraps per-subject data keys."
         )
 
     def info(self) -> KeyProviderInfo:
@@ -326,8 +452,17 @@ class AwsKmsEnvelopeProvider:
     def kids_for(self, purpose: str) -> list[str]:
         return [item["kid"] for item in self._wrapped.get(purpose, [])]
 
+    def usage(self) -> list[KeyUsageEvent]:
+        return self._usage.events()
+
+    def forget_dek(self, subject_id: str) -> None:
+        self._dek_cache.forget(opaque_subject(subject_id))
+
     def hmac(self, value: str, *, purpose: str) -> HmacToken:
-        return self._hmac_kid(self.active_kid(purpose), value, purpose)
+        started = time.perf_counter()
+        token = self._hmac_kid(self.active_kid(purpose), value, purpose)
+        _record(self._usage, "hmac", started, purpose=purpose, kid=token.kid)
+        return token
 
     def hmac_tokens(self, value: str, *, purpose: str) -> list[HmacToken]:
         active = self.active_kid(purpose)
@@ -343,7 +478,9 @@ class AwsKmsEnvelopeProvider:
         return hmac.compare_digest(expected, parsed.digest_hex)
 
     def issue_dek(self, subject_id: str) -> tuple[bytes, bytes]:
+        started = time.perf_counter()
         subject = _subject(subject_id)
+        ref = opaque_subject(subject)
         plaintext, blob = _kms_unwrap(
             lambda: self._kms().generate_data_key(
                 key_id=self.key_id,
@@ -353,10 +490,18 @@ class AwsKmsEnvelopeProvider:
         if len(plaintext) != 32:
             raise KeyCustodyError("KMS data key was not 32 bytes")
         wrapped = _pack_kms_dek(self.key_id, blob)
+        self._dek_cache.put(ref, wrapped, plaintext)
+        _record(self._usage, "issue_dek", started, purpose="kek", kid=self.key_id, subject_id=subject)
         return plaintext, wrapped
 
     def unwrap_dek(self, subject_id: str, wrapped: bytes) -> bytes:
+        started = time.perf_counter()
         subject = _subject(subject_id)
+        ref = opaque_subject(subject)
+        cached = self._dek_cache.get(ref, wrapped)
+        if cached is not None:
+            _record(self._usage, "unwrap_dek", started, purpose="kek", subject_id=subject, cache="hit")
+            return cached
         key_id, blob = _unpack_kms_dek(wrapped)
         if key_id != self.key_id:
             raise KeyCustodyError("wrapped data key was not produced for this master key")
@@ -369,23 +514,31 @@ class AwsKmsEnvelopeProvider:
         )
         if len(plaintext) != 32:
             raise KeyCustodyError("KMS data key was not 32 bytes")
+        self._dek_cache.put(ref, wrapped, plaintext)
+        _record(self._usage, "unwrap_dek", started, purpose="kek", kid=key_id, subject_id=subject, cache="miss")
         return plaintext
 
     def seal(self, plaintext: bytes, *, subject_id: str) -> str:
+        started = time.perf_counter()
         subject = _subject(subject_id)
         dek, wrapped = self.issue_dek(subject)
         try:
-            return _encode_seal(subject, dek, plaintext, wrapped)
+            encoded = _encode_seal(opaque_subject(subject), dek, plaintext, wrapped)
         finally:
             _wipe(dek)
+        _record(self._usage, "seal", started, subject_id=subject)
+        return encoded
 
     def unseal(self, encoded: str, *, subject_id: str) -> bytes:
+        started = time.perf_counter()
         subject, dek_wrapped, nonce, ciphertext = _decode_seal(encoded, subject_id)
-        dek = self.unwrap_dek(subject, dek_wrapped)
+        dek = self.unwrap_dek(subject_id, dek_wrapped)
         try:
-            return _open_aes(dek, nonce, ciphertext, _seal_aad(subject))
+            opened = _open_aes(dek, nonce, ciphertext, _seal_aad(subject))
         finally:
             _wipe(dek)
+        _record(self._usage, "unseal", started, subject_id=subject_id)
+        return opened
 
     def _hmac_kid(self, kid: str, value: str, purpose: str) -> HmacToken:
         secret = self._hmac_secret(purpose, kid)
@@ -465,8 +618,7 @@ class Boto3KmsClient:
 class InProcessDekStore:
     """Process-local wrapped-DEK map for tests.
 
-    Not durable, and not a substitute for a store outside the database backup
-    path. Destroying an entry here drops only this process's copy.
+    Not durable. The proof-of-concept store is ``DatabaseDekStore``.
     """
 
     def __init__(self) -> None:
@@ -475,23 +627,117 @@ class InProcessDekStore:
 
     def put(self, subject_id: str, wrapped: bytes) -> None:
         with self._lock:
-            self._items[_subject(subject_id)] = bytes(wrapped)
+            self._items[opaque_subject(subject_id)] = bytes(wrapped)
 
     def get(self, subject_id: str) -> bytes | None:
         with self._lock:
-            item = self._items.get(_subject(subject_id))
+            item = self._items.get(opaque_subject(subject_id))
             return None if item is None else bytes(item)
 
     def destroy(self, subject_id: str) -> bool:
         with self._lock:
-            return self._items.pop(_subject(subject_id), None) is not None
+            return self._items.pop(opaque_subject(subject_id), None) is not None
+
+
+class DatabaseDekStore:
+    """Wrapped per-person data keys in ``gab_subject_deks``.
+
+    The table holds the wrapped key only. Ciphertext stays in its own column.
+    Deleting the row removes the key from the live database. A database backup
+    taken before that delete still contains the wrapped key.
+    """
+
+    def __init__(self, connect) -> None:
+        self._connect = connect
+
+    def put(self, subject_id: str, wrapped: bytes) -> None:
+        ref = opaque_subject(subject_id)
+        stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO gab_subject_deks (subject_ref, wrapped_dek, created_at)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (subject_ref) DO UPDATE SET wrapped_dek = EXCLUDED.wrapped_dek
+                """,
+                (ref, _b64encode(wrapped), stamp),
+            )
+
+    def get(self, subject_id: str) -> bytes | None:
+        ref = opaque_subject(subject_id)
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT wrapped_dek FROM gab_subject_deks WHERE subject_ref = %s",
+                (ref,),
+            ).fetchone()
+        if row is None:
+            return None
+        return _b64decode(row[0])
+
+    def destroy(self, subject_id: str) -> bool:
+        ref = opaque_subject(subject_id)
+        with self._connect() as conn:
+            cursor = conn.execute("DELETE FROM gab_subject_deks WHERE subject_ref = %s", (ref,))
+            return cursor.rowcount > 0
+
+
+def seal_detached(provider, plaintext: bytes, *, subject_id: str) -> tuple[str, bytes]:
+    """Encrypt with a per-subject DEK and return ``(ciphertext, wrapped_dek)``.
+
+    The wrapped DEK is not inside the ciphertext. Store it in ``gab_subject_deks``.
+    """
+
+    ref = opaque_subject(subject_id)
+    dek, wrapped = provider.issue_dek(subject_id)
+    try:
+        nonce = os.urandom(12)
+        ciphertext = _AESGCM(dek).encrypt(nonce, plaintext, _seal_aad(ref))
+    finally:
+        _wipe(dek)
+    encoded = ".".join(
+        [
+            "gabseal1",
+            "detached",
+            _b64encode(ref.encode("utf-8")),
+            _b64encode(nonce),
+            _b64encode(ciphertext),
+        ]
+    )
+    return encoded, wrapped
+
+
+def open_detached(provider, encoded: str, wrapped: bytes, *, subject_id: str) -> bytes:
+    parts = encoded.split(".")
+    if len(parts) != 5 or parts[0] != "gabseal1" or parts[1] != "detached":
+        raise KeyCustodyError("ciphertext did not open")
+    try:
+        subject = _b64decode(parts[2]).decode("utf-8")
+        nonce = _b64decode(parts[3])
+        ciphertext = _b64decode(parts[4])
+    except (ValueError, UnicodeError) as exc:
+        raise KeyCustodyError("ciphertext did not open") from exc
+    if not hmac.compare_digest(_digest(subject), _digest(opaque_subject(subject_id))):
+        raise KeyCustodyError("ciphertext did not open")
+    dek = provider.unwrap_dek(subject_id, wrapped)
+    try:
+        return _open_aes(dek, nonce, ciphertext, _seal_aad(subject))
+    finally:
+        _wipe(dek)
+
+
+def shred_subject(provider, store, subject_id: str) -> bool:
+    """Drop the cached data key and delete the wrapped key from the store."""
+
+    removed = bool(store.destroy(subject_id))
+    provider.forget_dek(subject_id)
+    return removed
 
 
 class FileDekStore:
-    """Wrapped DEK files in a directory.
+    """Wrapped DEK files for a test process that has no database.
 
-    That directory has to stay outside the Postgres backup and PITR path.
-    A file next to a database dump does not shred. This is not a certification.
+    The proof-of-concept store is ``DatabaseDekStore``. Those rows live in
+    ``gab_subject_deks`` and travel with the Neon backup.
     """
 
     def __init__(self, directory: str) -> None:
@@ -519,32 +765,28 @@ class FileDekStore:
         return True
 
     def _path(self, subject_id: str):
-        name = hashlib.sha256(_subject(subject_id).encode("utf-8")).hexdigest()
-        return self.directory / name
+        return self.directory / opaque_subject(subject_id)
 
 
 def provider_from_env(env: dict[str, str], *, deployment_env: str) -> EnvKeyProvider | AwsKmsEnvelopeProvider | None:
     """Build the configured provider.
 
-    Unset ``GAB_KEY_PROVIDER`` returns None (no behavior change). ``env`` is
-    refused when ``deployment_env`` is production unless ``GAB_ALLOW_ENV_KEYS=1``.
-    That flag is the explicit PoC acknowledgement. It does not make the
-    provider production custody.
+    Unset ``GAB_KEY_PROVIDER`` with no ``GAB_MASTER_KEY`` returns None.
+    A master key with no provider name selects ``env``, the proof-of-concept
+    default. ``aws-kms`` is selected only when named. On a production-labeled
+    host the env provider requires ``GAB_SYNTHETIC_DATA=1``.
     """
 
     name = _blank(env.get("GAB_KEY_PROVIDER"))
-    if name is None:
+    master = _parse_master(env.get("GAB_MASTER_KEY"))
+    if name is None and master is None:
         return None
-    folded = name.lower().replace("_", "-")
+    folded = "env" if name is None else name.lower().replace("_", "-")
     if folded == "env":
-        allowed = (_blank(env.get("GAB_ALLOW_ENV_KEYS")) or "").lower() in {"1", "true", "yes"}
-        if deployment_env == "production" and not allowed:
-            raise KeyCustodyError(
-                "GAB_KEY_PROVIDER=env is non-production and needs GAB_ALLOW_ENV_KEYS=1 on this host"
-            )
-        ring = _parse_hmac_keys(env.get("GAB_HMAC_KEYS"))
+        _require_synthetic(env, deployment_env)
+        ring = _parse_hmac_keys(env.get("GAB_HMAC_KEYS"), allow_empty=master is not None)
         active, strict = _parse_active(env.get("GAB_HMAC_ACTIVE_KID"))
-        return EnvKeyProvider(ring, active, active_strict=strict)
+        return EnvKeyProvider(ring, active, active_strict=strict, master_key=master)
     if folded == "aws-kms":
         key_id = _blank(env.get("GAB_KMS_KEY_ID"))
         region = _blank(env.get("GAB_KMS_REGION"))
@@ -562,16 +804,49 @@ def provider_from_env(env: dict[str, str], *, deployment_env: str) -> EnvKeyProv
     raise KeyCustodyError("GAB_KEY_PROVIDER must be env or aws-kms")
 
 
-def _parse_hmac_keys(raw: str | None) -> dict[str, dict[str, object]]:
+def _flag(value: str | None) -> bool:
+    return (_blank(value) or "").lower() in {"1", "true", "yes"}
+
+
+def _require_synthetic(env: dict[str, str], deployment_env: str) -> None:
+    if deployment_env != "production":
+        return
+    if _flag(env.get("GAB_SYNTHETIC_DATA")) or _flag(env.get("GAB_ALLOW_ENV_KEYS")):
+        return
+    raise KeyCustodyError(
+        "GAB_KEY_PROVIDER=env is the proof-of-concept default for synthetic data only. "
+        "Set GAB_SYNTHETIC_DATA=1 when this database holds synthetic rows. "
+        "Real customer personal data requires a KMS decision and the hosting migration first."
+    )
+
+
+def _parse_master(raw: str | None) -> bytes | None:
     text = _blank(raw)
     if text is None:
+        return None
+    try:
+        decoded = _b64decode(text)
+    except ValueError as exc:
+        raise KeyCustodyError("GAB_MASTER_KEY is not valid base64") from exc
+    if len(decoded) != 32:
+        raise KeyCustodyError("GAB_MASTER_KEY must decode to 32 bytes")
+    return decoded
+
+
+def _parse_hmac_keys(raw: str | None, *, allow_empty: bool = False) -> dict[str, dict[str, object]]:
+    text = _blank(raw)
+    if text is None:
+        if allow_empty:
+            return {}
         raise KeyCustodyError("GAB_HMAC_KEYS is required for the env provider")
     try:
         parsed = json.loads(text)
     except json.JSONDecodeError as exc:
         raise KeyCustodyError("GAB_HMAC_KEYS is not valid JSON") from exc
-    if not isinstance(parsed, dict) or not parsed:
+    if not isinstance(parsed, dict) or (not parsed and not allow_empty):
         raise KeyCustodyError("GAB_HMAC_KEYS must be a JSON object of kid to secret")
+    if not parsed:
+        return {}
     ring: dict[str, dict[str, object]] = {}
     for kid, value in parsed.items():
         _kid(str(kid))
@@ -706,51 +981,6 @@ def _encode_seal(subject: str, dek: bytes, plaintext: bytes, wrapped: bytes) -> 
     )
 
 
-def seal_detached(provider, plaintext: bytes, *, subject_id: str) -> tuple[str, bytes]:
-    """Encrypt with a per-subject DEK and return ``(ciphertext, wrapped_dek)``.
-
-    The wrapped DEK is not inside the ciphertext. Store it outside the database
-    backup path. Destroying it is what makes the ciphertext unreadable.
-    """
-
-    subject = _subject(subject_id)
-    dek, wrapped = provider.issue_dek(subject)
-    try:
-        nonce = os.urandom(12)
-        ciphertext = _AESGCM(dek).encrypt(nonce, plaintext, _seal_aad(subject))
-    finally:
-        _wipe(dek)
-    encoded = ".".join(
-        [
-            "gabseal1",
-            "detached",
-            _b64encode(subject.encode("utf-8")),
-            _b64encode(nonce),
-            _b64encode(ciphertext),
-        ]
-    )
-    return encoded, wrapped
-
-
-def open_detached(provider, encoded: str, wrapped: bytes, *, subject_id: str) -> bytes:
-    parts = encoded.split(".")
-    if len(parts) != 5 or parts[0] != "gabseal1" or parts[1] != "detached":
-        raise KeyCustodyError("ciphertext did not open")
-    try:
-        subject = _b64decode(parts[2]).decode("utf-8")
-        nonce = _b64decode(parts[3])
-        ciphertext = _b64decode(parts[4])
-    except (ValueError, UnicodeError) as exc:
-        raise KeyCustodyError("ciphertext did not open") from exc
-    if not hmac.compare_digest(_digest(subject), _digest(_subject(subject_id))):
-        raise KeyCustodyError("ciphertext did not open")
-    dek = provider.unwrap_dek(subject, wrapped)
-    try:
-        return _open_aes(dek, nonce, ciphertext, _seal_aad(subject))
-    finally:
-        _wipe(dek)
-
-
 def _decode_seal(encoded: str, subject_id: str) -> tuple[str, bytes, bytes, bytes]:
     parts = encoded.split(".")
     if len(parts) != 6 or parts[0] != "gabseal1" or parts[1] != "embedded":
@@ -762,7 +992,7 @@ def _decode_seal(encoded: str, subject_id: str) -> tuple[str, bytes, bytes, byte
         wrapped = _b64decode(parts[5])
     except (ValueError, UnicodeError) as exc:
         raise KeyCustodyError("ciphertext did not open") from exc
-    if not hmac.compare_digest(_digest(subject), _digest(_subject(subject_id))):
+    if not hmac.compare_digest(_digest(subject), _digest(opaque_subject(subject_id))):
         raise KeyCustodyError("ciphertext did not open")
     return subject, wrapped, nonce, ciphertext
 

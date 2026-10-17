@@ -3,8 +3,9 @@
 """Ledger body allow-list and detached payload encryption.
 
 The chain keeps identifiers, hashes, and timestamps. A payload object is
-envelope-encrypted and the wrapped data key is stored outside the row. Erasure
-destroys that data key. The chain entry stays so verification still works.
+envelope-encrypted. The ciphertext is stored in gab_payloads and the wrapped
+data key is stored in gab_subject_deks. Erasure deletes that key from the live
+database. The chain entry stays so verification still works.
 A correction is a new entry. Old entries are not rewritten.
 
 This module does not claim legal compliance or certification.

@@ -611,6 +611,7 @@ class MemoryRepo:
             "012_consent_events.sql",
             "015_entity_kind.sql",
             "016_ledger_payloads.sql",
+            "017_subject_deks.sql",
         ]
 
     def create_org(self, record: dict[str, Any]) -> None:

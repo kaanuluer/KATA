@@ -117,8 +117,8 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
     dek_store_dir = _blank(env.get("GAB_DEK_STORE_DIR"))
     if error is None and ledger_hygiene and key_provider is None:
         error = "GAB_LEDGER_HYGIENE needs GAB_KEY_PROVIDER"
-    if error is None and ledger_hygiene and deployment_env == "production" and not dek_store_dir:
-        error = "GAB_LEDGER_HYGIENE needs GAB_DEK_STORE_DIR outside the database backup"
+    if error is None and ledger_hygiene and deployment_env == "production" and not database_url:
+        error = "GAB_LEDGER_HYGIENE stores wrapped data keys in gab_subject_deks and needs DATABASE_URL"
     return Settings(
         database_url=database_url,
         schema_url=schema_url,

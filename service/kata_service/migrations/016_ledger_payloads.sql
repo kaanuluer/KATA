@@ -1,6 +1,6 @@
 -- Off-chain ledger payloads. Additive. The wrapped data key is not stored here.
--- Destroying the data key outside this database is what makes the ciphertext unreadable.
--- A database backup that also contains the data key does not shred.
+-- It lives in gab_subject_deks. Deleting that row shreds the live database.
+-- A Neon backup includes the wrapped key, so a restore brings it back.
 
 CREATE TABLE IF NOT EXISTS gab_payloads (
   payload_id TEXT PRIMARY KEY,
