@@ -66,10 +66,9 @@ def test_home_page_explains_kata_in_english():
     assert "/health" in body
     assert 'href="/status"' in body
     assert "assumed mapping" in body
-    assert "316 checks" in body
     assert "does not host checkout" in body
-    assert "Malformed input is denied" in body
-    assert "security headers" in body
+    for banned in ("316 checks", "latest test round", "malformed input", "security headers", "2026-10-16"):
+        assert banned not in body.lower()
     for banned in ("compatible", "compliant", "certified"):
         assert banned not in body.lower()
 
@@ -110,6 +109,8 @@ def test_history_page_uses_repository_facts():
     assert "Apache-2.0" in body
     assert "open source" not in body.lower()
     assert "open-source" not in body.lower()
+    for banned in ("316 checks", "latest test round", "malformed input", "security headers", "2026-10-16"):
+        assert banned not in body.lower()
 
 
 def test_docs_index_lists_the_requested_pages():
@@ -129,6 +130,8 @@ def test_docs_index_lists_the_requested_pages():
     assert "PolyForm Noncommercial" in body
     assert "open source" not in body.lower()
     assert "open-source" not in body.lower()
+    for banned in ("316 checks", "latest test round", "malformed input", "security headers"):
+        assert banned not in body.lower()
 
 
 def test_rendered_docs_come_from_the_repository():

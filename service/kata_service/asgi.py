@@ -426,11 +426,6 @@ def create_app(
             "\n"
             "GET /health and GET /v1/health need no API key. The same reading is on /status.\n"
             "A rate limit returns 429 with Retry-After: 60.\n"
-            "Malformed input is denied. Responses include security headers.\n"
-            "\n"
-            "## Latest test round\n"
-            "\n"
-            "316 checks. SYNTHETIC TEST DATA – not real customers.\n"
         )
         return Response(body, media_type="text/plain; charset=utf-8")
 
