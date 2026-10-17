@@ -378,6 +378,12 @@ def token_hash(token: str) -> str:
 
 
 def email_hash(email: str) -> str:
+    """Legacy unsalted SHA-256 of a normalized email.
+
+    Login lookups use a keyed HMAC when GAB_KEYED_IDENTIFIERS is on. token_hash
+    stays plain SHA-256 because its input is a high-entropy secret.
+    """
+
     return hashlib.sha256(normalize_email(email).encode("utf-8")).hexdigest()
 
 
@@ -558,6 +564,9 @@ class MemoryRepo:
         self.rate: dict[tuple[str, str], int] = {}
         self.principals: dict[str, dict[str, Any]] = {}
         self.logins: dict[str, dict[str, Any]] = {}
+        self.logins_by_hmac: dict[str, str] = {}
+        self.org_logins_by_hmac: dict[str, str] = {}
+        self.identifier_mode = None
         self.magic: dict[str, dict[str, Any]] = {}
         self.sessions: dict[str, dict[str, Any]] = {}
         self.passkeys: dict[str, dict[str, Any]] = {}
@@ -596,6 +605,7 @@ class MemoryRepo:
             "008_audit_environment.sql",
             "009_portal_devices.sql",
             "010_step_up.sql",
+            "011_keyed_identifiers.sql",
             "017_subject_deks.sql",
         ]
 
@@ -655,6 +665,13 @@ class MemoryRepo:
             self.rate[key] = self.rate.get(key, 0) + 1
             return self.rate[key]
 
+    def purge_rate(self, before: str) -> int:
+        with self._lock:
+            stale = [key for key in self.rate if key[1] < before]
+            for key in stale:
+                del self.rate[key]
+            return len(stale)
+
     def ensure_principal(self, principal_id: str, at: str) -> None:
         with self._lock:
             self.principals.setdefault(principal_id, {"principal_id": principal_id, "created_at": at})
@@ -663,45 +680,151 @@ class MemoryRepo:
         """Bind an email once. A later call cannot move it to another principal."""
 
         with self._lock:
-            digest = email_hash(email)
-            current = self.logins.get(digest)
+            current = self._find_login(email)
+            material = {**self._login_material(email, principal_id), "principal_id": principal_id}
             if current is None:
-                self.logins[digest] = {
-                    "email": normalize_email(email),
-                    "principal_id": principal_id,
-                    "created_at": at,
-                }
+                self._store_login(material["email_hash"], material, at, created=True)
                 return "inserted"
-            if current["principal_id"] == principal_id:
-                return "same"
-            return "conflict"
+            if current["principal_id"] != principal_id:
+                return "conflict"
+            self._store_login(current["email_hash"], {**current, **material, "email_hash": current["email_hash"]}, at, created=False)
+            return "same"
 
     def upsert_login(self, email: str, principal_id: str, at: str) -> None:
         self.insert_login(email, principal_id, at)
 
     def login_by_email(self, email: str) -> dict[str, Any] | None:
-        return self.login_by_hash(email_hash(email))
+        with self._lock:
+            return self._copy_login(self._find_login(email))
 
     def login_by_hash(self, digest: str) -> dict[str, Any] | None:
         with self._lock:
-            item = self.logins.get(digest)
-            return dict(item) if item else None
+            return self._copy_login(self._login_by_stored_digest(digest))
+
+    def login_by_subject(self, subject_hmac: str | None, subject_hash: str) -> dict[str, Any] | None:
+        with self._lock:
+            if subject_hmac:
+                found = self._login_by_stored_digest(subject_hmac)
+                if found is not None:
+                    return self._copy_login(found)
+            return self._copy_login(self._login_by_stored_digest(subject_hash))
 
     def upsert_org_login(self, email: str, org_id: str, at: str) -> None:
         with self._lock:
-            self.org_logins[email_hash(email)] = {
-                "email": normalize_email(email),
-                "org_id": org_id,
-                "created_at": at,
-            }
+            current = self._find_org_login(email)
+            material = self._login_material(email, org_id)
+            digest = current["email_hash"] if current is not None else material["email_hash"]
+            self._store_org_login(digest, {**material, "org_id": org_id, "email_hash": digest}, at, created=current is None)
 
     def org_login_by_email(self, email: str) -> dict[str, Any] | None:
-        return self.org_login_by_hash(email_hash(email))
+        with self._lock:
+            return self._copy_org_login(self._find_org_login(email))
 
     def org_login_by_hash(self, digest: str) -> dict[str, Any] | None:
         with self._lock:
-            item = self.org_logins.get(digest)
-            return dict(item) if item else None
+            return self._copy_org_login(self._org_login_by_stored_digest(digest))
+
+    def org_login_by_subject(self, subject_hmac: str | None, subject_hash: str) -> dict[str, Any] | None:
+        with self._lock:
+            if subject_hmac:
+                found = self._org_login_by_stored_digest(subject_hmac)
+                if found is not None:
+                    return self._copy_org_login(found)
+            return self._copy_org_login(self._org_login_by_stored_digest(subject_hash))
+
+    def _login_material(self, email: str, subject_id: str) -> dict[str, Any]:
+        mode = self.identifier_mode
+        if mode is None:
+            return {"email_hash": email_hash(email), "email": normalize_email(email)}
+        return mode.bind(email, subject_id)
+
+    def _find_login(self, email: str) -> dict[str, Any] | None:
+        mode = self.identifier_mode
+        if mode is not None:
+            for token in mode.candidates(email):
+                found = self._login_by_stored_digest(token)
+                if found is not None:
+                    return found
+        return self.logins.get(email_hash(email))
+
+    def _login_by_stored_digest(self, digest: str) -> dict[str, Any] | None:
+        item = self.logins.get(digest)
+        if item is None:
+            pointer = self.logins_by_hmac.get(digest)
+            item = None if pointer is None else self.logins.get(pointer)
+        return item
+
+    def _store_login(self, digest: str, material: dict[str, Any], at: str, *, created: bool) -> None:
+        current = self.logins.get(digest)
+        record = {
+            "email_hash": digest,
+            "email": material.get("email", ""),
+            "principal_id": material["principal_id"] if "principal_id" in material else current["principal_id"],
+            "created_at": current["created_at"] if current is not None else at,
+        }
+        if "principal_id" in material and created:
+            record["principal_id"] = material["principal_id"]
+        elif current is not None:
+            record["principal_id"] = current["principal_id"]
+        else:
+            record["principal_id"] = material["principal_id"]
+        for key in ("email_hmac", "email_kid", "email_ciphertext"):
+            if material.get(key):
+                record[key] = material[key]
+            elif current is not None and current.get(key):
+                record[key] = current[key]
+        self.logins[digest] = record
+        if record.get("email_hmac"):
+            self.logins_by_hmac[record["email_hmac"]] = digest
+
+    def _copy_login(self, item: dict[str, Any] | None) -> dict[str, Any] | None:
+        if item is None:
+            return None
+        mode = self.identifier_mode
+        record = dict(item)
+        if mode is not None:
+            record = mode.reveal(record, item["principal_id"])
+        return {"email": record.get("email") or "", "principal_id": item["principal_id"], "created_at": item["created_at"]}
+
+    def _find_org_login(self, email: str) -> dict[str, Any] | None:
+        mode = self.identifier_mode
+        if mode is not None:
+            for token in mode.candidates(email):
+                found = self._org_login_by_stored_digest(token)
+                if found is not None:
+                    return found
+        return self.org_logins.get(email_hash(email))
+
+    def _org_login_by_stored_digest(self, digest: str) -> dict[str, Any] | None:
+        item = self.org_logins.get(digest)
+        if item is None:
+            pointer = self.org_logins_by_hmac.get(digest)
+            item = None if pointer is None else self.org_logins.get(pointer)
+        return item
+
+    def _store_org_login(self, digest: str, material: dict[str, Any], at: str, *, created: bool) -> None:
+        current = self.org_logins.get(digest)
+        record = {
+            "email_hash": digest,
+            "email": material.get("email", ""),
+            "org_id": material["org_id"],
+            "created_at": current["created_at"] if current is not None else at,
+        }
+        for key in ("email_hmac", "email_kid", "email_ciphertext"):
+            if material.get(key):
+                record[key] = material[key]
+        self.org_logins[digest] = record
+        if record.get("email_hmac"):
+            self.org_logins_by_hmac[record["email_hmac"]] = digest
+
+    def _copy_org_login(self, item: dict[str, Any] | None) -> dict[str, Any] | None:
+        if item is None:
+            return None
+        mode = self.identifier_mode
+        record = dict(item)
+        if mode is not None:
+            record = mode.reveal(record, item["org_id"])
+        return {"email": record.get("email") or "", "org_id": item["org_id"], "created_at": item["created_at"]}
 
     def put_magic(self, record: dict[str, Any]) -> None:
         with self._lock:
@@ -1143,6 +1266,10 @@ class BureauService:
         vapid_public_key: str | None = None,
         vapid_private_key: str | None = None,
         vapid_subject: str | None = None,
+        key_provider=None,
+        keyed_identifiers: bool = False,
+        hmac_rate_subject: bool = False,
+        stop_plaintext_email: bool = False,
     ) -> None:
         self.repo = repo
         self.deployment_env = deployment_env if deployment_env in {"production", "sandbox"} else "production"
@@ -1166,6 +1293,15 @@ class BureauService:
         self.vapid_public_key = vapid_public_key
         self.vapid_private_key = vapid_private_key
         self.vapid_subject = vapid_subject
+        self.key_provider = key_provider
+        self.keyed_identifiers = keyed_identifiers
+        self.hmac_rate_subject = hmac_rate_subject
+        self.stop_plaintext_email = stop_plaintext_email
+        self._rate_purged_before: str | None = None
+        if keyed_identifiers:
+            from kata_service.identifiers import IdentifierMode
+
+            self.repo.identifier_mode = IdentifierMode(key_provider, stop_plaintext=stop_plaintext_email)
         self.push_outbox: list[dict[str, str]] = []
         self.dev_mailbox: list[dict[str, str]] = []
 
@@ -1220,6 +1356,11 @@ class BureauService:
         raise BureauError(401, "credentials are required")
 
     def hit_rate(self, subject: str) -> int:
+        if self.hmac_rate_subject:
+            cutoff = (self.now() - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M")
+            if self._rate_purged_before != cutoff:
+                self.repo.purge_rate(cutoff)
+                self._rate_purged_before = cutoff
         window = self.now().strftime("%Y-%m-%dT%H:%M")
         return self.repo.hit_rate(subject, window)
 
@@ -1920,12 +2061,12 @@ class BureauService:
             raise BureauError(401, "magic link is not valid")
         self.repo.consume_magic(record["token_hash"], self.stamp())
         if record["kind"] == "portal":
-            login = self.repo.login_by_hash(record["subject_hash"])
+            login = self.repo.login_by_subject(record.get("subject_hmac"), record["subject_hash"])
             if login is None:
                 raise BureauError(401, "magic link is not valid")
             session = self._session("portal", login["principal_id"])
             return {"token": session, "kind": "portal", "principal_id": login["principal_id"]}
-        login = self.repo.org_login_by_hash(record["subject_hash"])
+        login = self.repo.org_login_by_subject(record.get("subject_hmac"), record["subject_hash"])
         if login is None:
             raise BureauError(401, "magic link is not valid")
         session = self._session("org", login["org_id"])
@@ -2063,9 +2204,15 @@ class BureauService:
     def _send_link(self, kind: str, email: str, subject_hash: str) -> None:
         token = secrets.token_urlsafe(32)
         expires = (self.now() + timedelta(seconds=self.magic_link_ttl_seconds)).strftime("%Y-%m-%dT%H:%M:%SZ")
-        self.repo.put_magic(
-            {"token_hash": token_hash(token), "kind": kind, "subject_hash": subject_hash, "expires_at": expires, "used_at": None}
-        )
+        record = {"token_hash": token_hash(token), "kind": kind, "subject_hash": subject_hash, "expires_at": expires, "used_at": None}
+        mode = getattr(self.repo, "identifier_mode", None)
+        if mode is not None:
+            hmac_token = mode.provider.hmac(normalize_email(email), purpose="identifier")
+            record["subject_hmac"] = hmac_token.encode()
+            record["subject_kid"] = hmac_token.kid
+            if mode.stop_plaintext:
+                record["subject_hash"] = hmac_token.encode()
+        self.repo.put_magic(record)
         path = "/portal" if kind == "portal" else "/dashboard"
         url = f"{self.public_base_url}{path}#token={token}"
         self.mailer.send_magic_link(email, url)
