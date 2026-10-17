@@ -283,7 +283,7 @@ Set secrets in the host. Do not commit values.
 | `DATABASE_URL` | Production | yes | Neon Postgres. Pooled URL. |
 | `DATABASE_URL_UNPOOLED` | No | yes | Direct Neon URL for `CREATE TABLE`. |
 | `KATA_LOG_SIGNING_SEED` | Yes for signed log heads and outbound alerts | yes | Base64 32-byte Ed25519 seed. |
-| `KATA_PUSH_NOTIFIER_JWK` | Yes for inbound revocation push | no | Public JWK. A private `d` is rejected. |
+| `KATA_PUSH_NOTIFIER_JWK` | Yes for inbound revocation push | no | Public Ed25519 or P-256 JWK. Members are limited to `kty`, `crv`, `x`, `y`, `kid`, `alg`, `use`, and `key_ops`. A private `d` is rejected, and so is any other member. |
 | `KATA_APPEND_TOKEN` | Yes for `POST /v1/log/entries` | yes | Bearer for manual log append. |
 | `GAB_ADMIN_TOKEN` | Yes to create organizations | yes | Admin bearer. |
 | `GAB_RATE_LIMIT_PER_MINUTE` | No | no | Default 120. |

@@ -8,7 +8,9 @@ Version 1 accepts two algorithms, named on the mandate:
 - ``ES256`` — ECDSA P-256 with SHA-256 (JWS). The fingerprint is SHA-256 of the 64-byte ``x || y``.
 
 JWS signatures for ES256 are the raw 32-byte ``R || S`` encoding, not DER.
-The private ``d`` parameter is rejected on every public JWK.
+The private ``d`` parameter is rejected on every public JWK. Any other member
+outside ``kty``, ``crv``, ``x``, ``y``, ``kid``, ``alg``, ``use``, and ``key_ops``
+is rejected as well.
 """
 
 from __future__ import annotations
@@ -34,6 +36,7 @@ from cryptography.hazmat.primitives.serialization import (
 from kata_intent.errors import KataError
 
 ALGORITHMS = frozenset({"EdDSA", "ES256"})
+_PUBLIC_JWK_MEMBERS = frozenset({"kty", "crv", "x", "y", "kid", "alg", "use", "key_ops"})
 _P256_ORDER = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
 
 
@@ -161,12 +164,21 @@ def private_key_from_seed(seed: bytes, algorithm: str = "EdDSA") -> PrivateKey:
 
 
 def public_key_from_jwk(jwk: dict[str, Any]) -> PublicKey:
-    """Read a public JWK. A private ``d`` parameter is rejected so it is never stored on a mandate."""
+    """Read a public Ed25519 or P-256 JWK.
+
+    A private ``d`` parameter is rejected so it is never stored on a mandate.
+    Members other than ``kty``, ``crv``, ``x``, ``y``, ``kid``, ``alg``, ``use``,
+    and ``key_ops`` are rejected.
+    """
 
     if not isinstance(jwk, dict):
         raise KataError("JWK must be an object")
     if "d" in jwk:
         raise KataError("refusing a private JWK")
+    unknown = sorted(set(jwk) - _PUBLIC_JWK_MEMBERS)
+    if unknown:
+        names = ", ".join(unknown)
+        raise KataError(f"JWK member is not allowed: {names}")
     kty = jwk.get("kty")
     crv = jwk.get("crv")
     if kty == "OKP" and crv == "Ed25519":

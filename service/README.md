@@ -42,7 +42,7 @@ Set these in the host environment. The current proof-of-concept host is a Vercel
 | `DATABASE_URL` | yes | yes | Pooled Neon URL. The Marketplace sets this when the integration is connected. |
 | `DATABASE_URL_UNPOOLED` | no | yes | Direct Neon URL for `CREATE TABLE`. The Marketplace sets this too. |
 | `KATA_LOG_SIGNING_SEED` | yes | yes | Base64 of a 32-byte Ed25519 seed. Signs transparency-log tree heads. |
-| `KATA_PUSH_NOTIFIER_JWK` | yes | no | Public JWK JSON of the key that signs revocation push webhooks. A private `d` parameter is rejected. |
+| `KATA_PUSH_NOTIFIER_JWK` | yes | no | Public JWK JSON of the key that signs revocation push webhooks. Ed25519 or P-256. Members are limited to `kty`, `crv`, `x`, `y`, `kid`, `alg`, `use`, and `key_ops`. A private `d` parameter is rejected, and so is any other member. |
 | `KATA_APPEND_TOKEN` | yes | yes | Bearer token for `POST /v1/log/entries`. |
 | `KATA_PUBLISHED_KEYS` | no | no | JSON array of extra `.well-known` key records. Each record has a public `public_key`. |
 | `KATA_FX_SOURCE_URL` | no | no | Daily rate origin. Default `https://api.frankfurter.dev/v1` (ECB rates, no API key). |

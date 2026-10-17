@@ -17,7 +17,7 @@ GAB is an agent bureau. KATA is the framework.
 | `GAB_ADMIN_TOKEN` | Bearer for admin routes, including organization creation |
 | `KATA_LOG_SIGNING_SEED` | Signs the transparency log and bureau alert webhooks |
 | `KATA_APPEND_TOKEN` | Authorizes appends to the log |
-| `KATA_PUSH_NOTIFIER_JWK` | Public key that verifies revocation push. Rotating it means publishing the new public key and keeping the private key off the server |
+| `KATA_PUSH_NOTIFIER_JWK` | Public key that verifies revocation push. Rotating it means publishing the new public key and keeping the private key off the server. Ed25519 or P-256 only. The JWK may contain only `kty`, `crv`, `x`, `y`, `kid`, `alg`, `use`, and `key_ops`. A `d` parameter or any other member is rejected. |
 | `GAB_HMAC_KEYS` | Non-production env provider only. A new kid changes new HMAC outputs. Keep the old kid until stored identifiers are re-keyed. Do not commit the JSON. |
 | `GAB_KMS_KEY_ID` | AWS KMS master key that wraps data keys. Rotate inside KMS and re-wrap data keys. Do not export the master key. |
 | `GAB_KMS_WRAPPED_HMAC_KEYS` | HMAC data keys already wrapped by the master key. Add a new wrapped kid and keep the old one until lookups are re-keyed. |
