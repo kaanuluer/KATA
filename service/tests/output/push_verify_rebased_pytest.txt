@@ -1,0 +1,13 @@
+SYNTHETIC TEST DATA
+After rebasing onto the ALLOW side-table branch. Both the side table and the pushed-revocation check are in verify.
+
+python3 -m pytest tests/test_push_verify.py tests/test_agreement_growth.py -q --tb=short -m "not long"
+
+.....                                                                    [100%]
+5 passed, 1 deselected, 1 warning in 1.81s
+
+python3 -m pytest -q --tb=line -m "not long"
+
+150 passed, 5 skipped, 1 deselected, 5 warnings in 13.64s
+SKIPPED tests/test_keys.py boto3 import (5)
+DESELECTED test_ten_thousand_allows_keep_document_size_and_latency_bounded

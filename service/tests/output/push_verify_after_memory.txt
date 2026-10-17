@@ -1,0 +1,27 @@
+{
+  "before": "ALLOW",
+  "label": "SYNTHETIC TEST DATA",
+  "listed": 1,
+  "other_agent": "ALLOW",
+  "other_agent_sequence": 1,
+  "push_stored": true,
+  "replay_push_stored": false,
+  "replay_verify": "DENY",
+  "revoked": {
+    "agent_id": "shopper-01",
+    "agreement_id": "agr_test",
+    "kata_decision": "BLOCK",
+    "mandate_hash": "sha256:7645603a65ede1babca921dd65b8ad83ead1b3ab11c9fb502627531e3e47dec8",
+    "messages": [
+      "A trusted revocation log says the principal revoked this mandate."
+    ],
+    "reasons": [
+      "MANDATE_REVOKED"
+    ],
+    "required_action": "NONE",
+    "verdict": "DENY"
+  },
+  "revoked_sequence": 1,
+  "same_agent_other_agreement": "ALLOW",
+  "same_agent_sequence": 1
+}
