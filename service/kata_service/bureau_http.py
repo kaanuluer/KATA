@@ -291,6 +291,10 @@ def build_router() -> APIRouter:
             lambda auth, body: remove_device(_bureau(request), auth, credential_id, _assertion(body), _origin(request)),
         )
 
+    @router.post("/v1/portal/consent", summary="Append a consent event when that flag is on")
+    async def portal_consent(request: Request):
+        return await _run(request, lambda auth, body: _bureau(request).record_consent(auth, body))
+
     @router.post("/v1/portal/push", summary="Store a push device after explicit consent")
     async def portal_push(request: Request):
         from kata_service.portal_devices import register_push

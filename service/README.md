@@ -85,6 +85,9 @@ Set these in the host environment. The current proof-of-concept host is a Vercel
 | `GAB_KEYED_IDENTIFIERS` | no | no | Default off. On: HMAC email lookups, dual-read the legacy hash, envelope-encrypt the address. |
 | `GAB_HMAC_RATE_SUBJECT` | no | no | Default off. On: HMAC the client host used for rate limits and delete rate rows older than 24 hours. |
 | `GAB_STOP_PLAINTEXT_EMAIL` | no | no | Default off. Requires keyed identifiers. Stops writing plaintext email and the unsalted hash. Use only after the offline backfill. |
+| `GAB_CONSENT_EVENTS` | no | no | Default off. On: `POST /v1/portal/consent` appends a hash-chained consent event. |
+| `GAB_CONSENT_PUSH` | no | no | Default off. Requires consent events. On: push registration appends a push consent event. |
+| `GAB_CONSENT_NETWORK` | no | no | Default off. Requires consent events. On: a network signal needs a granted network consent event. |
 
 `public_key_from_jwk` is the shared parser. Agent registration, mandate and agreement keys, institution keys, `KATA_PUBLISHED_KEYS`, the SDK, and `KATA_PUSH_NOTIFIER_JWK` all go through it. The object may contain only `kty`, `crv`, `x`, `y`, `kid`, `alg`, `use`, and `key_ops`, and it must be Ed25519 or P-256. A private `d` is rejected. Any other member is rejected, including a WebCrypto `ext` field. If `use` is present it must be `sig`. If `key_ops` is present it must be an array whose values are only `verify`. If `alg` is present it must be `EdDSA` for Ed25519 and `ES256` for P-256.
 
