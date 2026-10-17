@@ -2,13 +2,15 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """ALLOW history stays out of the agreement document.
 
-The 10_000-ALLOW run uses local Postgres (GAB_TEST_DATABASE_URL). It records
-octet_length and pg_column_size of gab_agreements.document. SYNTHETIC TEST DATA.
+The 10_000-ALLOW run is opt-in (`KATA_RUN_LONG=1`, marker `long`). It uses local
+Postgres (GAB_TEST_DATABASE_URL) and records octet_length and pg_column_size of
+gab_agreements.document. SYNTHETIC TEST DATA.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import statistics
 import time
 from datetime import datetime, timedelta, timezone
@@ -145,6 +147,8 @@ def test_frequency_limit_uses_the_side_table_count():
     assert record["document"]["ledger_sequence"] == 2
 
 
+@pytest.mark.long
+@pytest.mark.skipif(os.environ.get("KATA_RUN_LONG") != "1", reason="set KATA_RUN_LONG=1 to run the 10000 ALLOW measurement")
 def test_ten_thousand_allows_keep_document_size_and_latency_bounded():
     url = _database_url()
     _reset(url)

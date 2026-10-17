@@ -27,3 +27,6 @@ kata_service = ["static/*", "migrations/*.sql"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = [".", "../reference/python/src"]
+markers = [
+  "long: opt-in measurement; set KATA_RUN_LONG=1",
+]

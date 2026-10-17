@@ -1,0 +1,17 @@
+SYNTHETIC TEST DATA
+Default pytest does not run the 10000 ALLOW measurement.
+
+python3 -m pytest tests/test_agreement_growth.py -q --tb=line -rs
+
+..s                                                                      [100%]
+SKIPPED [1] tests/test_agreement_growth.py:150: set KATA_RUN_LONG=1 to run the 10000 ALLOW measurement
+2 passed, 1 skipped, 1 warning in 0.43s
+
+python3 -m pytest -q -m "not long" is what CI runs. That deselects the long marker.
+
+The 10000 ALLOW measurement already recorded in allow_10k.txt is unchanged.
+Run it with:
+
+  KATA_RUN_LONG=1 python3 -m pytest -m long
+
+GAB_TEST_DATABASE_URL must point at localhost. The run disables velocity so the daily cap does not stop it.
