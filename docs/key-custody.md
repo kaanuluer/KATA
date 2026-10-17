@@ -40,6 +40,12 @@ Per-subject data keys use:
 {"gab": "subject-dek", "purpose": "subject-dek", "subject_id": "<subject id>"}
 ```
 
+## Identifiers and rate subjects
+
+`GAB_KEYED_IDENTIFIERS` defaults off. When it is on, new login rows store `v1:<kid>:<hex>` in `email_hmac` and an envelope in `email_ciphertext`. Reads try every configured identifier kid, then the legacy unsalted `email_hash`. Plaintext `email` is still written until `GAB_STOP_PLAINTEXT_EMAIL=1`. Leave that second flag off until the offline backfill has run. The backfill is `service/scripts/backfill_keyed_identifiers.py`. It is not started by the service. Dry-run is the default and does not open a database. A write needs `--execute`, `--approve`, a verified backup id, a verified backup time, and the phrase `BACKUP-VERIFIED`.
+
+`GAB_HMAC_RATE_SUBJECT` defaults off. When it is on, a request with no bearer stores an HMAC of the client host (purpose `rate`) instead of the raw host, and rate rows older than 24 hours are deleted. Bearer subjects stay `token_hash` (plain SHA-256 of a high-entropy secret). Rows younger than 24 hours can still hold a raw host until they age out.
+
 ## What not to commit
 
 Do not commit `GAB_HMAC_KEYS`, wrapped blobs, data keys, the master key, or database URLs. Tests build key bytes from the label `SYNTHETIC TEST DATA` in memory.

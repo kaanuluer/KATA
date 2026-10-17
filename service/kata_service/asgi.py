@@ -15,7 +15,9 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 
-from kata_service.bureau import BureauError, BureauService, HttpWebhookSender, MemoryRepo, RecordingSender, mailer_from_settings, token_hash
+from kata_service.bureau import BureauError, BureauService, HttpWebhookSender, MemoryRepo, RecordingSender, mailer_from_settings
+from kata_service.identifiers import rate_limit_subject
+from kata_service.keys import KeyCustodyError
 from kata_service.bureau_http import build_router
 from kata_service.demo import run_demo
 from kata_service.pages import (
@@ -179,8 +181,16 @@ def create_app(
             return _error(exc.status, exc.message)
         header = request.headers.get("authorization", "")
         token = header[7:].strip() if header.startswith("Bearer ") else ""
-        subject = token_hash(token) if token else (request.client.host if request.client else "anonymous")
         settings = app.state.settings
+        try:
+            subject = rate_limit_subject(
+                token,
+                request.client.host if request.client else None,
+                keyed=settings.hmac_rate_subject,
+                provider=settings.key_provider,
+            )
+        except KeyCustodyError as exc:
+            return _error(500, str(exc))
         limited = bureau.hit_rate(subject) > settings.rate_limit_per_minute
         endpoint_cap = _endpoint_rate_cap(request.method, path, settings)
         if not limited and endpoint_cap is not None:
@@ -505,6 +515,10 @@ def ensure_bureau(app: FastAPI):
             vapid_public_key=settings.vapid_public_key,
             vapid_private_key=settings.vapid_private_key,
             vapid_subject=settings.vapid_subject,
+            key_provider=settings.key_provider,
+            keyed_identifiers=settings.keyed_identifiers,
+            hmac_rate_subject=settings.hmac_rate_subject,
+            stop_plaintext_email=settings.stop_plaintext_email,
         )
         if settings.demo:
             from kata_service.seed import seed_demo
@@ -541,6 +555,10 @@ def ensure_bureau(app: FastAPI):
         vapid_public_key=settings.vapid_public_key,
         vapid_private_key=settings.vapid_private_key,
         vapid_subject=settings.vapid_subject,
+        key_provider=settings.key_provider,
+        keyed_identifiers=settings.keyed_identifiers,
+        hmac_rate_subject=settings.hmac_rate_subject,
+        stop_plaintext_email=settings.stop_plaintext_email,
     )
     app.state.bureau = service
     return service

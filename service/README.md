@@ -79,6 +79,9 @@ Set these in the host environment. The current proof-of-concept host is a Vercel
 | `GAB_KMS_KEY_ID` | with `aws-kms` | no | Master key id or ARN. The key itself stays in KMS. |
 | `GAB_KMS_REGION` | with `aws-kms` | no | Region of that master key. |
 | `GAB_KMS_WRAPPED_HMAC_KEYS` | no | yes | JSON of HMAC keys already wrapped by the master key. Ciphertext only. |
+| `GAB_KEYED_IDENTIFIERS` | no | no | Default off. On: HMAC email lookups, dual-read the legacy hash, envelope-encrypt the address. |
+| `GAB_HMAC_RATE_SUBJECT` | no | no | Default off. On: HMAC the client host used for rate limits and delete rate rows older than 24 hours. |
+| `GAB_STOP_PLAINTEXT_EMAIL` | no | no | Default off. Requires keyed identifiers. Stops writing plaintext email and the unsalted hash. Use only after the offline backfill. |
 
 Generate a log seed, a push notifier, and an append token:
 

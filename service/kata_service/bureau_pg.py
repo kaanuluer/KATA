@@ -50,6 +50,7 @@ class PostgresRepo:
         self.schema_url = schema_url or database_url
         self._ready = False
         self._schema_lock = threading.Lock()
+        self.identifier_mode = None
 
     def migration_versions(self) -> list[str]:
         self._ensure()
@@ -188,6 +189,12 @@ class PostgresRepo:
             ).fetchone()
         return int(row[0])
 
+    def purge_rate(self, before: str) -> int:
+        self._ensure()
+        with self._connect() as conn:
+            cursor = conn.execute("DELETE FROM gab_rate WHERE window_start < %s", (before,))
+            return int(cursor.rowcount)
+
     def ensure_principal(self, principal_id: str, at: str) -> None:
         self._execute(
             "INSERT INTO gab_principals (principal_id, created_at) VALUES (%s, %s) ON CONFLICT (principal_id) DO NOTHING",
@@ -197,18 +204,40 @@ class PostgresRepo:
     def insert_login(self, email: str, principal_id: str, at: str) -> str:
         """Bind an email once. A conflict leaves the existing principal in place."""
 
-        digest = email_hash(email)
+        material = self._email_material(email, principal_id)
+        existing = self._login_row(email) if self.identifier_mode is not None else None
+        if existing is not None:
+            if existing["principal_id"] != principal_id:
+                return "conflict"
+            self._execute(
+                """
+                UPDATE gab_logins
+                SET email = %s, email_hmac = %s, email_kid = %s, email_ciphertext = %s
+                WHERE email_hash = %s
+                """,
+                (material["email"], material.get("email_hmac"), material.get("email_kid"), material.get("email_ciphertext"), existing["email_hash"]),
+            )
+            return "same"
         row = self._one(
             """
-            INSERT INTO gab_logins (email_hash, email, principal_id, created_at) VALUES (%s, %s, %s, %s)
+            INSERT INTO gab_logins (email_hash, email, principal_id, created_at, email_hmac, email_kid, email_ciphertext)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (email_hash) DO NOTHING
             RETURNING principal_id
             """,
-            (digest, email.strip().lower(), principal_id, at),
+            (
+                material["email_hash"],
+                material["email"],
+                principal_id,
+                at,
+                material.get("email_hmac"),
+                material.get("email_kid"),
+                material.get("email_ciphertext"),
+            ),
         )
         if row is not None:
             return "inserted"
-        current = self.login_by_hash(digest)
+        current = self.login_by_hash(material["email_hash"])
         if current is not None and current["principal_id"] == principal_id:
             return "same"
         return "conflict"
@@ -217,50 +246,188 @@ class PostgresRepo:
         self.insert_login(email, principal_id, at)
 
     def login_by_email(self, email: str) -> dict[str, Any] | None:
-        return self.login_by_hash(email_hash(email))
+        row = self._login_row(email)
+        return None if row is None else self._present_login(row)
 
     def login_by_hash(self, digest: str) -> dict[str, Any] | None:
-        row = self._one("SELECT email, principal_id, created_at FROM gab_logins WHERE email_hash = %s", (digest,))
-        if row is None:
-            return None
-        return {"email": row[0], "principal_id": row[1], "created_at": row[2]}
+        row = self._one(
+            """
+            SELECT email_hash, email, principal_id, created_at, email_hmac, email_ciphertext
+            FROM gab_logins WHERE email_hash = %s OR email_hmac = %s
+            """,
+            (digest, digest),
+        )
+        return None if row is None else self._present_login(_login_tuple(row))
+
+    def login_by_subject(self, subject_hmac: str | None, subject_hash: str) -> dict[str, Any] | None:
+        if subject_hmac:
+            found = self.login_by_hash(subject_hmac)
+            if found is not None:
+                return found
+        return self.login_by_hash(subject_hash)
 
     def upsert_org_login(self, email: str, org_id: str, at: str) -> None:
-        digest = email_hash(email)
+        material = self._email_material(email, org_id)
+        existing = self._org_login_row(email) if self.identifier_mode is not None else None
+        if existing is not None:
+            self._execute(
+                """
+                UPDATE gab_org_logins
+                SET org_id = %s, email = %s, email_hmac = %s, email_kid = %s, email_ciphertext = %s
+                WHERE email_hash = %s
+                """,
+                (org_id, material["email"], material.get("email_hmac"), material.get("email_kid"), material.get("email_ciphertext"), existing["email_hash"]),
+            )
+            return
         self._execute(
             """
-            INSERT INTO gab_org_logins (email_hash, email, org_id, created_at) VALUES (%s, %s, %s, %s)
-            ON CONFLICT (email_hash) DO UPDATE SET org_id = EXCLUDED.org_id
+            INSERT INTO gab_org_logins (email_hash, email, org_id, created_at, email_hmac, email_kid, email_ciphertext)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (email_hash) DO UPDATE SET
+              org_id = EXCLUDED.org_id,
+              email = EXCLUDED.email,
+              email_hmac = EXCLUDED.email_hmac,
+              email_kid = EXCLUDED.email_kid,
+              email_ciphertext = EXCLUDED.email_ciphertext
             """,
-            (digest, email.strip().lower(), org_id, at),
+            (
+                material["email_hash"],
+                material["email"],
+                org_id,
+                at,
+                material.get("email_hmac"),
+                material.get("email_kid"),
+                material.get("email_ciphertext"),
+            ),
         )
 
     def org_login_by_email(self, email: str) -> dict[str, Any] | None:
-        return self.org_login_by_hash(email_hash(email))
+        row = self._org_login_row(email)
+        return None if row is None else self._present_org(row)
 
     def org_login_by_hash(self, digest: str) -> dict[str, Any] | None:
-        row = self._one("SELECT email, org_id, created_at FROM gab_org_logins WHERE email_hash = %s", (digest,))
-        if row is None:
-            return None
-        return {"email": row[0], "org_id": row[1], "created_at": row[2]}
+        row = self._one(
+            """
+            SELECT email_hash, email, org_id, created_at, email_hmac, email_ciphertext
+            FROM gab_org_logins WHERE email_hash = %s OR email_hmac = %s
+            """,
+            (digest, digest),
+        )
+        return None if row is None else self._present_org(_login_tuple(row))
+
+    def org_login_by_subject(self, subject_hmac: str | None, subject_hash: str) -> dict[str, Any] | None:
+        if subject_hmac:
+            found = self.org_login_by_hash(subject_hmac)
+            if found is not None:
+                return found
+        return self.org_login_by_hash(subject_hash)
 
     def put_magic(self, record: dict[str, Any]) -> None:
         self._execute(
             """
-            INSERT INTO gab_magic_links (token_hash, kind, subject_hash, expires_at, used_at)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO gab_magic_links (token_hash, kind, subject_hash, expires_at, used_at, subject_hmac, subject_kid)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             """,
-            (record["token_hash"], record["kind"], record["subject_hash"], record["expires_at"], record.get("used_at")),
+            (
+                record["token_hash"],
+                record["kind"],
+                record["subject_hash"],
+                record["expires_at"],
+                record.get("used_at"),
+                record.get("subject_hmac"),
+                record.get("subject_kid"),
+            ),
         )
 
     def get_magic(self, token_hash_value: str) -> dict[str, Any] | None:
         row = self._one(
-            "SELECT token_hash, kind, subject_hash, expires_at, used_at FROM gab_magic_links WHERE token_hash = %s",
+            """
+            SELECT token_hash, kind, subject_hash, expires_at, used_at, subject_hmac, subject_kid
+            FROM gab_magic_links WHERE token_hash = %s
+            """,
             (token_hash_value,),
         )
         if row is None:
             return None
-        return {"token_hash": row[0], "kind": row[1], "subject_hash": row[2], "expires_at": row[3], "used_at": row[4]}
+        return {
+            "token_hash": row[0],
+            "kind": row[1],
+            "subject_hash": row[2],
+            "expires_at": row[3],
+            "used_at": row[4],
+            "subject_hmac": row[5],
+            "subject_kid": row[6],
+        }
+
+    def _email_material(self, email: str, subject_id: str) -> dict[str, Any]:
+        mode = self.identifier_mode
+        if mode is None:
+            return {"email_hash": email_hash(email), "email": email.strip().lower()}
+        return mode.bind(email, subject_id)
+
+    def _login_row(self, email: str) -> dict[str, Any] | None:
+        mode = self.identifier_mode
+        legacy = email_hash(email)
+        if mode is None:
+            row = self._one(
+                """
+                SELECT email_hash, email, principal_id, created_at, email_hmac, email_ciphertext
+                FROM gab_logins WHERE email_hash = %s
+                """,
+                (legacy,),
+            )
+        else:
+            tokens = mode.candidates(email)
+            row = self._one(
+                """
+                SELECT email_hash, email, principal_id, created_at, email_hmac, email_ciphertext
+                FROM gab_logins
+                WHERE email_hmac = ANY(%s) OR email_hash = %s
+                ORDER BY CASE WHEN email_hmac = ANY(%s) THEN 0 ELSE 1 END
+                LIMIT 1
+                """,
+                (tokens, legacy, tokens),
+            )
+        return None if row is None else _login_tuple(row)
+
+    def _org_login_row(self, email: str) -> dict[str, Any] | None:
+        mode = self.identifier_mode
+        legacy = email_hash(email)
+        if mode is None:
+            row = self._one(
+                """
+                SELECT email_hash, email, org_id, created_at, email_hmac, email_ciphertext
+                FROM gab_org_logins WHERE email_hash = %s
+                """,
+                (legacy,),
+            )
+        else:
+            tokens = mode.candidates(email)
+            row = self._one(
+                """
+                SELECT email_hash, email, org_id, created_at, email_hmac, email_ciphertext
+                FROM gab_org_logins
+                WHERE email_hmac = ANY(%s) OR email_hash = %s
+                ORDER BY CASE WHEN email_hmac = ANY(%s) THEN 0 ELSE 1 END
+                LIMIT 1
+                """,
+                (tokens, legacy, tokens),
+            )
+        return None if row is None else _login_tuple(row)
+
+    def _present_login(self, row: dict[str, Any]) -> dict[str, Any]:
+        record = {"email": row["email"], "email_ciphertext": row.get("email_ciphertext"), "principal_id": row["principal_id"]}
+        mode = self.identifier_mode
+        if mode is not None:
+            record = mode.reveal(record, row["principal_id"])
+        return {"email": record.get("email") or "", "principal_id": row["principal_id"], "created_at": row["created_at"]}
+
+    def _present_org(self, row: dict[str, Any]) -> dict[str, Any]:
+        record = {"email": row["email"], "email_ciphertext": row.get("email_ciphertext"), "org_id": row["org_id"]}
+        mode = self.identifier_mode
+        if mode is not None:
+            record = mode.reveal(record, row["org_id"])
+        return {"email": record.get("email") or "", "org_id": row["org_id"], "created_at": row["created_at"]}
 
     def consume_magic(self, token_hash_value: str, at: str) -> None:
         self._execute("UPDATE gab_magic_links SET used_at = %s WHERE token_hash = %s", (at, token_hash_value))
@@ -1091,6 +1258,18 @@ class PostgresRepo:
         self._ensure()
         with self._connect() as conn:
             return conn.execute(sql, params).fetchall()
+
+
+def _login_tuple(row) -> dict[str, Any]:
+    return {
+        "email_hash": row[0],
+        "email": row[1],
+        "principal_id": row[2],
+        "org_id": row[2],
+        "created_at": row[3],
+        "email_hmac": row[4],
+        "email_ciphertext": row[5],
+    }
 
 
 def _passkey_row(row) -> dict[str, Any]:
