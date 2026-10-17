@@ -1,0 +1,29 @@
+SYNTHETIC TEST DATA
+Local Postgres only. The database URL is not in this file.
+
+python3 -m pytest tests/test_agreement_growth.py::test_replay_frequency_and_document_bound_use_the_side_table tests/test_agreement_growth.py::test_frequency_limit_uses_the_side_table_count -q --tb=short
+
+..                                                                       [100%]
+=============================== warnings summary ===============================
+../../home/ubuntu/.local/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /home/ubuntu/.local/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+2 passed, 1 warning in 0.36s
+
+python3 -m pytest tests/test_agreement_growth.py::test_ten_thousand_allows_keep_document_size_and_latency_bounded -q --tb=line
+
+.                                                                        [100%]
+=============================== warnings summary ===============================
+../../home/ubuntu/.local/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /home/ubuntu/.local/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+1 passed, 1 warning in 612.53s (0:10:12)
+
+python3 -m pytest -q --tb=line -k "not ten_thousand"
+
+147 passed, 5 skipped, 1 deselected, 5 warnings in 13.34s
+SKIPPED tests/test_keys.py boto3 import (5)

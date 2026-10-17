@@ -9,6 +9,9 @@ import threading
 from pathlib import Path
 from typing import Any
 
+from kata_intent.errors import KataError
+
+from kata_service.agreement_ledger import assert_document_bounded
 from kata_service.bureau import BureauError, email_hash, in_test_mode
 from kata_service.store import dump_doc, load_doc
 
@@ -336,14 +339,68 @@ class PostgresRepo:
         return [_agent_row(row) for row in rows]
 
     def save_agreement(self, record: dict[str, Any]) -> None:
-        self._execute(
+        _reject_large(record["document"])
+        self._execute(_AGREEMENT_UPSERT, _agreement_params(record))
+
+    def replace_agreement_allows(self, record: dict[str, Any], entries: list[dict[str, Any]]) -> None:
+        _reject_large(record["document"])
+        self._ensure()
+        flag = _test_row()
+        with self._connect() as conn:
+            with conn.transaction():
+                conn.execute(
+                    "DELETE FROM gab_agreement_allows WHERE agreement_id = %s AND is_test = %s",
+                    (record["agreement_id"], flag),
+                )
+                for entry in entries:
+                    conn.execute(_ALLOW_INSERT, _allow_params(record["agreement_id"], entry, flag))
+                conn.execute(_AGREEMENT_UPSERT, _agreement_params(record))
+
+    def append_agreement_allow(self, record: dict[str, Any], entry: dict[str, Any]) -> None:
+        _reject_large(record["document"])
+        self._ensure()
+        flag = _test_row()
+        with self._connect() as conn:
+            with conn.transaction():
+                conn.execute(_AGREEMENT_UPSERT, _agreement_params(record))
+                conn.execute(_ALLOW_INSERT, _allow_params(record["agreement_id"], entry, flag))
+
+    def agreement_allow_action_exists(self, agreement_id: str, action_id: str) -> bool:
+        row = self._one(
             """
-            INSERT INTO gab_agreements (agreement_id, agent_id, document, status, updated_at, is_test)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            ON CONFLICT (agreement_id, is_test) DO UPDATE SET document = EXCLUDED.document, status = EXCLUDED.status, updated_at = EXCLUDED.updated_at
+            SELECT 1 FROM gab_agreement_allows
+            WHERE agreement_id = %s AND action_id = %s AND is_test = %s
+            LIMIT 1
             """,
-            (record["agreement_id"], record["agent_id"], dump_doc(record["document"]), record["status"], record["updated_at"], _test_row()),
+            (agreement_id, action_id, _test_row()),
         )
+        return row is not None
+
+    def agreement_allow_idempotency_exists(self, agreement_id: str, idempotency_key: str) -> bool:
+        row = self._one(
+            """
+            SELECT 1 FROM gab_agreement_allows
+            WHERE agreement_id = %s AND idempotency_key = %s AND is_test = %s
+              AND outcome IN ('allowed', 'authorized', 'settled')
+            LIMIT 1
+            """,
+            (agreement_id, idempotency_key, _test_row()),
+        )
+        return row is not None
+
+    def agreement_allow_count(self, agreement_id: str, intent_id: str, after: str | None, until: str) -> int:
+        row = self._one(
+            """
+            SELECT COUNT(*) FROM gab_agreement_allows
+            WHERE agreement_id = %s AND is_test = %s
+              AND outcome IN ('allowed', 'authorized', 'settled')
+              AND (intent_id IS NULL OR intent_id = %s)
+              AND at <= %s
+              AND (%s = '' OR at > %s)
+            """,
+            (agreement_id, _test_row(), intent_id, until, after or "", after or ""),
+        )
+        return int(row[0] if row else 0)
 
     def get_agreement(self, agreement_id: str) -> dict[str, Any] | None:
         row = self._one(
@@ -1179,6 +1236,55 @@ def _agent_row(row) -> dict[str, Any]:
         "principal_public_key": json.loads(row[13]) if len(row) > 13 and row[13] else None,
         "is_test": bool(row[14]) if len(row) > 14 else False,
     }
+
+
+_AGREEMENT_UPSERT = """
+INSERT INTO gab_agreements (agreement_id, agent_id, document, status, updated_at, is_test)
+VALUES (%s, %s, %s, %s, %s, %s)
+ON CONFLICT (agreement_id, is_test) DO UPDATE SET document = EXCLUDED.document, status = EXCLUDED.status, updated_at = EXCLUDED.updated_at
+"""
+
+_ALLOW_INSERT = """
+INSERT INTO gab_agreement_allows (
+  agreement_id, sequence, action_id, intent_id, outcome, currency, amount, at, entry_hash, idempotency_key, entry, is_test
+) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+"""
+
+
+def _reject_large(document: dict[str, Any]) -> None:
+    try:
+        assert_document_bounded(document)
+    except KataError as exc:
+        raise BureauError(400, str(exc)) from exc
+
+
+def _agreement_params(record: dict[str, Any]) -> tuple:
+    return (
+        record["agreement_id"],
+        record["agent_id"],
+        dump_doc(record["document"]),
+        record["status"],
+        record["updated_at"],
+        _test_row(),
+    )
+
+
+def _allow_params(agreement_id: str, entry: dict[str, Any], is_test: bool) -> tuple:
+    amount = entry.get("amount")
+    return (
+        agreement_id,
+        int(entry["sequence"]),
+        entry["action_id"],
+        entry.get("intent_id"),
+        entry["outcome"],
+        entry["currency"],
+        None if amount is None else str(amount),
+        entry["at"],
+        entry["entry_hash"],
+        entry.get("idempotency_key"),
+        dump_doc(entry),
+        is_test,
+    )
 
 
 def _agreement_row(row) -> dict[str, Any]:
