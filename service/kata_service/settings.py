@@ -64,6 +64,8 @@ class Settings:
     consent_network: bool = False
     entity_only: bool = False
     network_step_up: bool = False
+    ledger_hygiene: bool = False
+    dek_store_dir: str | None = None
 
     def log_key(self) -> PrivateKey | None:
         if self.log_signing_seed is None:
@@ -111,6 +113,12 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
         error = "consent purposes need GAB_CONSENT_EVENTS=1"
     entity_only = _flag(env.get("GAB_ENTITY_ONLY"))
     network_step_up = _flag(env.get("GAB_NETWORK_STEP_UP"))
+    ledger_hygiene = _flag(env.get("GAB_LEDGER_HYGIENE"))
+    dek_store_dir = _blank(env.get("GAB_DEK_STORE_DIR"))
+    if error is None and ledger_hygiene and key_provider is None:
+        error = "GAB_LEDGER_HYGIENE needs GAB_KEY_PROVIDER"
+    if error is None and ledger_hygiene and deployment_env == "production" and not dek_store_dir:
+        error = "GAB_LEDGER_HYGIENE needs GAB_DEK_STORE_DIR outside the database backup"
     return Settings(
         database_url=database_url,
         schema_url=schema_url,
@@ -154,6 +162,8 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
         consent_network=consent_network,
         entity_only=entity_only,
         network_step_up=network_step_up,
+        ledger_hygiene=ledger_hygiene,
+        dek_store_dir=dek_store_dir,
     )
 
 

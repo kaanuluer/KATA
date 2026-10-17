@@ -487,6 +487,42 @@ class InProcessDekStore:
             return self._items.pop(_subject(subject_id), None) is not None
 
 
+class FileDekStore:
+    """Wrapped DEK files in a directory.
+
+    That directory has to stay outside the Postgres backup and PITR path.
+    A file next to a database dump does not shred. This is not a certification.
+    """
+
+    def __init__(self, directory: str) -> None:
+        from pathlib import Path
+
+        self.directory = Path(directory)
+        self.directory.mkdir(parents=True, exist_ok=True)
+
+    def put(self, subject_id: str, wrapped: bytes) -> None:
+        path = self._path(subject_id)
+        path.write_bytes(bytes(wrapped))
+        path.chmod(0o600)
+
+    def get(self, subject_id: str) -> bytes | None:
+        path = self._path(subject_id)
+        if not path.is_file():
+            return None
+        return path.read_bytes()
+
+    def destroy(self, subject_id: str) -> bool:
+        path = self._path(subject_id)
+        if not path.is_file():
+            return False
+        path.unlink()
+        return True
+
+    def _path(self, subject_id: str):
+        name = hashlib.sha256(_subject(subject_id).encode("utf-8")).hexdigest()
+        return self.directory / name
+
+
 def provider_from_env(env: dict[str, str], *, deployment_env: str) -> EnvKeyProvider | AwsKmsEnvelopeProvider | None:
     """Build the configured provider.
 
@@ -668,6 +704,51 @@ def _encode_seal(subject: str, dek: bytes, plaintext: bytes, wrapped: bytes) -> 
             _b64encode(wrapped),
         ]
     )
+
+
+def seal_detached(provider, plaintext: bytes, *, subject_id: str) -> tuple[str, bytes]:
+    """Encrypt with a per-subject DEK and return ``(ciphertext, wrapped_dek)``.
+
+    The wrapped DEK is not inside the ciphertext. Store it outside the database
+    backup path. Destroying it is what makes the ciphertext unreadable.
+    """
+
+    subject = _subject(subject_id)
+    dek, wrapped = provider.issue_dek(subject)
+    try:
+        nonce = os.urandom(12)
+        ciphertext = _AESGCM(dek).encrypt(nonce, plaintext, _seal_aad(subject))
+    finally:
+        _wipe(dek)
+    encoded = ".".join(
+        [
+            "gabseal1",
+            "detached",
+            _b64encode(subject.encode("utf-8")),
+            _b64encode(nonce),
+            _b64encode(ciphertext),
+        ]
+    )
+    return encoded, wrapped
+
+
+def open_detached(provider, encoded: str, wrapped: bytes, *, subject_id: str) -> bytes:
+    parts = encoded.split(".")
+    if len(parts) != 5 or parts[0] != "gabseal1" or parts[1] != "detached":
+        raise KeyCustodyError("ciphertext did not open")
+    try:
+        subject = _b64decode(parts[2]).decode("utf-8")
+        nonce = _b64decode(parts[3])
+        ciphertext = _b64decode(parts[4])
+    except (ValueError, UnicodeError) as exc:
+        raise KeyCustodyError("ciphertext did not open") from exc
+    if not hmac.compare_digest(_digest(subject), _digest(_subject(subject_id))):
+        raise KeyCustodyError("ciphertext did not open")
+    dek = provider.unwrap_dek(subject, wrapped)
+    try:
+        return _open_aes(dek, nonce, ciphertext, _seal_aad(subject))
+    finally:
+        _wipe(dek)
 
 
 def _decode_seal(encoded: str, subject_id: str) -> tuple[str, bytes, bytes, bytes]:

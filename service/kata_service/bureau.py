@@ -591,6 +591,7 @@ class MemoryRepo:
         self.deliveries: list[dict[str, Any]] = []
         self.disputes: list[dict[str, Any]] = []
         self.consent_events: list[dict[str, Any]] = []
+        self.payloads: dict[str, dict[str, Any]] = {}
         self._lock = threading.Lock()
 
     def migration_versions(self) -> list[str]:
@@ -609,6 +610,7 @@ class MemoryRepo:
             "011_keyed_identifiers.sql",
             "012_consent_events.sql",
             "015_entity_kind.sql",
+            "016_ledger_payloads.sql",
         ]
 
     def create_org(self, record: dict[str, Any]) -> None:
@@ -1267,6 +1269,15 @@ class MemoryRepo:
     def delete_consent(self, event_id: str) -> None:
         raise BureauError(409, "gab_consent_events is append-only")
 
+    def put_payload(self, record: dict[str, Any]) -> None:
+        with self._lock:
+            self.payloads[record["payload_id"]] = dict(record)
+
+    def get_payload(self, payload_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            item = self.payloads.get(payload_id)
+            return dict(item) if item else None
+
 
 class BureauService:
     def __init__(
@@ -1303,6 +1314,8 @@ class BureauService:
         consent_network: bool = False,
         entity_only: bool = False,
         network_step_up: bool = False,
+        ledger_hygiene: bool = False,
+        dek_store=None,
     ) -> None:
         self.repo = repo
         self.deployment_env = deployment_env if deployment_env in {"production", "sandbox"} else "production"
@@ -1335,6 +1348,8 @@ class BureauService:
         self.consent_network = consent_network
         self.entity_only = entity_only
         self.network_step_up = network_step_up
+        self.ledger_hygiene = ledger_hygiene
+        self.dek_store = dek_store
         self._rate_purged_before: str | None = None
         if keyed_identifiers:
             from kata_service.identifiers import IdentifierMode
@@ -2744,6 +2759,21 @@ class BureauService:
     def _log(self, kind: str, body: dict[str, Any]) -> None:
         if self.log_store is None or self.log_key is None:
             return
+        if self.ledger_hygiene:
+            from kata_service.ledger import LedgerBodyError, prepare_body
+
+            if self.key_provider is None or self.dek_store is None:
+                raise BureauError(500, "ledger hygiene needs a key provider and a data-key store")
+            try:
+                body = prepare_body(
+                    body,
+                    provider=self.key_provider,
+                    dek_store=self.dek_store,
+                    put_payload=self.repo.put_payload,
+                    at=self.stamp(),
+                )
+            except LedgerBodyError as exc:
+                raise BureauError(400, str(exc)) from exc
         self.log_store.append_and_sign(kind, body, self.log_key, self.now())
 
     def _agent(self, agent_id: str) -> dict[str, Any]:
