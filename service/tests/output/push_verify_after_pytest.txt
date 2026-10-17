@@ -1,0 +1,10 @@
+SYNTHETIC TEST DATA
+python3 -m pytest tests/test_push_verify.py -q --tb=short
+
+...                                                                      [100%]
+3 passed, 1 warning in 1.78s
+
+python3 -m pytest -q --tb=line
+
+148 passed, 5 skipped, 5 warnings in 14.49s
+SKIPPED tests/test_keys.py boto3 import (5)

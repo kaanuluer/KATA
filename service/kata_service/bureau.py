@@ -1655,6 +1655,17 @@ class BureauService:
             self.repo.replace_agreement_allows(record, spilled)
         agreement = Agreement.from_dict(record["document"])
         at = self.stamp()
+        try:
+            extra_revocations = self._pushed_revocations()
+        except Exception:  # noqa: BLE001 — an unreadable revocation list must not allow the charge
+            return {
+                "verdict": "DENY",
+                "kata_decision": "BLOCK",
+                "reasons": ["REVOCATION_LIST_UNAVAILABLE"],
+                "messages": ["The revocation list could not be pulled."],
+                "agent_id": agent_id,
+                "agreement_id": record["agreement_id"],
+            }
         replay = self._allow_replay(record["agreement_id"], action)
         if replay is not None:
             return _bounded_deny(agent_id, record["agreement_id"], replay[0], replay[1])
@@ -1677,6 +1688,7 @@ class BureauService:
                 ledger_sequence=projection_sequence,
                 ledger_head=projection_head,
                 ledger_as_of=at,
+                extra_revocations=extra_revocations,
             )
         except KataError as exc:
             raise BureauError(400, str(exc)) from exc
@@ -1714,6 +1726,13 @@ class BureauService:
         payload["agent_id"] = agent_id
         payload["agreement_id"] = record["agreement_id"]
         return self._after_verify(agent, action, payload)
+
+    def _pushed_revocations(self) -> list[dict[str, Any]]:
+        """Signed revocations stored by /v1/revocations/push. No log means an empty list."""
+
+        if self.log_store is None:
+            return []
+        return [dict(item) for item in self.log_store.list_revocations()]
 
     def verify_checkout(self, auth: Auth, body: dict[str, Any]) -> dict[str, Any]:
         """Check a UCP checkout as an action. Sandbox test keys only."""
