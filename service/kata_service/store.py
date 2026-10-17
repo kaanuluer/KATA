@@ -301,9 +301,9 @@ class PostgresStore:
             self._ready = True
 
     def _connect(self):
-        import psycopg
+        from kata_service.db_pool import connection
 
-        return psycopg.connect(self.database_url)
+        return connection(self.database_url)
 
 
 def open_store(database_url: str | None, schema_url: str | None = None) -> PostgresStore:

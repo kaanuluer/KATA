@@ -1244,9 +1244,9 @@ class PostgresRepo:
                 _backfill_audit(conn, _audit_tail(conn))
 
     def _connect(self):
-        import psycopg
+        from kata_service.db_pool import connection
 
-        return psycopg.connect(self.database_url)
+        return connection(self.database_url)
 
     def _execute(self, sql: str, params: tuple) -> None:
         self._ensure()

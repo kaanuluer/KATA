@@ -187,12 +187,19 @@ def create_app(
         token = header[7:].strip() if header.startswith("Bearer ") else ""
         subject = token_hash(token) if token else (request.client.host if request.client else "anonymous")
         settings = app.state.settings
-        limited = bureau.hit_rate(subject) > settings.rate_limit_per_minute
-        endpoint_cap = _endpoint_rate_cap(request.method, path, settings)
-        if not limited and endpoint_cap is not None:
-            limited = bureau.hit_rate(f"{path}:{subject}") > endpoint_cap
-        if limited:
-            response = _error(429, "rate limit exceeded", {"Retry-After": "60"})
+        limit_reason = None
+        if bureau.hit_rate(subject) > settings.rate_limit_per_minute:
+            limit_reason = "general"
+        else:
+            endpoint_cap = _endpoint_rate_cap(request.method, path, settings)
+            if endpoint_cap is not None and bureau.hit_rate(f"{path}:{subject}") > endpoint_cap:
+                limit_reason = "verify" if path == "/v1/verify" else path
+        if limit_reason is not None:
+            response = _error(
+                429,
+                "rate limit exceeded",
+                {"Retry-After": "60", "X-Rate-Limit-Reason": limit_reason},
+            )
         else:
             response = await call_next(request)
         # Subject removal writes its one audit row in the removal transaction.
