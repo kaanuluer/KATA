@@ -33,7 +33,7 @@ from typing import Protocol
 
 ENV_PROVIDER_NOTICE = (
     "NON-PRODUCTION and SYNTHETIC DATA ONLY. The master key is read from the process environment. "
-    "This is the proof-of-concept default, not production custody. "
+    "This provider is refused when GAB_ENV is production. No flag overrides that refusal. "
     "Real customer personal data requires a KMS decision and the hosting migration first. "
     "If the host account that holds the environment is compromised, the master key is compromised too."
 )
@@ -587,10 +587,11 @@ class Boto3KmsClient:
 
     def _boto(self):
         if self._client is None:
+            _require_web_identity()
             try:
                 import boto3
             except ImportError as exc:
-                raise KeyCustodyError("aws-kms needs boto3 installed on the host") from exc
+                raise KeyCustodyError("aws-kms needs the optional boto3 extra installed") from exc
             self._client = boto3.client("kms", region_name=self._region)
         return self._client
 
@@ -738,8 +739,9 @@ def provider_from_env(env: dict[str, str], *, deployment_env: str) -> EnvKeyProv
 
     Unset ``GAB_KEY_PROVIDER`` with no ``GAB_MASTER_KEY`` returns None.
     A master key with no provider name selects ``env``, the proof-of-concept
-    default. ``aws-kms`` is selected only when named. On a production-labeled
-    host the env provider requires ``GAB_SYNTHETIC_DATA=1``.
+    default, except when ``deployment_env`` is production. ``aws-kms`` is
+    selected only when named. Production refuses ``env``. ``GAB_SYNTHETIC_DATA``
+    and ``GAB_ALLOW_ENV_KEYS`` do not override that refusal.
     """
 
     name = _blank(env.get("GAB_KEY_PROVIDER"))
@@ -748,7 +750,7 @@ def provider_from_env(env: dict[str, str], *, deployment_env: str) -> EnvKeyProv
         return None
     folded = "env" if name is None else name.lower().replace("_", "-")
     if folded == "env":
-        _require_synthetic(env, deployment_env)
+        _refuse_env_in_production(deployment_env)
         ring = _parse_hmac_keys(env.get("GAB_HMAC_KEYS"), allow_empty=master is not None)
         active, strict = _parse_active(env.get("GAB_HMAC_ACTIVE_KID"))
         return EnvKeyProvider(ring, active, active_strict=strict, master_key=master)
@@ -769,20 +771,52 @@ def provider_from_env(env: dict[str, str], *, deployment_env: str) -> EnvKeyProv
     raise KeyCustodyError("GAB_KEY_PROVIDER must be env or aws-kms")
 
 
-def _flag(value: str | None) -> bool:
-    return (_blank(value) or "").lower() in {"1", "true", "yes"}
-
-
-def _require_synthetic(env: dict[str, str], deployment_env: str) -> None:
+def _refuse_env_in_production(deployment_env: str) -> None:
     if deployment_env != "production":
         return
-    if _flag(env.get("GAB_SYNTHETIC_DATA")) or _flag(env.get("GAB_ALLOW_ENV_KEYS")):
-        return
     raise KeyCustodyError(
-        "GAB_KEY_PROVIDER=env is the proof-of-concept default for synthetic data only. "
-        "Set GAB_SYNTHETIC_DATA=1 when this database holds synthetic rows. "
-        "Real customer personal data requires a KMS decision and the hosting migration first."
+        "GAB_KEY_PROVIDER=env is refused when GAB_ENV is production. "
+        "GAB_SYNTHETIC_DATA and GAB_ALLOW_ENV_KEYS do not override this."
     )
+
+
+def _require_web_identity() -> None:
+    """Reject static AWS keys. The future path is a short-lived OIDC role."""
+
+    static = [
+        name
+        for name in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN")
+        if _blank(os.environ.get(name))
+    ]
+    if static:
+        names = ", ".join(static)
+        raise KeyCustodyError(
+            f"aws-kms refuses long-lived credentials in {names}. "
+            "Set AWS_ROLE_ARN and AWS_WEB_IDENTITY_TOKEN_FILE for Vercel OIDC. "
+            "Do not set AWS_ACCESS_KEY_ID or AWS_SECRET_ACCESS_KEY."
+        )
+    role = _blank(os.environ.get("AWS_ROLE_ARN"))
+    token_file = _blank(os.environ.get("AWS_WEB_IDENTITY_TOKEN_FILE"))
+    vercel_token = os.environ.get("VERCEL_OIDC_TOKEN")
+    if role and token_file is None and vercel_token:
+        token_file = _write_oidc_token(vercel_token)
+        os.environ["AWS_WEB_IDENTITY_TOKEN_FILE"] = token_file
+    if role is None or token_file is None:
+        raise KeyCustodyError(
+            "aws-kms needs AWS_ROLE_ARN and AWS_WEB_IDENTITY_TOKEN_FILE. "
+            "VERCEL_OIDC_TOKEN can supply the file. Static AWS keys are not accepted."
+        )
+
+
+def _write_oidc_token(token: str) -> str:
+    import tempfile
+
+    directory = tempfile.mkdtemp(prefix="gab-oidc-")
+    path = os.path.join(directory, "token")
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        handle.write(token)
+    return path
 
 
 def _parse_master(raw: str | None) -> bytes | None:

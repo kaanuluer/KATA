@@ -8,13 +8,85 @@ The proof of concept stays on Vercel and Neon. No new cloud account is required 
 
 The proof of concept does not use AWS credentials. `GAB_MASTER_KEY` is a 32-byte key, base64, stored as a Vercel Sensitive environment variable. The process uses it only to wrap and unwrap per-person data keys. HMAC keys, when keyed identifiers are turned on, stay in `GAB_HMAC_KEYS`.
 
-Leaving `GAB_KEY_PROVIDER` unset and leaving `GAB_MASTER_KEY` unset does not change request handling. Setting `GAB_MASTER_KEY` selects the `env` provider. That is the proof-of-concept default. `GAB_KEY_PROVIDER=aws-kms` is used only when that name is set. It is not the default.
+Leaving `GAB_KEY_PROVIDER` unset and leaving `GAB_MASTER_KEY` unset does not change request handling. Setting `GAB_MASTER_KEY` selects the `env` provider when `GAB_ENV` is not `production`. That is the proof-of-concept default. `GAB_KEY_PROVIDER=aws-kms` is used only when that name is set. It is not the default.
 
-When `GAB_ENV=production`, the env provider also requires `GAB_SYNTHETIC_DATA=1`. That flag confirms the rows are synthetic. Real customer personal data is out of scope for this provider. Storing it requires revisiting KMS and the hosting migration first.
-
-The AWS client is created on the first KMS call, not when the process starts. The proof of concept does not import boto3 at startup. The class `AwsKmsEnvelopeProvider` remains so a later KMS can use the same wrap and unwrap calls. Turning it on needs `GAB_KMS_KEY_ID` and `GAB_KMS_REGION`. No AWS account is created for the proof of concept.
+`GAB_KEY_PROVIDER=env` is refused when `GAB_ENV` is `production`. `GAB_SYNTHETIC_DATA` and `GAB_ALLOW_ENV_KEYS` do not override this. A proof-of-concept process that needs the env provider sets `GAB_ENV=sandbox`. Real customer personal data requires a KMS decision and the hosting migration first.
 
 Accepted risk: if the Vercel account is compromised the master key is lost too. An attacker who also reads the database can unwrap the data keys.
+
+### Future AWS path: Vercel OIDC, not long-lived keys
+
+`boto3`'s default credential chain will use `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` when those variables exist. That is a long-lived key on Vercel, and it is not the design. `Boto3KmsClient` refuses those variables, and it also refuses `AWS_SESSION_TOKEN` set in the environment. The client is created on the first KMS call. The process does not import boto3 at startup, and it does not check that the key is reachable at startup. The first `GenerateDataKey`, `Encrypt`, or `Decrypt` is the first network call.
+
+The future path is Vercel OIDC federation into one IAM role. No AWS account is created for the proof of concept. The examples below use placeholders. They are not a real account, role, or key.
+
+Install the client with the optional extra `pip install 'kata-service[aws]'` (`boto3`). The default install does not include it.
+
+Vercel publishes two issuer modes. Team issuer mode is the one this note uses. Confirm the issuer and claims against the current Vercel OIDC reference when the role is created.
+
+- Issuer: `https://oidc.vercel.com/TEAM_SLUG`
+- Audience: `https://vercel.com/TEAM_SLUG`
+- Subject: `owner:TEAM_SLUG:project:PROJECT_NAME:environment:production`
+
+Trust policy. The runtime role can be assumed only by that project in production:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "arn:aws:iam::ACCOUNT_ID:oidc-provider/oidc.vercel.com/TEAM_SLUG"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "oidc.vercel.com/TEAM_SLUG:aud": "https://vercel.com/TEAM_SLUG",
+          "oidc.vercel.com/TEAM_SLUG:sub": "owner:TEAM_SLUG:project:PROJECT_NAME:environment:production"
+        }
+      }
+    }
+  ]
+}
+```
+
+Permission policy. The role may only wrap and unwrap data keys on one key ARN, and only with the encryption contexts this service sends. It cannot schedule deletion, disable the key, or change the key policy, because those actions are not in the allow list.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "WrapSubjectDataKeys",
+      "Effect": "Allow",
+      "Action": ["kms:GenerateDataKey", "kms:Decrypt", "kms:Encrypt"],
+      "Resource": "arn:aws:kms:REGION:ACCOUNT_ID:key/KEY_ID",
+      "Condition": {
+        "StringEquals": {
+          "kms:EncryptionContext:gab": "subject-dek",
+          "kms:EncryptionContext:purpose": "subject-dek"
+        }
+      }
+    },
+    {
+      "Sid": "WrapHmacKeys",
+      "Effect": "Allow",
+      "Action": ["kms:GenerateDataKey", "kms:Decrypt", "kms:Encrypt"],
+      "Resource": "arn:aws:kms:REGION:ACCOUNT_ID:key/KEY_ID",
+      "Condition": {
+        "StringEquals": {
+          "kms:EncryptionContext:gab": "hmac-key"
+        }
+      }
+    }
+  ]
+}
+```
+
+On the host, set `AWS_ROLE_ARN` to that role and `AWS_WEB_IDENTITY_TOKEN_FILE` to a file that contains the Vercel OIDC token. If `VERCEL_OIDC_TOKEN` is present and the file variable is unset, the first KMS call writes the token to a mode-`0600` file and points `AWS_WEB_IDENTITY_TOKEN_FILE` at it. Do not set `AWS_ACCESS_KEY_ID` or `AWS_SECRET_ACCESS_KEY`.
+
+The global issuer `https://oidc.vercel.com` is a different IAM provider. IAM requires an `aud` condition on that shared issuer. This note does not use it. Preview deployments are not in the trust policy above. Add a preview subject only when a preview should call KMS.
 
 ## Envelope
 
@@ -28,7 +100,23 @@ Unwrapped data keys are cached in the process, keyed by the opaque subject and a
 
 Keep a copy of `GAB_MASTER_KEY` in a separate place Kaan controls, such as a password manager. The master key is not in the database. Losing both the Vercel variable and that copy makes every wrapped data key unreadable.
 
+Keep the same kind of copy of `GAB_HMAC_KEYS`. Those secrets are what recompute identifier hashes. If the Vercel copy is the only copy, a lost environment variable means stored hashes cannot be verified.
+
 Wrapped per-person data keys live in `gab_subject_deks` and travel with the Neon backup. Restoring the database restores those keys. Deleting a row shreds the live database. A backup taken before the delete still contains the wrapped key, and restoring that backup brings the key back.
+
+`seal` still embeds the wrapped data key in one string for callers that need a single value. That form cannot be shredded: deleting the ciphertext deletes the wrapped key with it, and a backup restores both. The shred path is `seal_detached` plus `gab_subject_deks`. A later change can move embedded callers onto that path. This note does not block that change. The detached format and the table are already in place.
+
+### Wrapped HMAC blobs
+
+`GAB_KMS_WRAPPED_HMAC_KEYS` is ciphertext wrapped by the KMS master key. It is not the master key, but it is the only copy of the HMAC key material the process can unwrap. If that variable is lost, identifier hashes cannot be verified even when the KMS key still exists.
+
+Until a database table exists, keep a second copy of that ciphertext in the same password manager as the master key. The planned table stores ciphertext only, apart from any personal data, so a Neon backup carries the blobs and a row can be restored without putting plaintext HMAC keys in the database. This change does not create that table.
+
+### KMS key lifetime, when the future option is turned on
+
+Turn on a deletion window before the key is used. AWS allows 7 to 30 days. Use 30 days. The runtime role above cannot call `ScheduleKeyDeletion`, `DisableKey`, or `PutKeyPolicy`. A separate admin role, not the Vercel role, holds those actions. CloudTrail on the key records `GenerateDataKey`, `Encrypt`, and `Decrypt`. The encryption context carries `subject_ref`, which is the opaque digest, so the trail does not receive the raw subject id.
+
+A multi-region key, or a second backup key in another US region, is not decided. The proof of concept does not create a KMS key. A single-region key in the same region as Neon is the smaller option. A multi-region key survives a regional KMS outage and needs a second region that stays in the US. Record the choice before any key is created.
 
 ## AWS HMAC wrap context
 

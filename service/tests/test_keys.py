@@ -150,22 +150,24 @@ def test_env_provider_is_marked_non_production_and_hides_secrets():
         provider.unseal(sealed, subject_id="prn_other")
 
 
-def test_env_provider_on_production_requires_synthetic_data():
+def test_env_provider_is_refused_in_production_with_no_flag_override():
     blocked = settings_from_env(
-        {"GAB_ENV": "production", "GAB_KEY_PROVIDER": "env", "GAB_HMAC_KEYS": _env_json()}
-    )
-    assert blocked.key_provider is None
-    assert blocked.config_error is not None
-    assert "GAB_SYNTHETIC_DATA" in blocked.config_error
-    assert _HMAC_KEY.decode() not in blocked.config_error
-
-    allowed = settings_from_env(
         {
             "GAB_ENV": "production",
             "GAB_KEY_PROVIDER": "env",
             "GAB_SYNTHETIC_DATA": "1",
+            "GAB_ALLOW_ENV_KEYS": "1",
             "GAB_HMAC_KEYS": _env_json(),
         }
+    )
+    assert blocked.key_provider is None
+    assert blocked.config_error is not None
+    assert "refused" in blocked.config_error
+    assert "GAB_SYNTHETIC_DATA" in blocked.config_error
+    assert _HMAC_KEY.decode() not in blocked.config_error
+
+    allowed = settings_from_env(
+        {"GAB_ENV": "sandbox", "GAB_KEY_PROVIDER": "env", "GAB_HMAC_KEYS": _env_json()}
     )
     assert allowed.config_error is None
     assert allowed.key_provider is not None
@@ -249,11 +251,10 @@ def test_provider_from_env_single_active_kid_skips_other_purposes():
     provider = provider_from_env(
         {
             "GAB_KEY_PROVIDER": "env",
-            "GAB_SYNTHETIC_DATA": "1",
             "GAB_HMAC_ACTIVE_KID": "email-new",
             "GAB_HMAC_KEYS": _env_json(),
         },
-        deployment_env="production",
+        deployment_env="sandbox",
     )
     assert provider.active_kid("identifier") == "email-new"
     assert provider.active_kid("kek") == "local-kek"
@@ -306,16 +307,25 @@ def test_dek_cache_records_a_hit_and_skips_the_second_unwrap(monkeypatch):
     assert [event.cache for event in unwraps] == ["miss", "hit"]
 
 
-def test_master_key_selects_the_env_provider():
-    selected = settings_from_env({"GAB_MASTER_KEY": _b64(_KEK), "GAB_SYNTHETIC_DATA": "1"})
+def test_master_key_selects_the_env_provider_outside_production():
+    selected = settings_from_env({"GAB_ENV": "sandbox", "GAB_MASTER_KEY": _b64(_KEK)})
     assert selected.config_error is None
     assert selected.key_provider.provider == "env"
     assert selected.key_provider.provider != "aws-kms"
     assert selected.key_provider.active_kid("kek") == "master"
     plain, wrapped = selected.key_provider.issue_dek("prn_synthetic")
     assert selected.key_provider.unwrap_dek("prn_synthetic", wrapped) == plain
-    refused = settings_from_env({"GAB_MASTER_KEY": _b64(_KEK)})
-    assert "GAB_SYNTHETIC_DATA" in (refused.config_error or "")
+    sealed = selected.key_provider.seal(b"SYNTHETIC TEST DATA", subject_id="prn_synthetic")
+    assert selected.key_provider.unseal(sealed, subject_id="prn_synthetic") == b"SYNTHETIC TEST DATA"
+    assert selected.key_provider.unseal(sealed, subject_id="prn_synthetic") == b"SYNTHETIC TEST DATA"
+    unwraps = [event for event in selected.key_provider.usage() if event.operation == "unwrap_dek"]
+    seals = [event for event in selected.key_provider.usage() if event.operation == "unseal"]
+    assert unwraps and unwraps[0].cache == "hit"
+    assert seals and seals[0].latency_ms >= 0
+    refused = settings_from_env(
+        {"GAB_MASTER_KEY": _b64(_KEK), "GAB_SYNTHETIC_DATA": "1", "GAB_ALLOW_ENV_KEYS": "1"}
+    )
+    assert "refused" in (refused.config_error or "")
     assert settings_from_env({}).key_provider is None
 
 
@@ -396,12 +406,41 @@ def test_boto3_client_stays_lazy_and_accepts_a_stubber():
         {"Plaintext": plaintext, "KeyId": _MASTER},
         {"CiphertextBlob": blob, "EncryptionContext": context, "KeyId": _MASTER},
     )
+    stubber.add_response(
+        "encrypt",
+        {"CiphertextBlob": blob},
+        {"KeyId": _MASTER, "Plaintext": plaintext, "EncryptionContext": context},
+    )
     with stubber:
         dek, wrapped = fresh.generate_data_key(key_id=_MASTER, encryption_context=context)
         opened = fresh.decrypt(key_id=_MASTER, ciphertext=wrapped, encryption_context=context)
+        encrypted = fresh.encrypt(key_id=_MASTER, plaintext=plaintext, encryption_context=context)
     assert dek == plaintext == opened
-    assert wrapped == blob
+    assert wrapped == blob == encrypted
     assert "prn_synthetic" not in json.dumps(context)
+    stubber.assert_no_pending_responses()
+
+
+def test_boto3_client_uses_web_identity_and_refuses_static_keys(monkeypatch):
+    pytest.importorskip("boto3")
+    from kata_service.keys import Boto3KmsClient
+
+    for name in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_WEB_IDENTITY_TOKEN_FILE"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("AWS_ROLE_ARN", "arn:aws:iam::000000000000:role/gab-example")
+    monkeypatch.setenv("VERCEL_OIDC_TOKEN", "SYNTHETIC TEST DATA oidc")
+    client = Boto3KmsClient("us-east-1")
+    raw = client._boto()
+    assert raw.meta.service_model.service_name == "kms"
+    written = Path(os.environ["AWS_WEB_IDENTITY_TOKEN_FILE"]).read_text(encoding="utf-8")
+    assert written == "SYNTHETIC TEST DATA oidc"
+    rendered = " ".join(str(value) for value in client.__dict__.values() if isinstance(value, str))
+    assert "SYNTHETIC TEST DATA oidc" not in rendered
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIA_SYNTHETIC")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "synthetic-secret")
+    refused = Boto3KmsClient("us-east-1")
+    with pytest.raises(KeyCustodyError, match="AWS_ACCESS_KEY_ID"):
+        refused._boto()
 
 
 def test_custody_doc_states_the_accepted_risk():
@@ -411,4 +450,11 @@ def test_custody_doc_states_the_accepted_risk():
     assert "Neon backup" in text
     assert "not the default" in text
     assert "import boto3 at startup" in text
+    assert "AssumeRoleWithWebIdentity" in text
+    assert "kms:GenerateDataKey" in text
+    assert "kms:Decrypt" in text
+    assert "kms:Encrypt" in text
+    assert "AWS_ACCESS_KEY_ID" in text
+    assert "deletion window" in text
+    assert "do not override" in text
     assert "kata-service-omega.vercel.app" not in text
