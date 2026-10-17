@@ -42,7 +42,7 @@ Set these in the host environment. The current proof-of-concept host is a Vercel
 | `DATABASE_URL` | yes | yes | Pooled Neon URL. The Marketplace sets this when the integration is connected. |
 | `DATABASE_URL_UNPOOLED` | no | yes | Direct Neon URL for `CREATE TABLE`. The Marketplace sets this too. |
 | `KATA_LOG_SIGNING_SEED` | yes | yes | Base64 of a 32-byte Ed25519 seed. Signs transparency-log tree heads. |
-| `KATA_PUSH_NOTIFIER_JWK` | yes | no | Public JWK JSON of the key that signs revocation push webhooks. Ed25519 or P-256. Members are limited to `kty`, `crv`, `x`, `y`, `kid`, `alg`, `use`, and `key_ops`. A private `d` parameter is rejected, and so is any other member. |
+| `KATA_PUSH_NOTIFIER_JWK` | yes | no | Public JWK JSON of the key that verifies revocation push. Parsed by the shared `public_key_from_jwk` rules below. |
 | `KATA_APPEND_TOKEN` | yes | yes | Bearer token for `POST /v1/log/entries`. |
 | `KATA_PUBLISHED_KEYS` | no | no | JSON array of extra `.well-known` key records. Each record has a public `public_key`. |
 | `KATA_FX_SOURCE_URL` | no | no | Daily rate origin. Default `https://api.frankfurter.dev/v1` (ECB rates, no API key). |
@@ -82,6 +82,8 @@ Set these in the host environment. The current proof-of-concept host is a Vercel
 | `GAB_KMS_WRAPPED_HMAC_KEYS` | no | yes | JSON of HMAC keys already wrapped by the master key. Ciphertext only. |
 | `GAB_SUBJECT_REF_KEY` | for subject refs | yes | 32-byte key, base64. Keys `subject_ref` on both `env` and `aws-kms`. It is not the wrapping key. Rotating the wrapping key does not change `subject_ref`. |
 | `GAB_SUBJECT_REF_KID` | no | no | Id of `GAB_SUBJECT_REF_KEY`. Unset means `subject-ref`. |
+
+`public_key_from_jwk` is the shared parser. Agent registration, mandate and agreement keys, institution keys, `KATA_PUBLISHED_KEYS`, the SDK, and `KATA_PUSH_NOTIFIER_JWK` all go through it. The object may contain only `kty`, `crv`, `x`, `y`, `kid`, `alg`, `use`, and `key_ops`, and it must be Ed25519 or P-256. A private `d` is rejected. Any other member is rejected, including a WebCrypto `ext` field. If `use` is present it must be `sig`. If `key_ops` is present it must be an array whose values are only `verify`. If `alg` is present it must be `EdDSA` for Ed25519 and `ES256` for P-256.
 
 Generate a log seed, a push notifier, and an append token:
 

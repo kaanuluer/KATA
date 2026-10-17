@@ -46,6 +46,39 @@ def test_allowed_jwk_members_are_accepted():
     assert public_key_from_jwk(minimal).fingerprint == ed["kid"]
 
 
+def test_use_key_ops_and_alg_values_are_checked():
+    ed = _public("EdDSA")
+    bad_use = dict(ed)
+    bad_use["use"] = "enc"
+    with pytest.raises(KataError, match="JWK use must be sig"):
+        public_key_from_jwk(bad_use)
+
+    bad_ops = dict(ed)
+    bad_ops["key_ops"] = ["verify", "sign"]
+    with pytest.raises(KataError, match="subset"):
+        public_key_from_jwk(bad_ops)
+
+    not_a_list = dict(ed)
+    not_a_list["key_ops"] = "verify"
+    with pytest.raises(KataError, match="subset"):
+        public_key_from_jwk(not_a_list)
+
+    empty_ops = dict(ed)
+    empty_ops["key_ops"] = []
+    assert public_key_from_jwk(empty_ops).algorithm == "EdDSA"
+
+    wrong_alg = dict(ed)
+    wrong_alg["alg"] = "ES256"
+    with pytest.raises(KataError, match="JWK alg does not match the key type"):
+        public_key_from_jwk(wrong_alg)
+
+    ec = _public("ES256")
+    swapped = dict(ec)
+    swapped["alg"] = "EdDSA"
+    with pytest.raises(KataError, match="JWK alg does not match the key type"):
+        public_key_from_jwk(swapped)
+
+
 def test_private_jwk_is_still_rejected():
     jwk = _public("EdDSA")
     jwk["d"] = "SYNTHETIC"
