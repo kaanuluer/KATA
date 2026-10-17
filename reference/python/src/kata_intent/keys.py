@@ -8,7 +8,10 @@ Version 1 accepts two algorithms, named on the mandate:
 - ``ES256`` — ECDSA P-256 with SHA-256 (JWS). The fingerprint is SHA-256 of the 64-byte ``x || y``.
 
 JWS signatures for ES256 are the raw 32-byte ``R || S`` encoding, not DER.
-The private ``d`` parameter is rejected on every public JWK.
+The private ``d`` parameter is rejected on every public JWK. Any other member
+outside ``kty``, ``crv``, ``x``, ``y``, ``kid``, ``alg``, ``use``, and ``key_ops``
+is rejected as well. ``use`` must be ``sig`` when present. ``key_ops`` must be
+a list of ``verify`` only when present. ``alg`` must match the key type.
 """
 
 from __future__ import annotations
@@ -34,7 +37,21 @@ from cryptography.hazmat.primitives.serialization import (
 from kata_intent.errors import KataError
 
 ALGORITHMS = frozenset({"EdDSA", "ES256"})
+_PUBLIC_JWK_MEMBERS = frozenset({"kty", "crv", "x", "y", "kid", "alg", "use", "key_ops"})
 _P256_ORDER = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
+
+
+def _public_jwk_hints(jwk: dict[str, Any], algorithm: str) -> None:
+    """Check optional public members. Absent members are left alone."""
+
+    if "use" in jwk and jwk["use"] != "sig":
+        raise KataError("JWK use must be sig")
+    if "key_ops" in jwk:
+        ops = jwk["key_ops"]
+        if not isinstance(ops, list) or any(item != "verify" for item in ops):
+            raise KataError('JWK key_ops must be a subset of ["verify"]')
+    if "alg" in jwk and jwk["alg"] != algorithm:
+        raise KataError("JWK alg does not match the key type")
 
 
 def _b64url(data: bytes) -> str:
@@ -161,27 +178,46 @@ def private_key_from_seed(seed: bytes, algorithm: str = "EdDSA") -> PrivateKey:
 
 
 def public_key_from_jwk(jwk: dict[str, Any]) -> PublicKey:
-    """Read a public JWK. A private ``d`` parameter is rejected so it is never stored on a mandate."""
+    """Read a public Ed25519 or P-256 JWK.
+
+    This is the shared parser for agent registration, mandate and agreement
+    keys, institution keys, published keys, the SDK, and the revocation-push
+    notifier. A private ``d`` parameter is rejected so it is never stored.
+    Members other than ``kty``, ``crv``, ``x``, ``y``, ``kid``, ``alg``,
+    ``use``, and ``key_ops`` are rejected, including a WebCrypto ``ext`` field.
+    ``use`` must be ``sig`` when present. ``key_ops`` must be a list of
+    ``verify`` only when present. ``alg`` must be ``EdDSA`` for Ed25519 and
+    ``ES256`` for P-256 when present.
+    """
 
     if not isinstance(jwk, dict):
         raise KataError("JWK must be an object")
     if "d" in jwk:
         raise KataError("refusing a private JWK")
+    unknown = sorted(set(jwk) - _PUBLIC_JWK_MEMBERS)
+    if unknown:
+        names = ", ".join(unknown)
+        raise KataError(f"JWK member is not allowed: {names}")
     kty = jwk.get("kty")
     crv = jwk.get("crv")
     if kty == "OKP" and crv == "Ed25519":
+        algorithm = "EdDSA"
+    elif kty == "EC" and crv == "P-256":
+        algorithm = "ES256"
+    else:
+        raise KataError("JWK must be Ed25519 or P-256")
+    _public_jwk_hints(jwk, algorithm)
+    if algorithm == "EdDSA":
         x = jwk.get("x")
         if not isinstance(x, str):
             raise KataError("JWK is missing x")
-        key = PublicKey(_b64url_decode(x), "EdDSA")
-    elif kty == "EC" and crv == "P-256":
+        key = PublicKey(_b64url_decode(x), algorithm)
+    else:
         x = jwk.get("x")
         y = jwk.get("y")
         if not isinstance(x, str) or not isinstance(y, str):
             raise KataError("JWK is missing x or y")
-        key = PublicKey(_b64url_decode(x) + _b64url_decode(y), "ES256")
-    else:
-        raise KataError("JWK must be Ed25519 or P-256")
+        key = PublicKey(_b64url_decode(x) + _b64url_decode(y), algorithm)
     kid = jwk.get("kid")
     if kid is not None and kid != key.fingerprint:
         raise KataError("JWK kid does not match the public key fingerprint")

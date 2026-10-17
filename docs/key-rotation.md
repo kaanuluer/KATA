@@ -17,10 +17,12 @@ GAB is an agent bureau. KATA is the framework.
 | `GAB_ADMIN_TOKEN` | Bearer for admin routes, including organization creation |
 | `KATA_LOG_SIGNING_SEED` | Signs the transparency log and bureau alert webhooks |
 | `KATA_APPEND_TOKEN` | Authorizes appends to the log |
-| `KATA_PUSH_NOTIFIER_JWK` | Public key that verifies revocation push. Rotating it means publishing the new public key and keeping the private key off the server |
+| `KATA_PUSH_NOTIFIER_JWK` | Public key that verifies revocation push. Rotating it means publishing the new public key and keeping the private key off the server. The value is read by the shared `public_key_from_jwk` parser described below. |
 | `GAB_HMAC_KEYS` | Non-production env provider only. A new kid changes new HMAC outputs. Keep the old kid until stored identifiers are re-keyed. Do not commit the JSON. |
 | `GAB_KMS_KEY_ID` | AWS KMS master key that wraps data keys. Rotate inside KMS and re-wrap data keys. Do not export the master key. |
 | `GAB_KMS_WRAPPED_HMAC_KEYS` | HMAC data keys already wrapped by the master key. Add a new wrapped kid and keep the old one until lookups are re-keyed. |
+
+`public_key_from_jwk` is the shared parser. Agent registration, mandate and agreement keys, institution keys, `KATA_PUBLISHED_KEYS`, the SDK, and `KATA_PUSH_NOTIFIER_JWK` all go through it. The object may contain only `kty`, `crv`, `x`, `y`, `kid`, `alg`, `use`, and `key_ops`, and it must be Ed25519 or P-256. A private `d` is rejected. Any other member is rejected, including a WebCrypto `ext` field. If `use` is present it must be `sig`. If `key_ops` is present it must be an array whose values are only `verify`. If `alg` is present it must be `EdDSA` for Ed25519 and `ES256` for P-256.
 
 `DATABASE_URL` and `DATABASE_URL_UNPOOLED` come from the database host. On the proof of concept that host is Neon. Rotate credentials at the database, then update the host environment. Do not paste a database URL into a pull request.
 
