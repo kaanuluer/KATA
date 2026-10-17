@@ -62,6 +62,8 @@ class Settings:
     consent_events: bool = False
     consent_push: bool = False
     consent_network: bool = False
+    entity_only: bool = False
+    network_step_up: bool = False
 
     def log_key(self) -> PrivateKey | None:
         if self.log_signing_seed is None:
@@ -107,6 +109,8 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
     consent_network = _flag(env.get("GAB_CONSENT_NETWORK"))
     if error is None and (consent_push or consent_network) and not consent_events:
         error = "consent purposes need GAB_CONSENT_EVENTS=1"
+    entity_only = _flag(env.get("GAB_ENTITY_ONLY"))
+    network_step_up = _flag(env.get("GAB_NETWORK_STEP_UP"))
     return Settings(
         database_url=database_url,
         schema_url=schema_url,
@@ -148,6 +152,8 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
         consent_events=consent_events,
         consent_push=consent_push,
         consent_network=consent_network,
+        entity_only=entity_only,
+        network_step_up=network_step_up,
     )
 
 
