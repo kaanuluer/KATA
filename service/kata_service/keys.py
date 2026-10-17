@@ -1,0 +1,839 @@
+# Copyright 2026 Kaan Uluer
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+"""Key providers for keyed HMAC and envelope encryption.
+
+The production custody model is a KMS master key (KEK) that wraps per-subject
+data keys (DEKs). The master key is not exported into this process. AWS KMS is
+the first implementation of that interface. Another provider can implement the
+same ``KmsClient`` methods later. Nothing here assumes a particular app host.
+
+``EnvKeyProvider`` is NON-PRODUCTION. It holds key bytes from the process
+environment. It exists for unit tests and for the current PoC, which has no
+KMS account. Do not describe it as production key custody.
+
+HMAC outputs use ``v1:<kid>:<hex>``. The message is
+``gab-hmac-v1 || NUL || purpose || NUL || value``. ``token_hash`` of high-entropy
+secrets stays plain SHA-256 and does not use this module.
+
+This module does not claim legal compliance or certification.
+"""
+
+from __future__ import annotations
+
+import base64
+import hashlib
+import hmac
+import json
+import os
+import threading
+from dataclasses import dataclass
+from typing import Protocol
+
+ENV_PROVIDER_NOTICE = (
+    "NON-PRODUCTION: this provider holds key material from the environment. "
+    "It is for unit tests and the PoC host only. Production custody is a KMS "
+    "master key that wraps per-subject data keys."
+)
+
+_HMAC_VERSION = "v1"
+_KID_MAX = 64
+_PURPOSES = frozenset({"identifier", "rate", "subject", "network", "kek"})
+_HMAC_PREFIX = b"gab-hmac-v1"
+_DEK_AAD = b"gab-dek-v1"
+_SEAL_AAD = b"gab-seal-v1"
+
+
+class KeyCustodyError(Exception):
+    """A key operation failed. The message names the setting, never the secret."""
+
+
+class KmsClient(Protocol):
+    """Host-neutral KMS calls. AWS KMS is one implementation."""
+
+    def generate_data_key(self, *, key_id: str, encryption_context: dict[str, str]) -> tuple[bytes, bytes]:
+        """Return ``(plaintext_dek, ciphertext_blob)``."""
+
+    def encrypt(self, *, key_id: str, plaintext: bytes, encryption_context: dict[str, str]) -> bytes:
+        """Wrap ``plaintext`` with the master key. Return the ciphertext blob."""
+
+    def decrypt(self, *, key_id: str, ciphertext: bytes, encryption_context: dict[str, str]) -> bytes:
+        """Unwrap a blob that was produced with the same encryption context."""
+
+
+@dataclass(frozen=True)
+class HmacToken:
+    version: str
+    kid: str
+    digest_hex: str
+
+    def encode(self) -> str:
+        return f"{self.version}:{self.kid}:{self.digest_hex}"
+
+
+@dataclass(frozen=True)
+class KeyProviderInfo:
+    provider: str
+    custody: str
+    production_custody: bool
+    notice: str
+    purposes: dict[str, dict[str, object]]
+
+
+def hmac_message(purpose: str, value: str) -> bytes:
+    _purpose(purpose)
+    if purpose == "kek":
+        raise KeyCustodyError("kek is a wrapping purpose, not an HMAC purpose")
+    text = _value(value)
+    return _HMAC_PREFIX + b"\x00" + purpose.encode("utf-8") + b"\x00" + text.encode("utf-8")
+
+
+def hmac_encryption_context(purpose: str, kid: str) -> dict[str, str]:
+    """Context that must be supplied when a KMS wraps or unwraps an HMAC key."""
+
+    _purpose(purpose)
+    _kid(kid)
+    return {"gab": "hmac-key", "purpose": purpose, "kid": kid}
+
+
+def dek_encryption_context(subject_id: str) -> dict[str, str]:
+    return {"gab": "subject-dek", "purpose": "subject-dek", "subject_id": _subject(subject_id)}
+
+
+def parse_hmac_token(token: str) -> HmacToken | None:
+    parts = token.split(":")
+    if len(parts) != 3:
+        return None
+    version, kid, digest = parts
+    if version != _HMAC_VERSION:
+        return None
+    try:
+        _kid(kid)
+    except KeyCustodyError:
+        return None
+    if len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
+        return None
+    return HmacToken(version, kid, digest)
+
+
+class EnvKeyProvider:
+    """NON-PRODUCTION key ring read from ``GAB_HMAC_KEYS``.
+
+    HMAC secrets and the local KEK live in process memory. A KMS master key
+    does not. ``production_custody`` is always false.
+    """
+
+    provider = "env"
+    custody = "non-production-env"
+
+    def __init__(
+        self,
+        ring: dict[str, dict[str, object]],
+        active: dict[str, str] | None = None,
+        *,
+        active_strict: bool = True,
+    ) -> None:
+        self._keys: dict[str, bytes] = {}
+        self._purposes: dict[str, list[str]] = {}
+        self._active: dict[str, str] = {}
+        cleaned = _normalize_ring(ring)
+        for kid, record in cleaned.items():
+            self._keys[kid] = record["secret"]
+            for purpose in record["purposes"]:
+                self._purposes.setdefault(purpose, []).append(kid)
+                if record["active"] and purpose not in self._active:
+                    self._active[purpose] = kid
+        for purpose, kids in self._purposes.items():
+            self._active.setdefault(purpose, kids[-1])
+        _apply_active_map(
+            self._active,
+            {purpose: list(kids) for purpose, kids in self._purposes.items()},
+            active,
+            strict=active_strict,
+        )
+        if not self._keys:
+            raise KeyCustodyError("the env key ring is empty")
+
+    @property
+    def production_custody(self) -> bool:
+        return False
+
+    def notice(self) -> str:
+        return ENV_PROVIDER_NOTICE
+
+    def info(self) -> KeyProviderInfo:
+        purposes: dict[str, dict[str, object]] = {}
+        for purpose, kids in sorted(self._purposes.items()):
+            purposes[purpose] = {"active_kid": self._active.get(purpose), "kids": list(kids)}
+        return KeyProviderInfo(self.provider, self.custody, False, ENV_PROVIDER_NOTICE, purposes)
+
+    def __repr__(self) -> str:
+        kids = ",".join(sorted(self._keys))
+        return f"EnvKeyProvider(NON-PRODUCTION, kids={kids})"
+
+    def active_kid(self, purpose: str) -> str:
+        _purpose(purpose)
+        kid = self._active.get(purpose)
+        if kid is None:
+            raise KeyCustodyError(f"no HMAC key is configured for purpose {purpose}")
+        return kid
+
+    def kids_for(self, purpose: str) -> list[str]:
+        _purpose(purpose)
+        return list(self._purposes.get(purpose, []))
+
+    def hmac(self, value: str, *, purpose: str) -> HmacToken:
+        return self._hmac_kid(self.active_kid(purpose), value, purpose)
+
+    def hmac_tokens(self, value: str, *, purpose: str) -> list[HmacToken]:
+        active = self.active_kid(purpose)
+        order = [active] + [kid for kid in self.kids_for(purpose) if kid != active]
+        return [self._hmac_kid(kid, value, purpose) for kid in order]
+
+    def verify(self, token: str, value: str, *, purpose: str) -> bool:
+        parsed = parse_hmac_token(token)
+        if parsed is None or parsed.kid not in self._purposes.get(purpose, []):
+            hmac.compare_digest("0" * 64, "0" * 64)
+            return False
+        expected = self._hmac_kid(parsed.kid, value, purpose).digest_hex
+        return hmac.compare_digest(expected, parsed.digest_hex)
+
+    def issue_dek(self, subject_id: str) -> tuple[bytes, bytes]:
+        """Return ``(plaintext_dek, wrapped_blob)``. The caller wipes the plaintext."""
+
+        subject = _subject(subject_id)
+        kek, kek_id = self._kek()
+        dek = os.urandom(32)
+        wrapped = _wrap_with_aes(kek, kek_id, dek, _dek_aad(subject))
+        return dek, wrapped
+
+    def unwrap_dek(self, subject_id: str, wrapped: bytes) -> bytes:
+        subject = _subject(subject_id)
+        kek_id, nonce, ciphertext = _split_wrapped(wrapped)
+        kek = self._keys.get(kek_id)
+        if kek is None or kek_id not in self._purposes.get("kek", []):
+            raise KeyCustodyError("wrapped data key does not match a local kek")
+        return _open_aes(kek, nonce, ciphertext, _dek_aad(subject))
+
+    def seal(self, plaintext: bytes, *, subject_id: str) -> str:
+        subject = _subject(subject_id)
+        dek, wrapped = self.issue_dek(subject)
+        try:
+            return _encode_seal(subject, dek, plaintext, wrapped)
+        finally:
+            _wipe(dek)
+
+    def unseal(self, encoded: str, *, subject_id: str) -> bytes:
+        subject, dek_wrapped, nonce, ciphertext = _decode_seal(encoded, subject_id)
+        dek = self.unwrap_dek(subject, dek_wrapped)
+        try:
+            return _open_aes(dek, nonce, ciphertext, _seal_aad(subject))
+        finally:
+            _wipe(dek)
+
+    def _hmac_kid(self, kid: str, value: str, purpose: str) -> HmacToken:
+        if purpose == "kek" or kid not in self._purposes.get(purpose, []):
+            raise KeyCustodyError(f"no HMAC key is configured for purpose {purpose}")
+        digest = hmac.new(self._keys[kid], hmac_message(purpose, value), hashlib.sha256).hexdigest()
+        return HmacToken(_HMAC_VERSION, kid, digest)
+
+    def _kek(self) -> tuple[bytes, str]:
+        kid = self._active.get("kek")
+        if kid is None:
+            raise KeyCustodyError("no kek is configured for envelope encryption")
+        return self._keys[kid], kid
+
+
+class AwsKmsEnvelopeProvider:
+    """AWS KMS envelope provider.
+
+    The master key stays in KMS. This process sees plaintext data keys only
+    after KMS unwraps them. HMAC keys are data keys wrapped by that master
+    key (``GAB_KMS_WRAPPED_HMAC_KEYS``). Per-subject DEKs come from
+    ``GenerateDataKey`` and are wrapped by the same master key.
+    """
+
+    provider = "aws-kms"
+    custody = "aws-kms-envelope"
+
+    def __init__(
+        self,
+        *,
+        key_id: str,
+        region: str,
+        wrapped_hmac: dict[str, list[dict[str, object]]] | None = None,
+        client: KmsClient | None = None,
+        active: dict[str, str] | None = None,
+        active_strict: bool = True,
+    ) -> None:
+        self.key_id = _kms_key_id(key_id)
+        self.region = _region(region)
+        self._client = client
+        self._lock = threading.Lock()
+        self._cache: dict[str, bytes] = {}
+        self._wrapped: dict[str, list[dict[str, str]]] = {}
+        self._active: dict[str, str] = {}
+        for purpose, records in (wrapped_hmac or {}).items():
+            _purpose(purpose)
+            if purpose == "kek":
+                raise KeyCustodyError("the KMS master key is the kek; do not put a kek in the HMAC ring")
+            normalized = []
+            for record in records:
+                kid = _kid(str(record["kid"]))
+                blob = str(record["wrapped"])
+                if not blob or len(blob) > 20000:
+                    raise KeyCustodyError("a wrapped HMAC key blob is missing or too large")
+                normalized.append({"kid": kid, "wrapped": blob})
+                if record.get("active") and purpose not in self._active:
+                    self._active[purpose] = kid
+            if not normalized:
+                continue
+            self._wrapped[purpose] = normalized
+            self._active.setdefault(purpose, normalized[-1]["kid"])
+        _apply_active_map(
+            self._active,
+            {purpose: [item["kid"] for item in records] for purpose, records in self._wrapped.items()},
+            active,
+            strict=active_strict,
+        )
+
+    @property
+    def production_custody(self) -> bool:
+        return True
+
+    def notice(self) -> str:
+        return (
+            "Master key stays in AWS KMS and wraps per-subject data keys. "
+            "This is key-custody machinery, not a certification."
+        )
+
+    def info(self) -> KeyProviderInfo:
+        purposes = {
+            purpose: {"active_kid": self._active.get(purpose), "kids": [item["kid"] for item in records]}
+            for purpose, records in sorted(self._wrapped.items())
+        }
+        return KeyProviderInfo(self.provider, self.custody, True, self.notice(), purposes)
+
+    def __repr__(self) -> str:
+        return f"AwsKmsEnvelopeProvider(region={self.region}, key_id={self.key_id})"
+
+    def active_kid(self, purpose: str) -> str:
+        _purpose(purpose)
+        kid = self._active.get(purpose)
+        if kid is None:
+            raise KeyCustodyError(f"no HMAC key is configured for purpose {purpose}")
+        return kid
+
+    def kids_for(self, purpose: str) -> list[str]:
+        return [item["kid"] for item in self._wrapped.get(purpose, [])]
+
+    def hmac(self, value: str, *, purpose: str) -> HmacToken:
+        return self._hmac_kid(self.active_kid(purpose), value, purpose)
+
+    def hmac_tokens(self, value: str, *, purpose: str) -> list[HmacToken]:
+        active = self.active_kid(purpose)
+        order = [active] + [kid for kid in self.kids_for(purpose) if kid != active]
+        return [self._hmac_kid(kid, value, purpose) for kid in order]
+
+    def verify(self, token: str, value: str, *, purpose: str) -> bool:
+        parsed = parse_hmac_token(token)
+        if parsed is None or parsed.kid not in self.kids_for(purpose):
+            hmac.compare_digest("0" * 64, "0" * 64)
+            return False
+        expected = self._hmac_kid(parsed.kid, value, purpose).digest_hex
+        return hmac.compare_digest(expected, parsed.digest_hex)
+
+    def issue_dek(self, subject_id: str) -> tuple[bytes, bytes]:
+        subject = _subject(subject_id)
+        plaintext, blob = _kms_unwrap(
+            lambda: self._kms().generate_data_key(
+                key_id=self.key_id,
+                encryption_context=dek_encryption_context(subject),
+            )
+        )
+        if len(plaintext) != 32:
+            raise KeyCustodyError("KMS data key was not 32 bytes")
+        wrapped = _pack_kms_dek(self.key_id, blob)
+        return plaintext, wrapped
+
+    def unwrap_dek(self, subject_id: str, wrapped: bytes) -> bytes:
+        subject = _subject(subject_id)
+        key_id, blob = _unpack_kms_dek(wrapped)
+        if key_id != self.key_id:
+            raise KeyCustodyError("wrapped data key was not produced for this master key")
+        plaintext = _kms_unwrap(
+            lambda: self._kms().decrypt(
+                key_id=self.key_id,
+                ciphertext=blob,
+                encryption_context=dek_encryption_context(subject),
+            )
+        )
+        if len(plaintext) != 32:
+            raise KeyCustodyError("KMS data key was not 32 bytes")
+        return plaintext
+
+    def seal(self, plaintext: bytes, *, subject_id: str) -> str:
+        subject = _subject(subject_id)
+        dek, wrapped = self.issue_dek(subject)
+        try:
+            return _encode_seal(subject, dek, plaintext, wrapped)
+        finally:
+            _wipe(dek)
+
+    def unseal(self, encoded: str, *, subject_id: str) -> bytes:
+        subject, dek_wrapped, nonce, ciphertext = _decode_seal(encoded, subject_id)
+        dek = self.unwrap_dek(subject, dek_wrapped)
+        try:
+            return _open_aes(dek, nonce, ciphertext, _seal_aad(subject))
+        finally:
+            _wipe(dek)
+
+    def _hmac_kid(self, kid: str, value: str, purpose: str) -> HmacToken:
+        secret = self._hmac_secret(purpose, kid)
+        digest = hmac.new(secret, hmac_message(purpose, value), hashlib.sha256).hexdigest()
+        return HmacToken(_HMAC_VERSION, kid, digest)
+
+    def _hmac_secret(self, purpose: str, kid: str) -> bytes:
+        cache_id = purpose + "\x00" + kid
+        with self._lock:
+            cached = self._cache.get(cache_id)
+        if cached is not None:
+            return cached
+        record = next((item for item in self._wrapped.get(purpose, []) if item["kid"] == kid), None)
+        if record is None:
+            raise KeyCustodyError(f"no HMAC key is configured for purpose {purpose}")
+        try:
+            blob = _b64decode(record["wrapped"])
+        except ValueError as exc:
+            raise KeyCustodyError("a wrapped HMAC key is not valid base64") from exc
+        plaintext = _kms_unwrap(
+            lambda: self._kms().decrypt(
+                key_id=self.key_id,
+                ciphertext=blob,
+                encryption_context=hmac_encryption_context(purpose, kid),
+            )
+        )
+        if len(plaintext) != 32:
+            raise KeyCustodyError("unwrapped HMAC key was not 32 bytes")
+        with self._lock:
+            self._cache[cache_id] = plaintext
+        return plaintext
+
+    def _kms(self) -> KmsClient:
+        if self._client is not None:
+            return self._client
+        self._client = Boto3KmsClient(self.region)
+        return self._client
+
+
+class Boto3KmsClient:
+    """Lazy AWS KMS adapter. boto3 is imported on first use, not at process start."""
+
+    def __init__(self, region: str) -> None:
+        self._region = region
+        self._client = None
+
+    def _boto(self):
+        if self._client is None:
+            try:
+                import boto3
+            except ImportError as exc:
+                raise KeyCustodyError("aws-kms needs boto3 installed on the host") from exc
+            self._client = boto3.client("kms", region_name=self._region)
+        return self._client
+
+    def generate_data_key(self, *, key_id: str, encryption_context: dict[str, str]) -> tuple[bytes, bytes]:
+        response = self._boto().generate_data_key(
+            KeyId=key_id,
+            KeySpec="AES_256",
+            EncryptionContext=encryption_context,
+        )
+        return bytes(response["Plaintext"]), bytes(response["CiphertextBlob"])
+
+    def encrypt(self, *, key_id: str, plaintext: bytes, encryption_context: dict[str, str]) -> bytes:
+        response = self._boto().encrypt(KeyId=key_id, Plaintext=plaintext, EncryptionContext=encryption_context)
+        return bytes(response["CiphertextBlob"])
+
+    def decrypt(self, *, key_id: str, ciphertext: bytes, encryption_context: dict[str, str]) -> bytes:
+        response = self._boto().decrypt(
+            CiphertextBlob=ciphertext,
+            EncryptionContext=encryption_context,
+            KeyId=key_id,
+        )
+        return bytes(response["Plaintext"])
+
+
+class InProcessDekStore:
+    """Process-local wrapped-DEK map for tests.
+
+    Not durable, and not a substitute for a store outside the database backup
+    path. Destroying an entry here drops only this process's copy.
+    """
+
+    def __init__(self) -> None:
+        self._items: dict[str, bytes] = {}
+        self._lock = threading.Lock()
+
+    def put(self, subject_id: str, wrapped: bytes) -> None:
+        with self._lock:
+            self._items[_subject(subject_id)] = bytes(wrapped)
+
+    def get(self, subject_id: str) -> bytes | None:
+        with self._lock:
+            item = self._items.get(_subject(subject_id))
+            return None if item is None else bytes(item)
+
+    def destroy(self, subject_id: str) -> bool:
+        with self._lock:
+            return self._items.pop(_subject(subject_id), None) is not None
+
+
+def provider_from_env(env: dict[str, str], *, deployment_env: str) -> EnvKeyProvider | AwsKmsEnvelopeProvider | None:
+    """Build the configured provider.
+
+    Unset ``GAB_KEY_PROVIDER`` returns None (no behavior change). ``env`` is
+    refused when ``deployment_env`` is production unless ``GAB_ALLOW_ENV_KEYS=1``.
+    That flag is the explicit PoC acknowledgement. It does not make the
+    provider production custody.
+    """
+
+    name = _blank(env.get("GAB_KEY_PROVIDER"))
+    if name is None:
+        return None
+    folded = name.lower().replace("_", "-")
+    if folded == "env":
+        allowed = (_blank(env.get("GAB_ALLOW_ENV_KEYS")) or "").lower() in {"1", "true", "yes"}
+        if deployment_env == "production" and not allowed:
+            raise KeyCustodyError(
+                "GAB_KEY_PROVIDER=env is non-production and needs GAB_ALLOW_ENV_KEYS=1 on this host"
+            )
+        ring = _parse_hmac_keys(env.get("GAB_HMAC_KEYS"))
+        active, strict = _parse_active(env.get("GAB_HMAC_ACTIVE_KID"))
+        return EnvKeyProvider(ring, active, active_strict=strict)
+    if folded == "aws-kms":
+        key_id = _blank(env.get("GAB_KMS_KEY_ID"))
+        region = _blank(env.get("GAB_KMS_REGION"))
+        if key_id is None or region is None:
+            raise KeyCustodyError("aws-kms needs GAB_KMS_KEY_ID and GAB_KMS_REGION")
+        wrapped = _parse_wrapped_hmac(env.get("GAB_KMS_WRAPPED_HMAC_KEYS"))
+        active, strict = _parse_active(env.get("GAB_HMAC_ACTIVE_KID"))
+        return AwsKmsEnvelopeProvider(
+            key_id=key_id,
+            region=region,
+            wrapped_hmac=wrapped,
+            active=active,
+            active_strict=strict,
+        )
+    raise KeyCustodyError("GAB_KEY_PROVIDER must be env or aws-kms")
+
+
+def _parse_hmac_keys(raw: str | None) -> dict[str, dict[str, object]]:
+    text = _blank(raw)
+    if text is None:
+        raise KeyCustodyError("GAB_HMAC_KEYS is required for the env provider")
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise KeyCustodyError("GAB_HMAC_KEYS is not valid JSON") from exc
+    if not isinstance(parsed, dict) or not parsed:
+        raise KeyCustodyError("GAB_HMAC_KEYS must be a JSON object of kid to secret")
+    ring: dict[str, dict[str, object]] = {}
+    for kid, value in parsed.items():
+        _kid(str(kid))
+        if isinstance(value, str):
+            ring[str(kid)] = {"secret": _secret_bytes(value), "purposes": ["identifier"], "active": False}
+        elif isinstance(value, dict):
+            secret = value.get("secret")
+            if not isinstance(secret, str):
+                raise KeyCustodyError("GAB_HMAC_KEYS entries need a secret string")
+            purposes = value.get("purposes") or ["identifier"]
+            if not isinstance(purposes, list) or not purposes:
+                raise KeyCustodyError("GAB_HMAC_KEYS purposes must be a non-empty list")
+            for purpose in purposes:
+                _purpose(str(purpose))
+            ring[str(kid)] = {
+                "secret": _secret_bytes(secret),
+                "purposes": [str(item) for item in purposes],
+                "active": bool(value.get("active")),
+            }
+        else:
+            raise KeyCustodyError("GAB_HMAC_KEYS entries must be a secret or an object")
+    return ring
+
+
+def _parse_wrapped_hmac(raw: str | None) -> dict[str, list[dict[str, object]]]:
+    text = _blank(raw)
+    if text is None:
+        return {}
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise KeyCustodyError("GAB_KMS_WRAPPED_HMAC_KEYS is not valid JSON") from exc
+    if not isinstance(parsed, dict):
+        raise KeyCustodyError("GAB_KMS_WRAPPED_HMAC_KEYS must be a JSON object")
+    wrapped: dict[str, list[dict[str, object]]] = {}
+    for purpose, value in parsed.items():
+        _purpose(str(purpose))
+        records = value if isinstance(value, list) else [value]
+        normalized = []
+        for record in records:
+            if not isinstance(record, dict):
+                raise KeyCustodyError("wrapped HMAC records must be objects")
+            kid = record.get("kid")
+            blob = record.get("wrapped")
+            if not isinstance(kid, str) or not isinstance(blob, str):
+                raise KeyCustodyError("wrapped HMAC records need kid and wrapped")
+            normalized.append({"kid": kid, "wrapped": blob, "active": bool(record.get("active"))})
+        wrapped[str(purpose)] = normalized
+    return wrapped
+
+
+def _parse_active(raw: str | None) -> tuple[dict[str, str] | None, bool]:
+    """Return ``(mapping, strict)``. A bare kid is not strict: purposes it does not serve are skipped."""
+
+    text = _blank(raw)
+    if text is None:
+        return None, True
+    if text.startswith("{"):
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise KeyCustodyError("GAB_HMAC_ACTIVE_KID is not valid JSON") from exc
+        if not isinstance(parsed, dict):
+            raise KeyCustodyError("GAB_HMAC_ACTIVE_KID object must map purpose to kid")
+        return {str(purpose): str(kid) for purpose, kid in parsed.items()}, True
+    return {"identifier": text, "rate": text, "subject": text, "network": text}, False
+
+
+def _apply_active_map(
+    current: dict[str, str],
+    available: dict[str, list[str]],
+    active: dict[str, str] | None,
+    *,
+    strict: bool,
+) -> None:
+    if not active:
+        return
+    applied = 0
+    for purpose, kid in active.items():
+        _purpose(purpose)
+        if kid not in available.get(purpose, []):
+            if strict:
+                raise KeyCustodyError(f"active kid {kid} is not enabled for {purpose}")
+            continue
+        current[purpose] = kid
+        applied += 1
+    if applied == 0:
+        raise KeyCustodyError("active kid is not enabled for any configured purpose")
+
+
+def _normalize_ring(ring: dict[str, dict[str, object]]) -> dict[str, dict[str, object]]:
+    cleaned: dict[str, dict[str, object]] = {}
+    for kid, record in ring.items():
+        secret = record.get("secret")
+        purposes = record.get("purposes")
+        if not isinstance(secret, bytes) or len(secret) != 32:
+            raise KeyCustodyError("key material must be 32 bytes")
+        if not isinstance(purposes, list) or not purposes:
+            raise KeyCustodyError("each key needs a purpose")
+        for purpose in purposes:
+            _purpose(str(purpose))
+        cleaned[_kid(str(kid))] = {
+            "secret": secret,
+            "purposes": [str(item) for item in purposes],
+            "active": bool(record.get("active")),
+        }
+    return cleaned
+
+
+def _secret_bytes(value: str) -> bytes:
+    try:
+        raw = _b64decode(value)
+    except ValueError as exc:
+        raise KeyCustodyError("a key secret is not valid base64") from exc
+    if len(raw) != 32:
+        raise KeyCustodyError("a key secret must decode to 32 bytes")
+    return raw
+
+
+def _encode_seal(subject: str, dek: bytes, plaintext: bytes, wrapped: bytes) -> str:
+    nonce = os.urandom(12)
+    ciphertext = _AESGCM(dek).encrypt(nonce, plaintext, _seal_aad(subject))
+    return ".".join(
+        [
+            "gabseal1",
+            "embedded",
+            _b64encode(subject.encode("utf-8")),
+            _b64encode(nonce),
+            _b64encode(ciphertext),
+            _b64encode(wrapped),
+        ]
+    )
+
+
+def _decode_seal(encoded: str, subject_id: str) -> tuple[str, bytes, bytes, bytes]:
+    parts = encoded.split(".")
+    if len(parts) != 6 or parts[0] != "gabseal1" or parts[1] != "embedded":
+        raise KeyCustodyError("ciphertext did not open")
+    try:
+        subject = _b64decode(parts[2]).decode("utf-8")
+        nonce = _b64decode(parts[3])
+        ciphertext = _b64decode(parts[4])
+        wrapped = _b64decode(parts[5])
+    except (ValueError, UnicodeError) as exc:
+        raise KeyCustodyError("ciphertext did not open") from exc
+    if not hmac.compare_digest(_digest(subject), _digest(_subject(subject_id))):
+        raise KeyCustodyError("ciphertext did not open")
+    return subject, wrapped, nonce, ciphertext
+
+
+def _wrap_with_aes(kek: bytes, kek_id: str, dek: bytes, aad: bytes) -> bytes:
+    nonce = os.urandom(12)
+    ciphertext = _AESGCM(kek).encrypt(nonce, dek, aad)
+    kid = kek_id.encode("utf-8")
+    if len(kid) > 255:
+        raise KeyCustodyError("kek id is too long")
+    return bytes([1, len(kid)]) + kid + nonce + ciphertext
+
+
+def _split_wrapped(wrapped: bytes) -> tuple[str, bytes, bytes]:
+    if len(wrapped) < 2 + 12 + 16 or wrapped[0] != 1:
+        raise KeyCustodyError("wrapped data key is not valid")
+    length = wrapped[1]
+    start = 2 + length
+    if start + 12 > len(wrapped):
+        raise KeyCustodyError("wrapped data key is not valid")
+    try:
+        kid = wrapped[2:start].decode("utf-8")
+        _kid(kid)
+    except (UnicodeError, KeyCustodyError) as exc:
+        raise KeyCustodyError("wrapped data key is not valid") from exc
+    nonce = wrapped[start : start + 12]
+    ciphertext = wrapped[start + 12 :]
+    return kid, nonce, ciphertext
+
+
+def _pack_kms_dek(key_id: str, blob: bytes) -> bytes:
+    encoded = key_id.encode("utf-8")
+    if len(encoded) > 2048:
+        raise KeyCustodyError("KMS key id is too long")
+    return b"kms1" + len(encoded).to_bytes(2, "big") + encoded + blob
+
+
+def _unpack_kms_dek(wrapped: bytes) -> tuple[str, bytes]:
+    if len(wrapped) < 6 or not wrapped.startswith(b"kms1"):
+        raise KeyCustodyError("wrapped data key is not valid")
+    length = int.from_bytes(wrapped[4:6], "big")
+    start = 6 + length
+    if start > len(wrapped):
+        raise KeyCustodyError("wrapped data key is not valid")
+    try:
+        key_id = wrapped[6:start].decode("utf-8")
+    except UnicodeError as exc:
+        raise KeyCustodyError("wrapped data key is not valid") from exc
+    return key_id, wrapped[start:]
+
+
+def _kms_unwrap(call):
+    try:
+        return call()
+    except KeyCustodyError:
+        raise
+    except Exception as exc:  # noqa: BLE001 — KMS failures must not echo key material
+        raise KeyCustodyError("KMS did not unwrap the data key") from exc
+
+
+def _open_aes(key: bytes, nonce: bytes, ciphertext: bytes, aad: bytes) -> bytes:
+    try:
+        return _AESGCM(key).decrypt(nonce, ciphertext, aad)
+    except Exception as exc:  # noqa: BLE001 — authentication failures stay generic
+        raise KeyCustodyError("ciphertext did not open") from exc
+
+
+def _AESGCM(key: bytes):
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    return AESGCM(key)
+
+
+def _dek_aad(subject: str) -> bytes:
+    return _DEK_AAD + b"\x00" + subject.encode("utf-8")
+
+
+def _seal_aad(subject: str) -> bytes:
+    return _SEAL_AAD + b"\x00" + subject.encode("utf-8")
+
+
+def _wipe(secret: bytes) -> None:
+    # CPython bytes are immutable. Best-effort overwrite of a private copy.
+    buf = bytearray(secret)
+    for index in range(len(buf)):
+        buf[index] = 0
+
+
+def _digest(value: str) -> bytes:
+    return hashlib.sha256(value.encode("utf-8")).digest()
+
+
+def _b64encode(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def _b64decode(value: str) -> bytes:
+    padding = "=" * (-len(value) % 4)
+    return base64.urlsafe_b64decode(value + padding)
+
+
+def _purpose(purpose: str) -> str:
+    if purpose not in _PURPOSES:
+        raise KeyCustodyError(f"unknown key purpose {purpose}")
+    return purpose
+
+
+def _kid(kid: str) -> str:
+    if not kid or len(kid) > _KID_MAX:
+        raise KeyCustodyError("key id is missing or too long")
+    if kid[0] not in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789":
+        raise KeyCustodyError("key id must start with a letter or digit")
+    allowed = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-"
+    if any(ch not in allowed for ch in kid):
+        raise KeyCustodyError("key id has characters outside letters, digits, dot, underscore, and hyphen")
+    return kid
+
+
+def _value(value: str) -> str:
+    if not isinstance(value, str) or value == "":
+        raise KeyCustodyError("HMAC value is empty")
+    if len(value) > 2000:
+        raise KeyCustodyError("HMAC value is too long")
+    return value
+
+
+def _subject(subject_id: str) -> str:
+    if not isinstance(subject_id, str) or not subject_id.strip():
+        raise KeyCustodyError("subject id is empty")
+    text = subject_id.strip()
+    if len(text) > 200 or any(ord(ch) < 33 or ord(ch) > 126 for ch in text):
+        raise KeyCustodyError("subject id is not a printable identifier")
+    return text
+
+
+def _kms_key_id(value: str) -> str:
+    text = value.strip()
+    if not text or len(text) > 2048 or any(ch.isspace() for ch in text):
+        raise KeyCustodyError("GAB_KMS_KEY_ID is missing or not a single token")
+    return text
+
+
+def _region(value: str) -> str:
+    text = value.strip()
+    parts = text.split("-")
+    if len(parts) < 3 or not all(part.isalnum() for part in parts):
+        raise KeyCustodyError("GAB_KMS_REGION is not a region name")
+    return text
+
+
+def _blank(value: str | None) -> str | None:
+    if value is None:
+        return None
+    text = value.strip()
+    return text or None

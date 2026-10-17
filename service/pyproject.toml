@@ -7,6 +7,7 @@ requires-python = ">=3.11"
 license = "PolyForm-Noncommercial-1.0.0"
 authors = [{name = "Kaan Uluer"}]
 dependencies = [
+  "cryptography>=43",
   "fastapi>=0.117.1",
   "markdown>=3.7",
   "psycopg[binary]>=3.2",

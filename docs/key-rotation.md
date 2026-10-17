@@ -1,6 +1,6 @@
 # Key rotation
 
-The Global Agent Bureau service reads its secrets from the Vercel project `kata-service`. This note says how to rotate them. It does not contain values.
+The Global Agent Bureau service reads its secrets from the host environment. The current proof-of-concept host is the Vercel project `kata-service`. This note says how to rotate them. It does not contain values. A move off that host is described in [migration-plan.md](migration-plan.md). Key custody is in [key-custody.md](key-custody.md).
 
 GAB is an agent bureau. KATA is the framework.
 
@@ -18,8 +18,13 @@ GAB is an agent bureau. KATA is the framework.
 | `KATA_LOG_SIGNING_SEED` | Signs the transparency log and bureau alert webhooks |
 | `KATA_APPEND_TOKEN` | Authorizes appends to the log |
 | `KATA_PUSH_NOTIFIER_JWK` | Public key that verifies revocation push. Rotating it means publishing the new public key and keeping the private key off the server |
+| `GAB_HMAC_KEYS` | Non-production env provider only. A new kid changes new HMAC outputs. Keep the old kid until stored identifiers are re-keyed. Do not commit the JSON. |
+| `GAB_KMS_KEY_ID` | AWS KMS master key that wraps data keys. Rotate inside KMS and re-wrap data keys. Do not export the master key. |
+| `GAB_KMS_WRAPPED_HMAC_KEYS` | HMAC data keys already wrapped by the master key. Add a new wrapped kid and keep the old one until lookups are re-keyed. |
 
-`DATABASE_URL` and `DATABASE_URL_UNPOOLED` come from the Neon integration. Rotate those in Neon, then reconnect the integration. Do not paste a database URL into a pull request.
+`DATABASE_URL` and `DATABASE_URL_UNPOOLED` come from the database host. On the proof of concept that host is Neon. Rotate credentials at the database, then update the host environment. Do not paste a database URL into a pull request.
+
+The steps below are the proof-of-concept procedure on Vercel. Another host uses its own secret store and its own restart. Do not put `GAB_HMAC_KEYS` on a production target; that provider is for tests and the PoC. Production HMAC and envelope keys use `GAB_KEY_PROVIDER=aws-kms`.
 
 ## Steps
 
@@ -33,4 +38,4 @@ Rotating `KATA_LOG_SIGNING_SEED` changes the log public key. Clients that pin th
 
 ## Pull requests
 
-Do not paste demo keys or live secrets into pull request descriptions. Name the variable. Say whether production is unchanged. Leave the value in Vercel.
+Do not paste demo keys or live secrets into pull request descriptions. Name the variable. Say whether production is unchanged. Leave the value in the host secret store.
