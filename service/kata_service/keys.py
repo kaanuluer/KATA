@@ -104,9 +104,9 @@ def hmac_encryption_context(purpose: str, kid: str) -> dict[str, str]:
 def opaque_subject(subject_id: str, key: bytes) -> str:
     """Keyed subject reference. The raw id is not recoverable from this value.
 
-    An unkeyed hash of an email or a name can be guessed. This is
-    HMAC-SHA256(key, ``gab-subject-v1 || NUL || subject``). The env provider
-    uses the active kek. The AWS provider uses ``GAB_SUBJECT_REF_KEY``.
+    An unkeyed hash of an email or a name can be guessed. The digest is
+    HMAC-SHA256 over the label gab-subject-v1, a NUL, and the subject.
+    The env provider uses the active kek. The AWS provider uses ``GAB_SUBJECT_REF_KEY``.
     """
 
     text = _subject(subject_id)
