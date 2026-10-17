@@ -12,7 +12,19 @@ Leaving `GAB_KEY_PROVIDER` unset and leaving `GAB_MASTER_KEY` unset does not cha
 
 `GAB_KEY_PROVIDER=env` is refused when `GAB_ENV` is `production`. `GAB_SYNTHETIC_DATA` and `GAB_ALLOW_ENV_KEYS` do not override this. A proof-of-concept process that needs the env provider sets `GAB_ENV=sandbox`. Real customer personal data requires a KMS decision and the hosting migration first.
 
-`GAB_ENV` defaults to `production` when it is unset. Setting `GAB_MASTER_KEY` or `GAB_KEY_PROVIDER=env` on that default does not select the env provider. Settings load with `config_error` and `key_provider` empty, so envelope encryption and keyed HMAC stay off. This note does not change that default. Kaan decides whether it should.
+`GAB_ENV` defaults to `production` when it is unset. Setting `GAB_MASTER_KEY` or `GAB_KEY_PROVIDER=env` on that default does not select the env provider. Settings load with `config_error` and `key_provider` empty, so envelope encryption and keyed HMAC stay off. This note does not change that default.
+
+## Accepted decision
+
+On 2026-10-17 Kaan approved this: the proof-of-concept key-custody feature runs only in a separate sandbox project. That project sets `GAB_ENV=sandbox` and uses the `gab_sandbox` schema. The feature is not enabled in production. Until a real customer arrives, the only data is synthetic.
+
+The `GAB_ENV` default stays `production`. The production refusal stays. `GAB_SYNTHETIC_DATA` and `GAB_ALLOW_ENV_KEYS` do not override it.
+
+Consequence: setting `GAB_MASTER_KEY` or `GAB_KEY_PROVIDER=env` on the live Vercel production project yields `config_error` and an empty `key_provider`. Envelope encryption and keyed HMAC stay off there.
+
+This decision is reopened when the first real customer arrives, together with the KMS decision and the hosting migration.
+
+`017_subject_deks.sql` still creates `public.gab_subject_deks` only. Migration `006` is what copies bureau tables into `gab_sandbox`. Do not set the master key on the production project. Wiring the sandbox project so wrapped keys stay in `gab_sandbox` is later work. This note does not do that wiring.
 
 Accepted risk: if the Vercel account is compromised the master key is lost too. An attacker who also reads the database can unwrap the data keys.
 
@@ -171,3 +183,32 @@ Do not commit `GAB_MASTER_KEY`, `GAB_HMAC_KEYS`, wrapped blobs, data keys, or da
 A preview with `GAB_KEY_PROVIDER` and `GAB_MASTER_KEY` unset does not select a provider and does not write data keys. This change adds `017_subject_deks.sql`. The service applies additive `CREATE TABLE IF NOT EXISTS` on the first database request. A preview that shares the production database URL creates that empty table there. Leave the master key unset on that preview. Do not put key material in the repository.
 
 Migrations `001` through `010` are already applied in production, including both files numbered `006`. This change does not renumber them. `011` through `016` are absent here because later drafts reserve them: `011` keyed identifiers, `012` consent events, `013` breach register, `014` retention (not written yet), `015` entity kind, `016` ledger payloads. `017_subject_deks.sql` has not been applied. It stays `017` so it does not collide with those files.
+
+## Rebase plan for stacked drafts
+
+Plan only. Do not rebase and do not push `#46` through `#50` until Kaan asks. Nothing here merges.
+
+Rebase onto the tip of `cursor/key-custody-cdba` after this section is on that branch. The parent of this section is `1fc0d3c`. Do not rebase onto `0ea7846`. That commit still lets `GAB_SYNTHETIC_DATA` and `GAB_ALLOW_ENV_KEYS` select the env provider in production.
+
+The stack was built by merging `0ea7846` into each feature branch. Those merge commits (`c8ccd78`, `fc5976d`, `8f2f60f`, `01f732f`) only pull that old key-custody commit. Do not replay them. Cherry-pick the feature commit onto the updated parent, in this order:
+
+1. `#46` `cursor/keyed-identifiers-cdba`, commit `a7cab0b`, onto the final `#45` tip. Then point `#46`'s base at `cursor/key-custody-cdba`.
+2. `#47` `cursor/consent-events-cdba`, commit `12b9e1e`, onto the updated `#46`.
+3. `#48` `cursor/entity-only-cdba`, commit `0083ba3`, onto the updated `#47`.
+4. `#49` `cursor/ledger-hygiene-cdba`, commit `96cb171`, onto the updated `#48`. Also bring forward the integration that exists only in merge `01f732f`: wrapped payload keys in `gab_subject_deks`, and the `DATABASE_URL` check. Do not bring forward `GAB_ALLOW_ENV_KEYS`.
+5. `#50` `cursor/breach-register-cdba`, commit `2c50136`, onto the updated `#49`.
+
+Expected conflicts:
+
+- `docs/migration-plan.md` and a new `docs/migration-plan.vN.md` on every feature commit. `#46` archives `v2`, `#47` archives `v3`, `#48` archives `v4`, `#49` archives `v5`, `#50` archives `v6`. Those numbers now collide with the key-custody archives already on `#45` (`v3` and `v4`, and `v5` once this note is archived). Keep the archives that are already on the parent. Append the feature changelog as the next free version. Do not replace an existing archive with the feature branch's copy.
+- `docs/key-custody.md`, `service/README.md`, and `service/.env.example` on `#46`. The feature text still says `GAB_SYNTHETIC_DATA=1` allows the env provider in production. Keep the parent text. Add only the keyed-identifier sentences.
+- `service/tests/test_package_data.py` on each step. Keep every migration filename. The sorted list grows by `011`, then `012`, then `015`, then `016`, then `013`, and already includes `017`.
+- `service/kata_service/keys.py` on `#49` only. Start from the `#45` file. Re-apply ledger behavior onto it: `seal_detached` now requires the store, `put` does not replace a key, `InProcessDekStore` and `DatabaseDekStore` take a 32-byte subject key, and `opaque_subject` is a keyed HMAC. `asgi.py` on that branch constructs `DatabaseDekStore` with only a connection and `InProcessDekStore` with no arguments. Pass the subject key. `get` hashes its argument. `test_ledger_hygiene.py` calls `dek_store.get` with the ledger body's `subject_ref` (`v1:...`) and then passes that same string to `open_detached` as `subject_id`. Hashing it again will miss the row. Pass the raw principal id, or read the stored reference without hashing twice.
+- `service/kata_service/settings.py` should take the feature flag fields. It should not restore a production bypass.
+
+Tests to adapt. `test_keys.py` on the stacked tips is the old file from `0ea7846`. Leave `#45`'s `test_keys.py` in place. Do not put back tests that expect `GAB_SYNTHETIC_DATA=1` to load the env provider in production.
+
+- `service/tests/test_keyed_identifiers.py` sets `GAB_KEY_PROVIDER=env` and `GAB_ALLOW_ENV_KEYS=1` and does not set `GAB_ENV`. The default is production, so the provider is refused and the rate-limit HMAC assertion fails. Set `GAB_ENV=sandbox` and remove `GAB_ALLOW_ENV_KEYS`.
+- `service/tests/test_ledger_hygiene.py` sets the same flag and expects `config_error` to name `gab_subject_deks` and `DATABASE_URL`. After the rebase the first error is the production refusal, so those strings are absent. Assert that production plus the env provider, with either flag set, yields `config_error` containing `refused` and an empty `key_provider`. Keep the `DATABASE_URL` assertion on a provider that is allowed in production: `GAB_KEY_PROVIDER=aws-kms` with `GAB_KMS_KEY_ID` and `GAB_KMS_REGION`, `GAB_LEDGER_HYGIENE=1`, and no `DATABASE_URL`. Any ledger test that needs the env provider sets `GAB_ENV=sandbox`.
+
+After each cherry-pick, run the service suite with `GAB_TEST_DATABASE_URL` pointed at localhost. Update that draft's description to name the new base. Leave the pull request a draft.

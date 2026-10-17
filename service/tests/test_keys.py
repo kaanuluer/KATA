@@ -470,6 +470,11 @@ def test_custody_doc_states_the_accepted_risk():
     assert "300 seconds" in text
     assert "Another process" in text
     assert "GAB_ENV` defaults to `production" in text
+    assert "Accepted decision" in text
+    assert "2026-10-17" in text
+    assert "gab_sandbox" in text
+    assert "Rebase plan for stacked drafts" in text
+    assert "a7cab0b" in text
     assert "011" in text and "017_subject_deks.sql" in text
     assert "kata-service-omega.vercel.app" not in text
 
