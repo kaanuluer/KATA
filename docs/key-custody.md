@@ -12,6 +12,8 @@ Leaving `GAB_KEY_PROVIDER` unset and leaving `GAB_MASTER_KEY` unset does not cha
 
 `GAB_KEY_PROVIDER=env` is refused when `GAB_ENV` is `production`. `GAB_SYNTHETIC_DATA` and `GAB_ALLOW_ENV_KEYS` do not override this. A proof-of-concept process that needs the env provider sets `GAB_ENV=sandbox`. Real customer personal data requires a KMS decision and the hosting migration first.
 
+`GAB_ENV` defaults to `production` when it is unset. Setting `GAB_MASTER_KEY` or `GAB_KEY_PROVIDER=env` on that default does not select the env provider. Settings load with `config_error` and `key_provider` empty, so envelope encryption and keyed HMAC stay off. This note does not change that default. Kaan decides whether it should.
+
 Accepted risk: if the Vercel account is compromised the master key is lost too. An attacker who also reads the database can unwrap the data keys.
 
 ### Future AWS path: Vercel OIDC, not long-lived keys
@@ -90,11 +92,11 @@ The global issuer `https://oidc.vercel.com` is a different IAM provider. IAM req
 
 ## Envelope
 
-`seal` draws a 32-byte data key, wraps it with `GAB_MASTER_KEY` (or the local `kek` purpose in tests), and encrypts with AES-256-GCM. The subject id is not stored. Callers pass the raw id. The encryption context, the additional data, and `gab_subject_deks.subject_ref` store `opaque_subject`, a SHA-256 of a fixed label and the id.
+`seal` draws a 32-byte data key, wraps it with `GAB_MASTER_KEY` (or the local `kek` purpose in tests), and encrypts with AES-256-GCM. The subject id is not stored. Callers pass the raw id. The encryption context, the additional data, and `gab_subject_deks.subject_ref` store `opaque_subject`. That value is HMAC-SHA256 of a fixed label and the id, keyed by the active kek (or by `GAB_SUBJECT_REF_KEY` on the AWS path). It is not an unkeyed SHA-256, so a person who sees the reference cannot test candidate emails or names without that key.
 
-`seal` can embed the wrapped data key in one string. That form is not shredding: deleting the ciphertext deletes the wrapped key with it, and a backup restores both. The shred path is `seal_detached`: the ciphertext string does not contain the wrapped key. `DatabaseDekStore` writes the wrapped key to `gab_subject_deks`. `shred_subject` deletes that row and drops the process cache.
+`seal` can embed the wrapped data key in one string. That form is not shredding: deleting the ciphertext deletes the wrapped key with it, and a backup restores both. The shred path is `seal_detached` plus the store. The first call inserts the wrapped key. A second call for the same person reuses it, so the first ciphertext stays readable. `DatabaseDekStore.put` inserts with `ON CONFLICT DO NOTHING` and reads the row back, including when two callers insert together. It does not replace an existing key. `shred_subject` is the only delete. It removes the row and clears this process's cache.
 
-Unwrapped data keys are cached in the process, keyed by the opaque subject and a hash of the wrapped blob. A second unwrap of the same blob is a cache hit and does not repeat the wrap operation. Each HMAC, issue, unwrap, seal, and unseal appends a usage event with the operation, purpose, key id, opaque subject, cache hit or miss, and latency in milliseconds. The event does not include plaintext, key bytes, or the raw subject id.
+Unwrapped data keys are cached in the process, keyed by the opaque subject and a hash of the wrapped blob. A cache entry lives for 300 seconds, and the cache holds at most 256 entries. A second unwrap of the same blob inside that window is a cache hit and does not repeat the wrap operation. Shredding clears this process's cache immediately. Another process that already unwrapped the key keeps its copy until that cache entry expires. Each HMAC, issue, unwrap, seal, and unseal appends a usage event with the operation, purpose, key id, opaque subject, cache hit or miss, and latency in milliseconds. The event does not include plaintext, key bytes, or the raw subject id. A KMS failure raises a fixed message. The AWS error text is not copied into that message, the repr, or a log line from this module.
 
 ## H3. Backup, restore, and shredding
 
@@ -118,6 +120,26 @@ Turn on a deletion window before the key is used. AWS allows 7 to 30 days. Use 3
 
 A multi-region key, or a second backup key in another US region, is not decided. The proof of concept does not create a KMS key. A single-region key in the same region as Neon is the smaller option. A multi-region key survives a regional KMS outage and needs a second region that stays in the US. Record the choice before any key is created.
 
+### Generate the master key
+
+Run this on a machine you control. Do not paste the output into a ticket, a log, or the repository.
+
+```text
+python -c "import os,base64; print(base64.b64encode(os.urandom(32)).decode())"
+```
+
+Store the line in the password manager and in the Vercel Sensitive variable `GAB_MASTER_KEY`. For the proof of concept set `GAB_ENV=sandbox` and leave `GAB_KEY_PROVIDER` unset. The unset default of `GAB_ENV` is `production`, and the env provider is then refused. Keep a second copy of `GAB_HMAC_KEYS` in the same password manager when keyed identifiers are turned on.
+
+### Restore drill
+
+Use a synthetic fixture or a restored copy. Do not point the drill at the production database.
+
+1. Restore a Neon backup into a new database that is not production. The Neon plan and PITR window are still unknown, so use the backup Neon actually has.
+2. Put the password-manager copy of `GAB_MASTER_KEY` into that process and set `GAB_ENV=sandbox`.
+3. Read one `gab_subject_deks` row and the matching detached ciphertext from the restored copy.
+4. Open the ciphertext with the restored wrapped key. The plaintext should match the known fixture.
+5. On a synthetic row only, shred the subject, confirm the live row is gone and this process's cache no longer opens from memory, then restore the backup again and confirm the row is back. Another process can still hold the data key until its 300-second cache entry expires.
+
 ## AWS HMAC wrap context
 
 This block is the future option, not the proof-of-concept path. Wrap each HMAC data key with `Encrypt` under the KMS master key and this encryption context. Store only the ciphertext blob, base64, in `GAB_KMS_WRAPPED_HMAC_KEYS`.
@@ -126,10 +148,10 @@ This block is the future option, not the proof-of-concept path. Wrap each HMAC d
 {"gab": "hmac-key", "purpose": "<purpose>", "kid": "<kid>"}
 ```
 
-Per-subject data keys use an opaque `subject_ref`, not the raw id:
+Per-subject data keys use a keyed `subject_ref`, not the raw id and not an unkeyed hash:
 
 ```text
-{"gab": "subject-dek", "purpose": "subject-dek", "subject_ref": "<sha256 hex>"}
+{"gab": "subject-dek", "purpose": "subject-dek", "subject_ref": "<hmac-sha256 hex>"}
 ```
 
 ## HMAC
@@ -147,3 +169,5 @@ Do not commit `GAB_MASTER_KEY`, `GAB_HMAC_KEYS`, wrapped blobs, data keys, or da
 ## Preview
 
 A preview with `GAB_KEY_PROVIDER` and `GAB_MASTER_KEY` unset does not select a provider and does not write data keys. This change adds `017_subject_deks.sql`. The service applies additive `CREATE TABLE IF NOT EXISTS` on the first database request. A preview that shares the production database URL creates that empty table there. Leave the master key unset on that preview. Do not put key material in the repository.
+
+Migrations `001` through `010` are already applied in production, including both files numbered `006`. This change does not renumber them. `011` through `016` are absent here because later drafts reserve them: `011` keyed identifiers, `012` consent events, `013` breach register, `014` retention (not written yet), `015` entity kind, `016` ledger payloads. `017_subject_deks.sql` has not been applied. It stays `017` so it does not collide with those files.

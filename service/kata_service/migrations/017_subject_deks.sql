@@ -1,6 +1,7 @@
 -- Wrapped per-person data keys. Additive. Ciphertext is not stored here.
--- subject_ref is an opaque digest, not a raw identifier.
--- Deleting a row drops the wrapped key from the live database.
+-- subject_ref is a keyed HMAC, not a raw identifier and not an unkeyed hash.
+-- The application inserts a row once. A second insert does not replace the key.
+-- Only an explicit shred deletes the row.
 -- A backup taken before that delete still contains the wrapped key.
 
 CREATE TABLE IF NOT EXISTS gab_subject_deks (
