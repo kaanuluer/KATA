@@ -30,8 +30,16 @@ from kata_intent.canonical import canonical_bytes
 from kata_intent.errors import KataError
 from kata_intent.jws import sign_jws
 from kata_intent.keys import PrivateKey, public_key_from_jwk
-from kata_intent.values import coerce, hash_document
+from kata_intent.values import as_time, coerce, hash_document
 
+from kata_service.agreement_ledger import (
+    append_allow,
+    assert_document_bounded,
+    frequency_window_start,
+    selected_frequency,
+    summary_ledger,
+    take_embedded_ledger,
+)
 from kata_service.score_model import ScoreWeights
 from kata_service.defenses import (
     ScoreContext,
@@ -547,6 +555,24 @@ def _report_points(report: dict[str, Any], weight: float, weights: ScoreWeights)
     return (int(round(base * weight)), code)
 
 
+def _reject_large_agreement(document: dict[str, Any]) -> None:
+    try:
+        assert_document_bounded(document)
+    except KataError as exc:
+        raise BureauError(400, str(exc)) from exc
+
+
+def _bounded_deny(agent_id: str, agreement_id: str, code: str, message: str) -> dict[str, Any]:
+    return {
+        "verdict": "DENY",
+        "kata_decision": "BLOCK",
+        "reasons": [code],
+        "messages": [message],
+        "agent_id": agent_id,
+        "agreement_id": agreement_id,
+    }
+
+
 class MemoryRepo:
     """Process-local bureau store. Tests and GAB_DEMO use this."""
 
@@ -568,6 +594,7 @@ class MemoryRepo:
         self.agents: dict[str, dict[str, Any]] = {}
         self.by_fingerprint: dict[str, str] = {}
         self.agreements: dict[str, dict[str, Any]] = {}
+        self.allows: dict[tuple[str, bool], list[dict[str, Any]]] = {}
         self.reports: list[dict[str, Any]] = []
         self.interactions: list[dict[str, Any]] = []
         self.identity_links: list[dict[str, Any]] = []
@@ -597,6 +624,7 @@ class MemoryRepo:
             "009_portal_devices.sql",
             "010_step_up.sql",
             "017_subject_deks.sql",
+            "018_agreement_allows.sql",
         ]
 
     def create_org(self, record: dict[str, Any]) -> None:
@@ -851,9 +879,55 @@ class MemoryRepo:
             return [dict(item) for item in rows]
 
     def save_agreement(self, record: dict[str, Any]) -> None:
+        _reject_large_agreement(record["document"])
         with self._lock:
             stamped = _stamp_env(record)
             self.agreements[stamped["agreement_id"]] = stamped
+
+    def replace_agreement_allows(self, record: dict[str, Any], entries: list[dict[str, Any]]) -> None:
+        _reject_large_agreement(record["document"])
+        with self._lock:
+            stamped = _stamp_env(record)
+            self.agreements[stamped["agreement_id"]] = stamped
+            self.allows[(stamped["agreement_id"], bool(stamped.get("is_test")))] = [dict(item) for item in entries]
+
+    def append_agreement_allow(self, record: dict[str, Any], entry: dict[str, Any]) -> None:
+        _reject_large_agreement(record["document"])
+        with self._lock:
+            stamped = _stamp_env(record)
+            self.agreements[stamped["agreement_id"]] = stamped
+            key = (stamped["agreement_id"], bool(stamped.get("is_test")))
+            self.allows.setdefault(key, []).append(dict(entry))
+
+    def agreement_allow_action_exists(self, agreement_id: str, action_id: str) -> bool:
+        with self._lock:
+            rows = self.allows.get((agreement_id, in_test_mode()), [])
+            return any(item.get("action_id") == action_id for item in rows)
+
+    def agreement_allow_idempotency_exists(self, agreement_id: str, idempotency_key: str) -> bool:
+        with self._lock:
+            rows = self.allows.get((agreement_id, in_test_mode()), [])
+            return any(
+                item.get("idempotency_key") == idempotency_key and item.get("outcome") in {"allowed", "authorized", "settled"}
+                for item in rows
+            )
+
+    def agreement_allow_count(self, agreement_id: str, intent_id: str, after: str | None, until: str) -> int:
+        with self._lock:
+            rows = self.allows.get((agreement_id, in_test_mode()), [])
+            count = 0
+            for item in rows:
+                if item.get("outcome") not in {"allowed", "authorized", "settled"}:
+                    continue
+                if item.get("intent_id") not in (None, intent_id):
+                    continue
+                stamp = str(item.get("at") or "")
+                if until and stamp > until:
+                    continue
+                if after and not stamp > after:
+                    continue
+                count += 1
+            return count
 
     def get_agreement(self, agreement_id: str) -> dict[str, Any] | None:
         with self._lock:
@@ -1538,7 +1612,8 @@ class BureauService:
             "status": "active",
             "updated_at": at,
         }
-        self.repo.save_agreement(record)
+        spilled = take_embedded_ledger(record["document"])
+        self.repo.replace_agreement_allows(record, spilled)
         return _agreement_summary(record)
 
     def list_intents(self, auth: Auth, agent_id: str) -> list[dict[str, Any]]:
@@ -1577,13 +1652,20 @@ class BureauService:
                 },
             )
         record = active[0]
+        spilled = take_embedded_ledger(record["document"])
+        if spilled:
+            self.repo.replace_agreement_allows(record, spilled)
         agreement = Agreement.from_dict(record["document"])
         at = self.stamp()
+        replay = self._allow_replay(record["agreement_id"], action)
+        if replay is not None:
+            return _bounded_deny(agent_id, record["agreement_id"], replay[0], replay[1])
         from kata_intent import evaluate
 
         principal_key = None
         if agent.get("principal_public_key"):
             principal_key = public_key_from_jwk(agent["principal_public_key"])
+        projection, projection_sequence, projection_head = summary_ledger(record["document"])
         try:
             result = evaluate(
                 agreement,
@@ -1593,8 +1675,9 @@ class BureauService:
                 agent_public_key=public_key_from_jwk(agent["public_key"]),
                 now=at,
                 intent_id=body.get("intent_id"),
-                ledger_sequence=agreement.ledger_sequence,
-                ledger_head=agreement.ledger_head,
+                ledger=projection,
+                ledger_sequence=projection_sequence,
+                ledger_head=projection_head,
                 ledger_as_of=at,
             )
         except KataError as exc:
@@ -1613,13 +1696,21 @@ class BureauService:
                 payload["agent_id"] = agent_id
                 payload["agreement_id"] = record["agreement_id"]
                 return payload
+            frequency = self._frequency_denial(record["agreement_id"], agreement, action, body.get("intent_id"), at)
+            if frequency is not None:
+                return _bounded_deny(agent_id, record["agreement_id"], frequency[0], frequency[1])
             try:
-                agreement.record_allowed(action, at=at, intent_id=body.get("intent_id"))
+                entry = append_allow(
+                    record["document"],
+                    agreement,
+                    action,
+                    at=at,
+                    intent_id=body.get("intent_id"),
+                )
             except KataError as exc:
                 raise BureauError(400, str(exc)) from exc
-            record["document"] = agreement.to_dict()
             record["updated_at"] = at
-            self.repo.save_agreement(record)
+            self.repo.append_agreement_allow(record, entry)
             self._record_interaction(agent, auth, body, action, record["agreement_id"], at)
         payload = result.to_dict()
         payload["agent_id"] = agent_id
@@ -2296,6 +2387,50 @@ class BureauService:
             )
             linked_ids.append(agent_id)
         return linked_ids
+
+    def _allow_replay(self, agreement_id: str, action: dict[str, Any]) -> tuple[str, str] | None:
+        action_id = action.get("action_id")
+        if isinstance(action_id, str) and action_id and self.repo.agreement_allow_action_exists(agreement_id, action_id):
+            return ("ACTION_REPLAY", "This action id is already in the ledger.")
+        settlement = action.get("settlement")
+        idempotency = settlement.get("idempotency_key") if isinstance(settlement, dict) else None
+        if (
+            isinstance(idempotency, str)
+            and idempotency
+            and self.repo.agreement_allow_idempotency_exists(agreement_id, idempotency)
+        ):
+            return ("ACTION_REPLAY", "This idempotency key was already used for a charge that did not fail.")
+        return None
+
+    def _frequency_denial(
+        self,
+        agreement_id: str,
+        agreement: Agreement,
+        action: dict[str, Any],
+        intent_id: Any,
+        at: str,
+    ) -> tuple[str, str] | None:
+        try:
+            selected = selected_frequency(agreement, action, intent_id if isinstance(intent_id, str) else None)
+        except KataError:
+            return None
+        if selected is None:
+            return None
+        chosen, frequency = selected
+        proposed = action.get("proposed_at") or at
+        try:
+            proposed_text = as_time(proposed)
+            window = frequency_window_start(proposed_text, None if frequency.get("per") is None else str(frequency.get("per")))
+        except KataError:
+            return None
+        count = self.repo.agreement_allow_count(agreement_id, chosen, window, proposed_text)
+        maximum = int(frequency["max_count"])
+        if count >= maximum:
+            return (
+                "FREQUENCY_LIMIT_EXCEEDED",
+                f"The agreement already has {count} charges in this window, and the limit is {maximum}.",
+            )
+        return None
 
     def _velocity_reason(self, agent: dict[str, Any], action: dict[str, Any], at: str) -> str | None:
         if not self.policy.velocity:
