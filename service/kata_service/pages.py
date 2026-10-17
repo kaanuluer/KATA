@@ -985,7 +985,7 @@ _ENDPOINTS: tuple[dict[str, str], ...] = (
     {
         "method": "POST",
         "path": "/v1/portal/passkeys/authenticate",
-        "summary": "Exchanges a passkey assertion for a portal session. The email link remains available at POST /v1/portal/magic-link.",
+        "summary": "Exchanges a passkey assertion for a portal session. The ceremony is discoverable: the options name no credential. The email link remains available at POST /v1/portal/magic-link. A failure uses the same message whether or not an account exists. Registration stays on the signed-in session.",
         "request": '{\n  "credential": {"id": "…", "type": "public-key", "response": {}}\n}',
         "response": '{\n  "token": "gab_sess_…",\n  "kind": "portal",\n  "principal_id": "prn_…"\n}',
         "errors": "401 when the passkey or the challenge is not valid.",
