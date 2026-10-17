@@ -1,0 +1,10 @@
+SYNTHETIC TEST DATA
+python3 -m pytest tests/test_intent_tenant.py -q --tb=short
+
+..                                                                       [100%]
+2 passed, 1 warning in 0.86s
+
+python3 -m pytest -q --tb=line
+
+147 passed, 5 skipped, 5 warnings in 12.84s
+SKIPPED tests/test_keys.py boto3 import (5)
