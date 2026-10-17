@@ -549,6 +549,75 @@ def test_principal_email_cannot_move_to_another_principal():
     assert first_session.json()["principal_id"] == second_session.json()["principal_id"]
 
 
+def test_a_protected_route_without_a_key_does_not_name_parameters():
+    client = _client()
+    missing = client.get("/v1/agents")
+    assert missing.status_code == 401
+    assert missing.json() == {"error": "credentials are required"}
+    assert "fingerprint" not in missing.text
+    revoked_setup = _client()
+    operator = _org(revoked_setup, "Harbor Agents", "agent_operator")
+    token = _key(revoked_setup, operator["org_id"])
+    listed = revoked_setup.get(f"/v1/orgs/{operator['org_id']}/keys", headers=_auth(token))
+    rotated = revoked_setup.post(f"/v1/keys/{listed.json()[0]['key_id']}/rotate", headers=_auth(token))
+    assert rotated.status_code == 200
+    stale = revoked_setup.get("/v1/agents", headers=_auth(token))
+    assert stale.status_code == 401
+    assert stale.json()["error"] == "api key is revoked"
+    assert "fingerprint" not in stale.text
+    present = client.get("/v1/score-model")
+    assert present.status_code == 200
+
+
+def test_unknown_agent_verify_counts_toward_the_key_rate_limit():
+    from kata_service.settings import settings_from_env
+
+    assert settings_from_env({}).verify_rate_limit_per_minute == 60
+    client = _client(verify_rate_limit_per_minute=2, rate_limit_per_minute=100)
+    operator = _org(client, "Harbor Agents", "agent_operator")
+    merchant = _org(client, "Techstore", "merchant")
+    other = _org(client, "Other Shop", "merchant")
+    operator_key = _key(client, operator["org_id"])
+    merchant_key = _key(client, merchant["org_id"])
+    other_key = _key(client, other["org_id"])
+    _register(client, operator_key)
+    stored = client.post(
+        "/v1/agents/shopper-01/intents",
+        headers={**_auth(operator_key), "Content-Type": "application/json"},
+        content=_agreement().to_json(),
+    )
+    assert stored.status_code == 200, stored.text
+    unknown = client.post(
+        "/v1/verify",
+        headers=_auth(merchant_key),
+        json={"agent_id": "no-such-agent", "action": _action(10, "act_missing")},
+    )
+    assert unknown.status_code == 404
+    assert unknown.json()["error"] == "agent was not found"
+    allowed = client.post(
+        "/v1/verify",
+        headers=_auth(merchant_key),
+        json={"agent_id": "shopper-01", "action": _action(10, "act_known")},
+    )
+    assert allowed.status_code == 200, allowed.text
+    assert allowed.json()["verdict"] == "ALLOW"
+    blocked = client.post(
+        "/v1/verify",
+        headers=_auth(merchant_key),
+        json={"agent_id": "another-missing", "action": _action(10, "act_again")},
+    )
+    assert blocked.status_code == 429
+    assert blocked.json()["error"] == "rate limit exceeded"
+    assert blocked.headers["retry-after"] == "60"
+    still_unknown = client.post(
+        "/v1/verify",
+        headers=_auth(other_key),
+        json={"agent_id": "no-such-agent", "action": _action(10, "act_other")},
+    )
+    assert still_unknown.status_code == 404
+    assert still_unknown.json()["error"] == "agent was not found"
+
+
 def test_endpoint_rate_limits_do_not_block_other_routes():
     client = _client(
         rate_limit_per_minute=100,
