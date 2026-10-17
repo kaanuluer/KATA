@@ -9,6 +9,8 @@ import hashlib
 import hmac
 import json
 import os
+from pathlib import Path
+from urllib.parse import urlparse
 
 import pytest
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -18,10 +20,16 @@ from kata_service.keys import (
     AwsKmsEnvelopeProvider,
     EnvKeyProvider,
     KeyCustodyError,
+    DatabaseDekStore,
+    KeyUsageEvent,
     dek_encryption_context,
     hmac_encryption_context,
+    opaque_subject,
+    open_detached,
     parse_hmac_token,
     provider_from_env,
+    seal_detached,
+    shred_subject,
 )
 from kata_service.settings import settings_from_env
 
@@ -142,20 +150,20 @@ def test_env_provider_is_marked_non_production_and_hides_secrets():
         provider.unseal(sealed, subject_id="prn_other")
 
 
-def test_env_provider_refused_on_production_without_the_allow_flag():
+def test_env_provider_on_production_requires_synthetic_data():
     blocked = settings_from_env(
         {"GAB_ENV": "production", "GAB_KEY_PROVIDER": "env", "GAB_HMAC_KEYS": _env_json()}
     )
     assert blocked.key_provider is None
     assert blocked.config_error is not None
-    assert "GAB_ALLOW_ENV_KEYS" in blocked.config_error
+    assert "GAB_SYNTHETIC_DATA" in blocked.config_error
     assert _HMAC_KEY.decode() not in blocked.config_error
 
     allowed = settings_from_env(
         {
             "GAB_ENV": "production",
             "GAB_KEY_PROVIDER": "env",
-            "GAB_ALLOW_ENV_KEYS": "1",
+            "GAB_SYNTHETIC_DATA": "1",
             "GAB_HMAC_KEYS": _env_json(),
         }
     )
@@ -241,7 +249,7 @@ def test_provider_from_env_single_active_kid_skips_other_purposes():
     provider = provider_from_env(
         {
             "GAB_KEY_PROVIDER": "env",
-            "GAB_ALLOW_ENV_KEYS": "1",
+            "GAB_SYNTHETIC_DATA": "1",
             "GAB_HMAC_ACTIVE_KID": "email-new",
             "GAB_HMAC_KEYS": _env_json(),
         },
@@ -259,3 +267,148 @@ def test_malformed_token_and_short_secret_are_rejected():
         EnvKeyProvider({"short": {"secret": b"tiny", "purposes": ["identifier"], "active": True}})
     with pytest.raises(KeyCustodyError):
         provider.hmac("", purpose="identifier")
+
+
+def test_subject_ref_is_opaque_and_usage_omits_the_value():
+    provider = EnvKeyProvider(_ring())
+    context = dek_encryption_context("prn_synthetic")
+    assert "subject_id" not in context
+    assert context["subject_ref"] == opaque_subject("prn_synthetic")
+    assert "prn_synthetic" not in json.dumps(context)
+    provider.hmac(_EMAIL, purpose="identifier")
+    dumped = json.dumps([event.__dict__ for event in provider.usage()])
+    assert _EMAIL not in dumped
+    assert "prn_" not in dumped
+    assert provider.usage()[0].latency_ms >= 0
+    assert isinstance(provider.usage()[0], KeyUsageEvent)
+    sealed = provider.seal(b"SYNTHETIC TEST DATA", subject_id="prn_synthetic")
+    assert "prn_synthetic" not in sealed
+
+
+def test_dek_cache_records_a_hit_and_skips_the_second_unwrap(monkeypatch):
+    provider = EnvKeyProvider(_ring())
+    _plain, wrapped = provider.issue_dek("prn_synthetic")
+    provider.forget_dek("prn_synthetic")
+    calls = {"n": 0}
+    import kata_service.keys as keys
+
+    real = keys._open_aes
+
+    def counted(key, nonce, ciphertext, aad):
+        calls["n"] += 1
+        return real(key, nonce, ciphertext, aad)
+
+    monkeypatch.setattr(keys, "_open_aes", counted)
+    assert provider.unwrap_dek("prn_synthetic", wrapped) == _plain
+    assert provider.unwrap_dek("prn_synthetic", wrapped) == _plain
+    assert calls["n"] == 1
+    unwraps = [event for event in provider.usage() if event.operation == "unwrap_dek"]
+    assert [event.cache for event in unwraps] == ["miss", "hit"]
+
+
+def test_master_key_selects_the_env_provider():
+    selected = settings_from_env({"GAB_MASTER_KEY": _b64(_KEK), "GAB_SYNTHETIC_DATA": "1"})
+    assert selected.config_error is None
+    assert selected.key_provider.provider == "env"
+    assert selected.key_provider.provider != "aws-kms"
+    assert selected.key_provider.active_kid("kek") == "master"
+    plain, wrapped = selected.key_provider.issue_dek("prn_synthetic")
+    assert selected.key_provider.unwrap_dek("prn_synthetic", wrapped) == plain
+    refused = settings_from_env({"GAB_MASTER_KEY": _b64(_KEK)})
+    assert "GAB_SYNTHETIC_DATA" in (refused.config_error or "")
+    assert settings_from_env({}).key_provider is None
+
+
+def test_detached_ciphertext_shreds_when_the_stored_key_is_deleted():
+    provider = EnvKeyProvider(_ring())
+    from kata_service.keys import InProcessDekStore
+
+    store = InProcessDekStore()
+    encoded, wrapped = seal_detached(provider, b"SYNTHETIC TEST DATA", subject_id="prn_synthetic")
+    assert "embedded" not in encoded
+    assert _b64(wrapped) not in encoded
+    assert "prn_synthetic" not in encoded
+    store.put("prn_synthetic", wrapped)
+    assert open_detached(provider, encoded, store.get("prn_synthetic"), subject_id="prn_synthetic") == b"SYNTHETIC TEST DATA"
+    assert shred_subject(provider, store, "prn_synthetic") is True
+    assert store.get("prn_synthetic") is None
+    assert open_detached(provider, encoded, wrapped, subject_id="prn_synthetic") == b"SYNTHETIC TEST DATA"
+
+
+def test_database_dek_row_is_separate_from_ciphertext():
+    url = os.environ.get("GAB_TEST_DATABASE_URL")
+    if not url:
+        if os.environ.get("GITHUB_ACTIONS"):
+            pytest.fail("GAB_TEST_DATABASE_URL is required in CI")
+        pytest.skip("GAB_TEST_DATABASE_URL is not set")
+    if urlparse(url).hostname not in {"localhost", "127.0.0.1"}:
+        pytest.fail("GAB_TEST_DATABASE_URL must point at localhost")
+    import psycopg
+
+    from kata_service.bureau_pg import PostgresRepo
+
+    with psycopg.connect(url, autocommit=True) as conn:
+        conn.execute("DROP SCHEMA IF EXISTS public CASCADE")
+        conn.execute("DROP SCHEMA IF EXISTS gab_sandbox CASCADE")
+        conn.execute("CREATE SCHEMA public")
+        conn.execute("GRANT ALL ON SCHEMA public TO public")
+    PostgresRepo(url, url).migration_versions()
+    provider = EnvKeyProvider(_ring(), master_key=_KEK)
+    encoded, wrapped = seal_detached(provider, b"SYNTHETIC TEST DATA", subject_id="prn_synthetic")
+    store = DatabaseDekStore(lambda: psycopg.connect(url))
+    store.put("prn_synthetic", wrapped)
+    with psycopg.connect(url) as conn:
+        row = conn.execute("SELECT subject_ref, wrapped_dek FROM gab_subject_deks").fetchone()
+    assert row[0] == opaque_subject("prn_synthetic")
+    assert "prn_synthetic" not in row[0]
+    assert "prn_synthetic" not in row[1]
+    assert row[1] not in encoded
+    assert open_detached(provider, encoded, store.get("prn_synthetic"), subject_id="prn_synthetic") == b"SYNTHETIC TEST DATA"
+    assert shred_subject(provider, store, "prn_synthetic") is True
+    assert store.get("prn_synthetic") is None
+
+
+def test_boto3_client_stays_lazy_and_accepts_a_stubber():
+    import inspect
+
+    import kata_service.keys as keys
+
+    source = inspect.getsource(keys)
+    assert "import boto3" not in source.split("def _boto")[0]
+    fresh = keys.Boto3KmsClient("us-east-1")
+    assert fresh._client is None
+    boto3 = pytest.importorskip("boto3")
+    from botocore.stub import Stubber
+
+    raw = boto3.client("kms", region_name="us-east-1")
+    fresh._client = raw
+    context = dek_encryption_context("prn_synthetic")
+    plaintext = b"SYNTHETIC TEST DATA kms-dek!!!!!"
+    blob = b"synthetic-wrapped-blob"
+    stubber = Stubber(raw)
+    stubber.add_response(
+        "generate_data_key",
+        {"Plaintext": plaintext, "CiphertextBlob": blob},
+        {"KeyId": _MASTER, "KeySpec": "AES_256", "EncryptionContext": context},
+    )
+    stubber.add_response(
+        "decrypt",
+        {"Plaintext": plaintext, "KeyId": _MASTER},
+        {"CiphertextBlob": blob, "EncryptionContext": context, "KeyId": _MASTER},
+    )
+    with stubber:
+        dek, wrapped = fresh.generate_data_key(key_id=_MASTER, encryption_context=context)
+        opened = fresh.decrypt(key_id=_MASTER, ciphertext=wrapped, encryption_context=context)
+    assert dek == plaintext == opened
+    assert wrapped == blob
+    assert "prn_synthetic" not in json.dumps(context)
+
+
+def test_custody_doc_states_the_accepted_risk():
+    text = Path(__file__).resolve().parents[2].joinpath("docs", "key-custody.md").read_text(encoding="utf-8")
+    assert "if the Vercel account is compromised the master key is lost too" in text
+    assert "password manager" in text
+    assert "Neon backup" in text
+    assert "not the default" in text
+    assert "import boto3 at startup" in text
+    assert "kata-service-omega.vercel.app" not in text

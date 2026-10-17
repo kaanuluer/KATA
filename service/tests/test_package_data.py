@@ -37,7 +37,7 @@ def test_installed_package_can_read_the_bureau_migration(tmp_path: Path):
         "assert 'CREATE TABLE IF NOT EXISTS gab_org_signals' in text\n"
         "assert migration._MIGRATION.is_file()\n"
         "names = sorted(path.name for path in migration._MIGRATIONS.glob('*.sql'))\n"
-        "assert names == ['001_bureau.sql', '002_defenses.sql', '003_proofing.sql', '004_consortium.sql', '005_org_signals.sql', '006_sandbox.sql', '006_webhook.sql', '007_partition.sql', '008_audit_environment.sql', '009_portal_devices.sql', '010_step_up.sql']\n",
+        "assert names == ['001_bureau.sql', '002_defenses.sql', '003_proofing.sql', '004_consortium.sql', '005_org_signals.sql', '006_sandbox.sql', '006_webhook.sql', '007_partition.sql', '008_audit_environment.sql', '009_portal_devices.sql', '010_step_up.sql', '017_subject_deks.sql']\n",
         encoding="utf-8",
     )
     env = os.environ.copy()

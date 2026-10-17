@@ -592,6 +592,11 @@ class MemoryRepo:
             "005_org_signals.sql",
             "006_sandbox.sql",
             "006_webhook.sql",
+            "007_partition.sql",
+            "008_audit_environment.sql",
+            "009_portal_devices.sql",
+            "010_step_up.sql",
+            "017_subject_deks.sql",
         ]
 
     def create_org(self, record: dict[str, Any]) -> None:
