@@ -1543,7 +1543,9 @@ class BureauService:
 
     def list_intents(self, auth: Auth, agent_id: str) -> list[dict[str, Any]]:
         self._scope(auth, "registry:read")
-        self._agent(agent_id)
+        agent = self._agent(agent_id)
+        if not auth.admin and auth.org_id != agent["operator_org_id"]:
+            raise BureauError(404, "agent was not found")
         return [_agreement_summary(item) for item in self.repo.list_agreements(agent_id)]
 
     def verify(self, auth: Auth, body: dict[str, Any]) -> dict[str, Any]:
