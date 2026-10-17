@@ -1,0 +1,43 @@
+{
+  "after": {
+    "body": {
+      "agent_id": "shopper-01",
+      "agreement_id": "agr_test",
+      "kata_decision": "ALLOW",
+      "mandate_hash": "sha256:7645603a65ede1babca921dd65b8ad83ead1b3ab11c9fb502627531e3e47dec8",
+      "messages": [],
+      "reasons": [],
+      "required_action": "NONE",
+      "verdict": "ALLOW"
+    },
+    "status": 200
+  },
+  "before": {
+    "body": {
+      "agent_id": "shopper-01",
+      "agreement_id": "agr_test",
+      "kata_decision": "ALLOW",
+      "mandate_hash": "sha256:7645603a65ede1babca921dd65b8ad83ead1b3ab11c9fb502627531e3e47dec8",
+      "messages": [],
+      "reasons": [],
+      "required_action": "NONE",
+      "verdict": "ALLOW"
+    },
+    "status": 200
+  },
+  "label": "SYNTHETIC TEST DATA",
+  "ledger_len": 2,
+  "ledger_sequence": 2,
+  "listed_agreement_ids": [
+    "agr_test"
+  ],
+  "push": {
+    "body": {
+      "revocation_id": "sha256:aa904c18eae40715ddf02fdbe86f50c9f12379ea16d533ac905822386d23ba9e",
+      "sequence": 2,
+      "stored": true
+    },
+    "status": 200
+  },
+  "stored_intent": 200
+}

@@ -1,0 +1,7 @@
+SYNTHETIC TEST DATA
+python3 -m pytest tests/test_push_verify.py -q --tb=short
+
+..                                                                       [100%]
+2 passed, 1 warning in 1.02s
+
+Recorded result, memory and local Postgres: push stored true, listed agreement_id agr_test, /v1/verify before and after the push both ALLOW, ledger_sequence 2, ledger length 2. The pushed revocation did not change verify.
