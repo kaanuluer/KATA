@@ -1,0 +1,10 @@
+{
+  "current": {
+    "push": "v1",
+    "network": "v1"
+  },
+  "sha256": {
+    "push/v1": "d8b80f2566a55c036373d84b3bb7345c7924c5634c601602afa241a33bb7c4fb",
+    "network/v1": "2de642412b7fc35fc32df8e989d922dbba53949c424e8fe5c1d33389fe7b154e"
+  }
+}

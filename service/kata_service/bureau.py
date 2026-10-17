@@ -590,6 +590,7 @@ class MemoryRepo:
         self.alerts: list[dict[str, Any]] = []
         self.deliveries: list[dict[str, Any]] = []
         self.disputes: list[dict[str, Any]] = []
+        self.consent_events: list[dict[str, Any]] = []
         self._lock = threading.Lock()
 
     def migration_versions(self) -> list[str]:
@@ -601,6 +602,12 @@ class MemoryRepo:
             "005_org_signals.sql",
             "006_sandbox.sql",
             "006_webhook.sql",
+            "007_partition.sql",
+            "008_audit_environment.sql",
+            "009_portal_devices.sql",
+            "010_step_up.sql",
+            "011_keyed_identifiers.sql",
+            "012_consent_events.sql",
         ]
 
     def create_org(self, record: dict[str, Any]) -> None:
@@ -1233,6 +1240,32 @@ class MemoryRepo:
         with self._lock:
             return {org_id: item["org_type"] for org_id, item in self.orgs.items()}
 
+    def append_consent(self, fields: dict[str, Any]) -> dict[str, Any]:
+        from kata_service.consent import seal_event
+
+        with self._lock:
+            source_ref = str(fields.get("source_ref") or "")
+            if source_ref:
+                for item in self.consent_events:
+                    if item.get("source_ref") == source_ref:
+                        return dict(item)
+            prev = self.consent_events[-1]["entry_hash"] if self.consent_events else None
+            sealed = seal_event(prev, fields)
+            self.consent_events.append(sealed)
+            return dict(sealed)
+
+    def list_consent(self, principal_id: str | None = None, purpose: str | None = None) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self.consent_events
+            if principal_id is not None:
+                rows = [item for item in rows if item["principal_id"] == principal_id]
+            if purpose is not None:
+                rows = [item for item in rows if item["purpose"] == purpose]
+            return [dict(item) for item in rows]
+
+    def delete_consent(self, event_id: str) -> None:
+        raise BureauError(409, "gab_consent_events is append-only")
+
 
 class BureauService:
     def __init__(
@@ -1264,6 +1297,9 @@ class BureauService:
         keyed_identifiers: bool = False,
         hmac_rate_subject: bool = False,
         stop_plaintext_email: bool = False,
+        consent_events: bool = False,
+        consent_push: bool = False,
+        consent_network: bool = False,
     ) -> None:
         self.repo = repo
         self.deployment_env = deployment_env if deployment_env in {"production", "sandbox"} else "production"
@@ -1291,6 +1327,9 @@ class BureauService:
         self.keyed_identifiers = keyed_identifiers
         self.hmac_rate_subject = hmac_rate_subject
         self.stop_plaintext_email = stop_plaintext_email
+        self.consent_events_enabled = consent_events
+        self.consent_push = consent_push
+        self.consent_network = consent_network
         self._rate_purged_before: str | None = None
         if keyed_identifiers:
             from kata_service.identifiers import IdentifierMode
@@ -1348,6 +1387,62 @@ class BureauService:
                 test=sandbox,
             )
         raise BureauError(401, "credentials are required")
+
+    def record_consent(self, auth: Auth, body: dict[str, Any]) -> dict[str, Any]:
+        if not self.consent_events_enabled:
+            raise BureauError(404, "consent events are off")
+        self._portal(auth)
+        purpose = str(body.get("purpose") or "")
+        self._consent_purpose_enabled(purpose)
+        granted = body.get("granted")
+        if granted is not True and granted is not False:
+            raise BureauError(400, "granted must be true or false")
+        version = str(body.get("text_version") or "") or None
+        return self._append_consent(auth.principal_id or "", purpose, bool(granted), text_version=version)
+
+    def _consent_purpose_enabled(self, purpose: str) -> None:
+        if purpose == "push" and self.consent_push:
+            return
+        if purpose == "network" and self.consent_network:
+            return
+        if purpose in {"push", "network"}:
+            raise BureauError(404, f"{purpose} consent purpose is off")
+        raise BureauError(400, "purpose is not push or network")
+
+    def _append_consent(
+        self,
+        principal_id: str,
+        purpose: str,
+        granted: bool,
+        *,
+        text_version: str | None = None,
+        source_ref: str | None = None,
+    ) -> dict[str, Any]:
+        from kata_service.consent import ConsentTextError, notice
+
+        try:
+            text = notice(purpose, text_version)
+        except ConsentTextError as exc:
+            raise BureauError(400, str(exc)) from exc
+        return self.repo.append_consent(
+            {
+                "event_id": _id("cns"),
+                "principal_id": principal_id,
+                "purpose": purpose,
+                "granted": granted,
+                "text_version": text["text_version"],
+                "text_sha256": text["text_sha256"],
+                "at": self.stamp(),
+                "source_ref": source_ref or "",
+            }
+        )
+
+    def _require_network_consent(self, principal_id: str) -> None:
+        if not self.consent_network:
+            return
+        rows = [item for item in self.repo.list_consent(principal_id, "network") if item.get("granted") is True]
+        if not rows:
+            raise BureauError(403, "network purpose needs a consent event")
 
     def hit_rate(self, subject: str) -> int:
         if self.hmac_rate_subject:
@@ -1523,6 +1618,8 @@ class BureauService:
             "cold_start": True,
             "principal_public_key": None,
         }
+        if self.consent_network and _registration_signals(body):
+            self._require_network_consent(principal_id)
         links = self._link_denied_identity(record, body, at)
         self._record_proof(record["agent_id"], org["org_id"], "key_binding", public.fingerprint, at)
         review = str(body.get("proofing_evidence") or "").strip()
@@ -1846,6 +1943,7 @@ class BureauService:
         record["counts"] = True
         shared = str(body.get("shared_signal") or "").strip()
         if shared:
+            self._require_network_consent(str(agent.get("principal_id") or ""))
             self.repo.add_org_signal(
                 {
                     "org_id": org["org_id"],

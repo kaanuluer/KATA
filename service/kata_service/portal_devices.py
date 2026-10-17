@@ -201,8 +201,21 @@ def register_push(service, auth, body: dict[str, Any]) -> dict[str, Any]:
     auth_secret = str(keys.get("auth") or "")
     if not p256dh or not auth_secret or len(p256dh) > 200 or len(auth_secret) > 200:
         raise BureauError(400, "push keys are required")
+    device_id = _id("psh")
+    supplied_credential = body.get("credential_id")
+    if supplied_credential and str(supplied_credential) == device_id:
+        raise BureauError(400, "device id must not equal a passkey credential id")
+    if service.consent_events_enabled and service.consent_push:
+        version = str(body.get("text_version") or "") or None
+        service._append_consent(
+            auth.principal_id or "",
+            "push",
+            True,
+            text_version=version,
+            source_ref=device_id,
+        )
     record = {
-        "device_id": _id("psh"),
+        "device_id": device_id,
         "principal_id": auth.principal_id,
         "endpoint": endpoint,
         "p256dh": p256dh,

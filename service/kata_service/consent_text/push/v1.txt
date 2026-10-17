@@ -1,0 +1,2 @@
+Purpose: push.
+This notice records that you asked the bureau to store a browser push address and the keys the browser issued for that address, so it can send an approval notice to this browser. You can remove the device later. This is a product notice. It is not a legal determination.

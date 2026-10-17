@@ -82,6 +82,9 @@ Set these in the host environment. The current proof-of-concept host is a Vercel
 | `GAB_KEYED_IDENTIFIERS` | no | no | Default off. On: HMAC email lookups, dual-read the legacy hash, envelope-encrypt the address. |
 | `GAB_HMAC_RATE_SUBJECT` | no | no | Default off. On: HMAC the client host used for rate limits and delete rate rows older than 24 hours. |
 | `GAB_STOP_PLAINTEXT_EMAIL` | no | no | Default off. Requires keyed identifiers. Stops writing plaintext email and the unsalted hash. Use only after the offline backfill. |
+| `GAB_CONSENT_EVENTS` | no | no | Default off. On: `POST /v1/portal/consent` appends a hash-chained consent event. |
+| `GAB_CONSENT_PUSH` | no | no | Default off. Requires consent events. On: push registration appends a push consent event. |
+| `GAB_CONSENT_NETWORK` | no | no | Default off. Requires consent events. On: a network signal needs a granted network consent event. |
 
 Generate a log seed, a push notifier, and an append token:
 
