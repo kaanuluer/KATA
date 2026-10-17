@@ -66,6 +66,7 @@ class Settings:
     network_step_up: bool = False
     ledger_hygiene: bool = False
     dek_store_dir: str | None = None
+    breach_tools: bool = False
 
     def log_key(self) -> PrivateKey | None:
         if self.log_signing_seed is None:
@@ -119,6 +120,7 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
         error = "GAB_LEDGER_HYGIENE needs GAB_KEY_PROVIDER"
     if error is None and ledger_hygiene and deployment_env == "production" and not database_url:
         error = "GAB_LEDGER_HYGIENE stores wrapped data keys in gab_subject_deks and needs DATABASE_URL"
+    breach_tools = _flag(env.get("GAB_BREACH_TOOLS"))
     return Settings(
         database_url=database_url,
         schema_url=schema_url,
@@ -164,6 +166,7 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
         network_step_up=network_step_up,
         ledger_hygiene=ledger_hygiene,
         dek_store_dir=dek_store_dir,
+        breach_tools=breach_tools,
     )
 
 
