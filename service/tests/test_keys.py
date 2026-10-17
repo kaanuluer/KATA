@@ -28,6 +28,7 @@ from kata_service.keys import (
     hmac_encryption_context,
     opaque_subject,
     open_detached,
+    open_stored,
     parse_hmac_token,
     provider_from_env,
     seal_detached,
@@ -57,6 +58,7 @@ def _ring() -> dict[str, dict[str, object]]:
         "email-new": {"secret": _HMAC_KEY, "purposes": ["identifier"], "active": True},
         "ip-1": {"secret": _HMAC_KEY, "purposes": ["rate"], "active": True},
         "local-kek": {"secret": _KEK, "purposes": ["kek"], "active": True},
+        "subject-ref": {"secret": _SUBJECT_KEY, "purposes": ["ref"], "active": True},
     }
 
 
@@ -99,8 +101,17 @@ class FakeKms:
 
 
 def _independent_hmac(key: bytes, purpose: str, value: str) -> str:
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+
+    derived = HKDF(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=b"gab-hkdf-v1",
+        info=b"gab-hmac-v1\x00" + purpose.encode("utf-8"),
+    ).derive(key)
     message = b"gab-hmac-v1\x00" + purpose.encode("utf-8") + b"\x00" + value.encode("utf-8")
-    return hmac.new(key, message, hashlib.sha256).hexdigest()
+    return hmac.new(derived, message, hashlib.sha256).hexdigest()
 
 
 def test_hmac_matches_an_independent_vector():
@@ -277,13 +288,14 @@ def test_malformed_token_and_short_secret_are_rejected():
 
 def test_subject_ref_is_opaque_and_usage_omits_the_value():
     provider = EnvKeyProvider(_ring())
-    context = dek_encryption_context("prn_synthetic", _KEK)
+    context = dek_encryption_context("prn_synthetic", _SUBJECT_KEY)
     assert "subject_id" not in context
-    assert context["subject_ref"] == opaque_subject("prn_synthetic", _KEK)
+    assert context["subject_ref"] == opaque_subject("prn_synthetic", _SUBJECT_KEY)
     assert context["subject_ref"] == provider.subject_ref("prn_synthetic")
+    assert provider.subject_ref("prn_synthetic") != opaque_subject("prn_synthetic", _KEK)
     unkeyed = hashlib.sha256(b"gab-subject-v1\x00" + _EMAIL.encode()).hexdigest()
-    assert opaque_subject(_EMAIL, _KEK) != unkeyed
-    assert opaque_subject(_EMAIL, _HMAC_KEY) != opaque_subject(_EMAIL, _KEK)
+    assert opaque_subject(_EMAIL, _SUBJECT_KEY) != unkeyed
+    assert opaque_subject(_EMAIL, _HMAC_KEY) != opaque_subject(_EMAIL, _SUBJECT_KEY)
     assert "prn_synthetic" not in json.dumps(context)
     provider.hmac(_EMAIL, purpose="identifier")
     dumped = json.dumps([event.__dict__ for event in provider.usage()])
@@ -317,11 +329,25 @@ def test_dek_cache_records_a_hit_and_skips_the_second_unwrap(monkeypatch):
 
 
 def test_master_key_selects_the_env_provider_outside_production():
-    selected = settings_from_env({"GAB_ENV": "sandbox", "GAB_MASTER_KEY": _b64(_KEK)})
+    selected = settings_from_env(
+        {
+            "GAB_ENV": "sandbox",
+            "GAB_MASTER_KEY": _b64(_KEK),
+            "GAB_MASTER_KEY_ID": "kek-sandbox",
+            "GAB_SUBJECT_REF_KEY": _b64(_SUBJECT_KEY),
+            "GAB_SUBJECT_REF_KID": "ref-sandbox",
+        }
+    )
     assert selected.config_error is None
     assert selected.key_provider.provider == "env"
     assert selected.key_provider.provider != "aws-kms"
-    assert selected.key_provider.active_kid("kek") == "master"
+    assert selected.key_provider.active_kid("kek") == "kek-sandbox"
+    assert selected.key_provider.active_kid("ref") == "ref-sandbox"
+    default_id = settings_from_env(
+        {"GAB_ENV": "sandbox", "GAB_MASTER_KEY": _b64(_KEK), "GAB_SUBJECT_REF_KEY": _b64(_SUBJECT_KEY)}
+    )
+    assert default_id.key_provider.active_kid("kek") == "master"
+    assert default_id.key_provider.active_kid("ref") == "subject-ref"
     plain, wrapped = selected.key_provider.issue_dek("prn_synthetic")
     assert selected.key_provider.unwrap_dek("prn_synthetic", wrapped) == plain
     sealed = selected.key_provider.seal(b"SYNTHETIC TEST DATA", subject_id="prn_synthetic")
@@ -342,7 +368,7 @@ def test_detached_ciphertext_shreds_when_the_stored_key_is_deleted():
     provider = EnvKeyProvider(_ring())
     from kata_service.keys import InProcessDekStore
 
-    store = InProcessDekStore(_KEK)
+    store = InProcessDekStore(_SUBJECT_KEY)
     encoded, wrapped = seal_detached(provider, b"SYNTHETIC TEST DATA", subject_id="prn_synthetic", store=store)
     assert "embedded" not in encoded
     assert _b64(wrapped) not in encoded
@@ -373,17 +399,52 @@ def test_database_dek_row_is_separate_from_ciphertext():
         conn.execute("GRANT ALL ON SCHEMA public TO public")
     PostgresRepo(url, url).migration_versions()
     provider = EnvKeyProvider(_ring(), master_key=_KEK)
-    store = DatabaseDekStore(lambda: psycopg.connect(url), subject_key=_KEK)
+    store = DatabaseDekStore(lambda: psycopg.connect(url), subject_key=_SUBJECT_KEY)
     encoded, wrapped = seal_detached(provider, b"SYNTHETIC TEST DATA", subject_id="prn_synthetic", store=store)
     with psycopg.connect(url) as conn:
         row = conn.execute("SELECT subject_ref, wrapped_dek FROM gab_subject_deks").fetchone()
-    assert row[0] == opaque_subject("prn_synthetic", _KEK)
+    assert row[0] == opaque_subject("prn_synthetic", _SUBJECT_KEY)
     assert "prn_synthetic" not in row[0]
     assert "prn_synthetic" not in row[1]
     assert row[1] not in encoded
     assert open_detached(provider, encoded, store.get("prn_synthetic"), subject_id="prn_synthetic") == b"SYNTHETIC TEST DATA"
     assert shred_subject(provider, store, "prn_synthetic") is True
     assert store.get("prn_synthetic") is None
+
+
+def test_database_previous_subject_ref_still_shreds():
+    url = _database_url()
+    _reset_database(url)
+    import psycopg
+
+    from kata_service.bureau_pg import PostgresRepo
+
+    PostgresRepo(url, url).migration_versions()
+    old_ref = b"SYNTHETIC TEST DATA ref-old!!!!!"
+    writer = EnvKeyProvider(
+        {
+            "local-kek": {"secret": _KEK, "purposes": ["kek"], "active": True},
+            "ref-old": {"secret": old_ref, "purposes": ["ref"], "active": True},
+        }
+    )
+    written = DatabaseDekStore(lambda: psycopg.connect(url), subject_key=old_ref)
+    encoded, wrapped = seal_detached(writer, b"SYNTHETIC TEST DATA", subject_id="prn_synthetic", store=written)
+    reader = EnvKeyProvider(
+        {
+            "local-kek": {"secret": _KEK, "purposes": ["kek"], "active": True},
+            "subject-ref": {"secret": _SUBJECT_KEY, "purposes": ["ref"], "active": True},
+            "ref-old": {"secret": old_ref, "purposes": ["ref"], "active": False},
+        }
+    )
+    store = DatabaseDekStore(lambda: psycopg.connect(url), subject_key=_SUBJECT_KEY, previous_keys=(old_ref,))
+    assert store.subject_ref("prn_synthetic") == reader.subject_ref("prn_synthetic")
+    assert store.subject_ref("prn_synthetic") != writer.subject_ref("prn_synthetic")
+    assert store.get("prn_synthetic") == wrapped
+    assert open_stored(reader, encoded, subject_id="prn_synthetic", store=store) == b"SYNTHETIC TEST DATA"
+    assert shred_subject(reader, store, "prn_synthetic") is True
+    assert store.get("prn_synthetic") is None
+    with pytest.raises(KeyCustodyError, match="ciphertext did not open"):
+        open_stored(reader, encoded, subject_id="prn_synthetic", store=store)
 
 
 def test_boto3_client_stays_lazy_and_accepts_a_stubber():
@@ -473,6 +534,13 @@ def test_custody_doc_states_the_accepted_risk():
     assert "Accepted decision" in text
     assert "2026-10-17" in text
     assert "gab_sandbox" in text
+    assert "does not use the `gab_sandbox` schema" in text
+    assert "Whether `config_error` stops the whole service is UNKNOWN." in text
+    assert "If the caller stores that wrapped value" in text
+    assert "has not been performed" in text
+    assert "must not merge" in text
+    assert "GAB_MASTER_KEY_ID" in text
+    assert "gab-wrap-v1" in text
     assert "Rebase plan for stacked drafts" in text
     assert "a7cab0b" in text
     assert "011" in text and "017_subject_deks.sql" in text
@@ -483,7 +551,7 @@ def test_second_seal_keeps_first_readable():
     provider = EnvKeyProvider(_ring())
     from kata_service.keys import InProcessDekStore
 
-    store = InProcessDekStore(_KEK)
+    store = InProcessDekStore(_SUBJECT_KEY)
     first, wrapped_first = seal_detached(
         provider, b"SYNTHETIC TEST DATA one", subject_id="prn_synthetic", store=store
     )
@@ -503,7 +571,7 @@ def test_concurrent_seal_keeps_one_key_and_every_ciphertext():
     provider = EnvKeyProvider(_ring())
     from kata_service.keys import InProcessDekStore
 
-    store = InProcessDekStore(_KEK)
+    store = InProcessDekStore(_SUBJECT_KEY)
     found, errors = _seal_together(provider, store, 8)
     assert errors == []
     assert len({item[2] for item in found}) == 1
@@ -523,7 +591,7 @@ def test_concurrent_database_insert_keeps_the_first_key():
     _reset_database(url)
     PostgresRepo(url, url).migration_versions()
     provider = EnvKeyProvider(_ring())
-    store = DatabaseDekStore(lambda: psycopg.connect(url), subject_key=_KEK)
+    store = DatabaseDekStore(lambda: psycopg.connect(url), subject_key=_SUBJECT_KEY)
     found, errors = _seal_together(provider, store, 8)
     assert errors == []
     assert len({item[2] for item in found}) == 1
@@ -541,7 +609,7 @@ def test_shred_clears_the_dek_cache(monkeypatch):
     provider = EnvKeyProvider(_ring())
     from kata_service.keys import InProcessDekStore
 
-    store = InProcessDekStore(_KEK)
+    store = InProcessDekStore(_SUBJECT_KEY)
     encoded, wrapped = seal_detached(provider, b"SYNTHETIC TEST DATA", subject_id="prn_synthetic", store=store)
     assert open_detached(provider, encoded, wrapped, subject_id="prn_synthetic") == b"SYNTHETIC TEST DATA"
     import kata_service.keys as keys
@@ -701,6 +769,244 @@ def test_wrong_subject_and_malformed_blob_fail_closed():
         local.unwrap_dek("prn_synthetic", junk)
     assert "prn_synthetic" not in str(local_error.value)
     assert _KEK.decode() not in str(local_error.value)
+
+
+def test_kek_rotation_keeps_subject_ref_and_shred_still_deletes():
+    rotated_kek = b"SYNTHETIC TEST DATA kek-rot!!!!!"
+    assert len(rotated_kek) == 32
+    person = "prn_synthetic"
+    first = EnvKeyProvider(_ring(), master_key=_KEK, master_key_id="kek-2026-10")
+    second = EnvKeyProvider(
+        {
+            **_ring(),
+            "kek-2026-10": {"secret": _KEK, "purposes": ["kek"], "active": False},
+        },
+        master_key=rotated_kek,
+        master_key_id="kek-2026-11",
+    )
+    assert first.subject_ref(person) == second.subject_ref(person)
+    assert first.subject_ref(person) == opaque_subject(person, _SUBJECT_KEY)
+    assert first.subject_ref(person) != opaque_subject(person, _KEK)
+    assert first.subject_ref(person) != opaque_subject(person, rotated_kek)
+    from kata_service.keys import InProcessDekStore
+
+    store = InProcessDekStore(_SUBJECT_KEY)
+    encoded, wrapped = seal_detached(first, b"SYNTHETIC TEST DATA", subject_id=person, store=store)
+    assert open_stored(first, encoded, subject_id=person, store=store) == b"SYNTHETIC TEST DATA"
+    assert shred_subject(second, store, person) is True
+    assert store.get(person) is None
+    with pytest.raises(KeyCustodyError, match="ciphertext did not open"):
+        open_stored(second, encoded, subject_id=person, store=store)
+    assert open_detached(second, encoded, wrapped, subject_id=person) == b"SYNTHETIC TEST DATA"
+
+
+def test_cannot_open_after_shred():
+    provider = EnvKeyProvider(_ring())
+    from kata_service.keys import InProcessDekStore
+
+    store = InProcessDekStore(_SUBJECT_KEY)
+    encoded, returned = seal_detached(provider, b"SYNTHETIC TEST DATA", subject_id="prn_synthetic", store=store)
+    assert open_stored(provider, encoded, subject_id="prn_synthetic", store=store) == b"SYNTHETIC TEST DATA"
+    assert shred_subject(provider, store, "prn_synthetic") is True
+    assert store.get("prn_synthetic") is None
+    with pytest.raises(KeyCustodyError, match="ciphertext did not open"):
+        open_stored(provider, encoded, subject_id="prn_synthetic", store=store)
+    assert open_detached(provider, encoded, returned, subject_id="prn_synthetic") == b"SYNTHETIC TEST DATA"
+
+
+def test_master_key_id_is_stored_and_same_id_replacement_does_not_open():
+    new_secret = b"SYNTHETIC TEST DATA kek-new!!!!!"
+    assert len(new_secret) == 32
+    old = EnvKeyProvider({}, master_key=_KEK, master_key_id="kek-old", subject_key=_SUBJECT_KEY)
+    plain, wrapped = old.issue_dek("prn_synthetic")
+    assert wrapped[0] == 1
+    assert wrapped[2 : 2 + wrapped[1]] == b"kek-old"
+    rotated = EnvKeyProvider(
+        {"kek-old": {"secret": _KEK, "purposes": ["kek"], "active": False}},
+        master_key=new_secret,
+        master_key_id="kek-new",
+        subject_key=_SUBJECT_KEY,
+    )
+    assert rotated.active_kid("kek") == "kek-new"
+    assert rotated.unwrap_dek("prn_synthetic", wrapped) == plain
+    assert rotated.subject_ref("prn_synthetic") == old.subject_ref("prn_synthetic")
+    replaced = EnvKeyProvider({}, master_key=new_secret, master_key_id="kek-old", subject_key=_SUBJECT_KEY)
+    with pytest.raises(KeyCustodyError, match="ciphertext did not open"):
+        replaced.unwrap_dek("prn_synthetic", wrapped)
+
+
+def test_previous_subject_ref_still_shreds_after_ref_key_rotation():
+    old_ref = b"SYNTHETIC TEST DATA ref-old!!!!!"
+    assert len(old_ref) == 32
+    writer = EnvKeyProvider(
+        {
+            "local-kek": {"secret": _KEK, "purposes": ["kek"], "active": True},
+            "ref-old": {"secret": old_ref, "purposes": ["ref"], "active": True},
+        }
+    )
+    from kata_service.keys import InProcessDekStore
+
+    written = InProcessDekStore(old_ref)
+    encoded, wrapped = seal_detached(writer, b"SYNTHETIC TEST DATA", subject_id="prn_synthetic", store=written)
+    reader = EnvKeyProvider(
+        {
+            "local-kek": {"secret": _KEK, "purposes": ["kek"], "active": True},
+            "subject-ref": {"secret": _SUBJECT_KEY, "purposes": ["ref"], "active": True},
+            "ref-old": {"secret": old_ref, "purposes": ["ref"], "active": False},
+        }
+    )
+    assert reader.subject_ref("prn_synthetic") != writer.subject_ref("prn_synthetic")
+    assert open_detached(reader, encoded, wrapped, subject_id="prn_synthetic") == b"SYNTHETIC TEST DATA"
+    assert shred_subject(reader, written, "prn_synthetic") is True
+    assert written.get("prn_synthetic") is None
+    with pytest.raises(KeyCustodyError, match="ciphertext did not open"):
+        open_stored(reader, encoded, subject_id="prn_synthetic", store=written)
+
+
+def test_wrap_and_hmac_keys_are_derived_apart():
+    from kata_service.keys import _hmac_key, _hkdf, _wrap_key
+
+    wrap = _wrap_key(_KEK)
+    mac = _hmac_key(_KEK, "identifier")
+    subject = _hkdf(_SUBJECT_KEY, b"gab-subject-ref-v1")
+    assert wrap != mac
+    assert wrap != _KEK
+    assert mac != _KEK
+    assert subject != _SUBJECT_KEY
+    assert subject != wrap
+    provider = EnvKeyProvider(
+        {
+            "same": {"secret": _KEK, "purposes": ["identifier", "kek"], "active": True},
+            "subject-ref": {"secret": _SUBJECT_KEY, "purposes": ["ref"], "active": True},
+        }
+    )
+    token = provider.hmac(_EMAIL, purpose="identifier")
+    assert token.encode().endswith(_independent_hmac(_KEK, "identifier", _EMAIL))
+    plain, wrapped = provider.issue_dek("prn_synthetic")
+    assert provider.unwrap_dek("prn_synthetic", wrapped) == plain
+
+
+def test_kms_key_id_mismatch_fails_closed(caplog):
+    fake = FakeKms()
+    provider = AwsKmsEnvelopeProvider(
+        key_id=_MASTER,
+        region="us-east-1",
+        client=fake,
+        subject_key=_SUBJECT_KEY,
+    )
+    from kata_service.keys import _pack_kms_dek
+
+    foreign = _pack_kms_dek("alias/other-synthetic", b"synthetic-blob")
+    with caplog.at_level(logging.DEBUG):
+        with pytest.raises(KeyCustodyError, match="wrapped data key was not produced for this master key") as caught:
+            provider.unwrap_dek("prn_synthetic", foreign)
+    rendered = str(caught.value) + repr(caught.value)
+    assert caught.value.__cause__ is None
+    assert "prn_synthetic" not in rendered
+    assert "LEAK-MARKER" not in rendered
+    assert _SUBJECT_KEY.decode() not in rendered
+    assert "alias/other-synthetic" not in rendered
+    assert fake.calls == []
+    assert "prn_synthetic" not in caplog.text
+    assert provider.usage() == []
+
+
+def test_kms_dek_length_is_rejected(caplog):
+    boto3 = pytest.importorskip("boto3")
+    from botocore.stub import Stubber
+
+    from kata_service.keys import Boto3KmsClient, _pack_kms_dek
+
+    short = b"LEAK-MARKER-short!!"
+    assert len(short) != 32
+    context = dek_encryption_context("prn_synthetic", _SUBJECT_KEY)
+    raw = boto3.client("kms", region_name="us-east-1")
+    adapter = Boto3KmsClient("us-east-1")
+    adapter._client = raw
+    provider = AwsKmsEnvelopeProvider(
+        key_id=_MASTER,
+        region="us-east-1",
+        client=adapter,
+        subject_key=_SUBJECT_KEY,
+    )
+    stubber = Stubber(raw)
+    stubber.add_response(
+        "generate_data_key",
+        {"Plaintext": short, "CiphertextBlob": b"synthetic-blob"},
+        {"KeyId": _MASTER, "KeySpec": "AES_256", "EncryptionContext": context},
+    )
+    with stubber:
+        with caplog.at_level(logging.DEBUG):
+            with pytest.raises(KeyCustodyError, match="KMS data key was not 32 bytes") as issued:
+                provider.issue_dek("prn_synthetic")
+    assert issued.value.__cause__ is None
+    assert "LEAK-MARKER" not in str(issued.value)
+    assert "prn_synthetic" not in str(issued.value)
+    assert short not in str(issued.value).encode()
+    assert "LEAK-MARKER" not in caplog.text
+    assert provider.usage() == []
+
+    raw = boto3.client("kms", region_name="us-east-1")
+    adapter = Boto3KmsClient("us-east-1")
+    adapter._client = raw
+    provider = AwsKmsEnvelopeProvider(
+        key_id=_MASTER,
+        region="us-east-1",
+        client=adapter,
+        subject_key=_SUBJECT_KEY,
+    )
+    blob = b"synthetic-kms-blob"
+    stubber = Stubber(raw)
+    stubber.add_response(
+        "decrypt",
+        {"Plaintext": short, "KeyId": _MASTER},
+        {"CiphertextBlob": blob, "EncryptionContext": context, "KeyId": _MASTER},
+    )
+    with stubber:
+        with caplog.at_level(logging.DEBUG):
+            with pytest.raises(KeyCustodyError, match="KMS data key was not 32 bytes") as opened:
+                provider.unwrap_dek("prn_synthetic", _pack_kms_dek(_MASTER, blob))
+    assert opened.value.__cause__ is None
+    assert "LEAK-MARKER" not in str(opened.value)
+    assert "prn_synthetic" not in str(opened.value)
+    assert "LEAK-MARKER" not in caplog.text
+    assert provider.usage() == []
+
+
+def test_kms_encrypt_errors_fail_closed(caplog):
+    boto3 = pytest.importorskip("boto3")
+    from botocore.stub import Stubber
+
+    from kata_service.keys import Boto3KmsClient
+
+    context = hmac_encryption_context("identifier", "email-new")
+    cases = [
+        ("AccessDeniedException", "encrypt LEAK-MARKER prn_synthetic", "KMS denied the request"),
+        ("KMSInvalidStateException", "disabled LEAK-MARKER prn_synthetic", "KMS key is disabled or pending deletion"),
+    ]
+    for code, leak, public in cases:
+        raw = boto3.client("kms", region_name="us-east-1")
+        adapter = Boto3KmsClient("us-east-1")
+        adapter._client = raw
+        stubber = Stubber(raw)
+        stubber.add_client_error(
+            "encrypt",
+            service_error_code=code,
+            service_message=leak,
+            expected_params={"KeyId": _MASTER, "Plaintext": _HMAC_KEY, "EncryptionContext": context},
+        )
+        with stubber:
+            with caplog.at_level(logging.DEBUG):
+                with pytest.raises(KeyCustodyError, match=public) as caught:
+                    adapter.encrypt(key_id=_MASTER, plaintext=_HMAC_KEY, encryption_context=context)
+        rendered = str(caught.value) + repr(caught.value)
+        assert leak not in rendered
+        assert "LEAK-MARKER" not in rendered
+        assert "prn_synthetic" not in rendered
+        assert _HMAC_KEY.decode() not in rendered
+        assert caught.value.__cause__ is None
+        assert "LEAK-MARKER" not in caplog.text
+        assert "prn_synthetic" not in caplog.text
 
 
 def _unwrap_mark(provider, subject_id: str, wrapped: bytes):

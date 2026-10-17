@@ -16,15 +16,17 @@ Leaving `GAB_KEY_PROVIDER` unset and leaving `GAB_MASTER_KEY` unset does not cha
 
 ## Accepted decision
 
-On 2026-10-17 Kaan approved this: the proof-of-concept key-custody feature runs only in a separate sandbox project. That project sets `GAB_ENV=sandbox` and uses the `gab_sandbox` schema. The feature is not enabled in production. Until a real customer arrives, the only data is synthetic.
+On 2026-10-17 Kaan approved this: the proof-of-concept key-custody feature runs only in a separate sandbox project. That project sets `GAB_ENV=sandbox`. The feature is not enabled in production. Until a real customer arrives, the only data is synthetic.
 
 The `GAB_ENV` default stays `production`. The production refusal stays. `GAB_SYNTHETIC_DATA` and `GAB_ALLOW_ENV_KEYS` do not override it.
 
 Consequence: setting `GAB_MASTER_KEY` or `GAB_KEY_PROVIDER=env` on the live Vercel production project yields `config_error` and an empty `key_provider`. Envelope encryption and keyed HMAC stay off there.
 
+Whether `config_error` stops the whole service is UNKNOWN.
+
 This decision is reopened when the first real customer arrives, together with the KMS decision and the hosting migration.
 
-`017_subject_deks.sql` still creates `public.gab_subject_deks` only. Migration `006` is what copies bureau tables into `gab_sandbox`. Do not set the master key on the production project. Wiring the sandbox project so wrapped keys stay in `gab_sandbox` is later work. This note does not do that wiring.
+`017_subject_deks.sql` creates `gab_subject_deks` in `public`. This feature does not use the `gab_sandbox` schema. Migration `006` creates `gab_sandbox` and copies other bureau tables into it. It does not create `gab_subject_deks`. Do not set the master key on the production project.
 
 Accepted risk: if the Vercel account is compromised the master key is lost too. An attacker who also reads the database can unwrap the data keys.
 
@@ -104,9 +106,19 @@ The global issuer `https://oidc.vercel.com` is a different IAM provider. IAM req
 
 ## Envelope
 
-`seal` draws a 32-byte data key, wraps it with `GAB_MASTER_KEY` (or the local `kek` purpose in tests), and encrypts with AES-256-GCM. The subject id is not stored. Callers pass the raw id. The encryption context, the additional data, and `gab_subject_deks.subject_ref` store `opaque_subject`. That value is HMAC-SHA256 of a fixed label and the id, keyed by the active kek (or by `GAB_SUBJECT_REF_KEY` on the AWS path). It is not an unkeyed SHA-256, so a person who sees the reference cannot test candidate emails or names without that key.
+`seal` draws a 32-byte data key, wraps it with `GAB_MASTER_KEY` (or the local `kek` purpose in tests), and encrypts with AES-256-GCM. The wrap uses HKDF-SHA256, not the raw secret. The salt is `gab-hkdf-v1`. The wrap info is `gab-wrap-v1`. The HMAC info is `gab-hmac-v1`, a NUL, and the purpose. Those two derived keys are different even when the input secret is the same.
+
+The subject id is not stored. Callers pass the raw id. The encryption context, the additional data, and `gab_subject_deks.subject_ref` store `opaque_subject`. That value is HMAC-SHA256 of a fixed label and the id. The HMAC key is HKDF-SHA256 of a subject-reference secret, info `gab-subject-ref-v1`. It is not the wrapping key and not an unkeyed SHA-256, so a person who sees the reference cannot test candidate emails or names without that secret, and rotating the wrapping key does not change the digest.
+
+On the env path the subject-reference secret is `GAB_SUBJECT_REF_KEY`, or a ring entry with purpose `ref`. Its id is `GAB_SUBJECT_REF_KID` (default `subject-ref`). On the AWS path it is `GAB_SUBJECT_REF_KEY` only. The env provider does not key `subject_ref` with the active kek.
+
+`GAB_MASTER_KEY_ID` is the id stored inside each wrapped data key. When it is unset the id is `master`. Replacing the bytes behind an existing id makes those wraps unopenable. Rotation is a new id, the new secret in `GAB_MASTER_KEY`, and the previous secret kept in `GAB_HMAC_KEYS` under purpose `kek` with the old id. Unwrap reads the id from the blob and looks that id up.
+
+Rotating the subject-reference key changes the digest used for new writes. Keep each previous secret in the ring with purpose `ref` and not active, and pass those secrets to the store as `previous_keys` (the provider's `previous_subject_keys()`). `get` and `destroy` try the older digests, so shred still deletes the old row, and unwrap tries each digest as additional data. Dropping an old subject-reference secret without that lookup leaves the row in place, and shred will not find it. On `aws-kms` there is one `GAB_SUBJECT_REF_KEY`. Changing it without rewriting `subject_ref` is that same migration: the old rows stay under the old digest until the old secret is still available for lookup or the rows are moved.
 
 `seal` can embed the wrapped data key in one string. That form is not shredding: deleting the ciphertext deletes the wrapped key with it, and a backup restores both. The shred path is `seal_detached` plus the store. The first call inserts the wrapped key. A second call for the same person reuses it, so the first ciphertext stays readable. `DatabaseDekStore.put` inserts with `ON CONFLICT DO NOTHING` and reads the row back, including when two callers insert together. It does not replace an existing key. `shred_subject` is the only delete. It removes the row and clears this process's cache.
+
+`seal_detached` returns the ciphertext and the wrapped data key. If the caller stores that wrapped value, shred does not make the ciphertext unreadable. `open_detached` unwraps the bytes it is given and does not read the table. Shred deletes the store row and this process's cache only. The supported open path is `open_stored`, which reads the wrapped key from the store. After shred that read fails and the ciphertext does not open.
 
 Unwrapped data keys are cached in the process, keyed by the opaque subject and a hash of the wrapped blob. A cache entry lives for 300 seconds, and the cache holds at most 256 entries. A second unwrap of the same blob inside that window is a cache hit and does not repeat the wrap operation. Shredding clears this process's cache immediately. Another process that already unwrapped the key keeps its copy until that cache entry expires. Each HMAC, issue, unwrap, seal, and unseal appends a usage event with the operation, purpose, key id, opaque subject, cache hit or miss, and latency in milliseconds. The event does not include plaintext, key bytes, or the raw subject id. A KMS failure raises a fixed message. The AWS error text is not copied into that message, the repr, or a log line from this module.
 
@@ -140,7 +152,7 @@ Run this on a machine you control. Do not paste the output into a ticket, a log,
 python -c "import os,base64; print(base64.b64encode(os.urandom(32)).decode())"
 ```
 
-Store the line in the password manager and in the Vercel Sensitive variable `GAB_MASTER_KEY`. For the proof of concept set `GAB_ENV=sandbox` and leave `GAB_KEY_PROVIDER` unset. The unset default of `GAB_ENV` is `production`, and the env provider is then refused. Keep a second copy of `GAB_HMAC_KEYS` in the same password manager when keyed identifiers are turned on.
+Store the line in the password manager and in the Vercel Sensitive variable `GAB_MASTER_KEY`. Generate a second line the same way and store it as `GAB_SUBJECT_REF_KEY`. Set `GAB_MASTER_KEY_ID` to a new id when the wrapping secret changes, and keep the previous secret under its old id. For the proof of concept set `GAB_ENV=sandbox` and leave `GAB_KEY_PROVIDER` unset. The unset default of `GAB_ENV` is `production`, and the env provider is then refused. Keep a second copy of `GAB_HMAC_KEYS` in the same password manager when keyed identifiers are turned on.
 
 ### Restore drill
 
@@ -150,7 +162,7 @@ Use a synthetic fixture or a restored copy. Do not point the drill at the produc
 2. Put the password-manager copy of `GAB_MASTER_KEY` into that process and set `GAB_ENV=sandbox`.
 3. Read one `gab_subject_deks` row and the matching detached ciphertext from the restored copy.
 4. Open the ciphertext with the restored wrapped key. The plaintext should match the known fixture.
-5. On a synthetic row only, shred the subject, confirm the live row is gone and this process's cache no longer opens from memory, then restore the backup again and confirm the row is back. Another process can still hold the data key until its 300-second cache entry expires.
+5. On a synthetic row only, shred the subject, confirm the live row is gone and this process's cache no longer opens from memory, then restore the backup again and confirm the row is back. Another process can still hold the data key until its 300-second cache entry expires. This drill has not been performed.
 
 ## AWS HMAC wrap context
 
@@ -168,7 +180,7 @@ Per-subject data keys use a keyed `subject_ref`, not the raw id and not an unkey
 
 ## HMAC
 
-Outputs look like `v1:<kid>:<64 hex chars>`. The message is `gab-hmac-v1`, a NUL, the purpose (`identifier`, `rate`, `subject`, or `network`), a NUL, and the value. `kek` is a wrapping purpose, not an HMAC purpose.
+Outputs look like `v1:<kid>:<64 hex chars>`. The message is `gab-hmac-v1`, a NUL, the purpose (`identifier`, `rate`, `subject`, or `network`), a NUL, and the value. The HMAC key is HKDF-SHA256 of the ring secret, salt `gab-hkdf-v1`, info `gab-hmac-v1`, a NUL, and the purpose. `kek` and `ref` are not HMAC purposes.
 
 Keep old kids until stored identifiers are re-keyed. Lookups try every kid configured for the purpose. The active kid is the one new writes use. Set it with `"active": true` on a ring entry, or with `GAB_HMAC_ACTIVE_KID` (one id, or a JSON object of purpose to id).
 
@@ -183,6 +195,20 @@ Do not commit `GAB_MASTER_KEY`, `GAB_HMAC_KEYS`, wrapped blobs, data keys, or da
 A preview with `GAB_KEY_PROVIDER` and `GAB_MASTER_KEY` unset does not select a provider and does not write data keys. This change adds `017_subject_deks.sql`. The service applies additive `CREATE TABLE IF NOT EXISTS` on the first database request. A preview that shares the production database URL creates that empty table there. Leave the master key unset on that preview. Do not put key material in the repository.
 
 Migrations `001` through `010` are already applied in production, including both files numbered `006`. This change does not renumber them. `011` through `016` are absent here because later drafts reserve them: `011` keyed identifiers, `012` consent events, `013` breach register, `014` retention (not written yet), `015` entity kind, `016` ledger payloads. `017_subject_deks.sql` has not been applied. It stays `017` so it does not collide with those files.
+
+## Open items
+
+Acceptable for this proof of concept. This list is not a merge approval.
+
+- H3: the restore drill above has not been performed.
+- M1
+- M4
+- M5
+- L1
+- L2
+- N4: migrations `011` through `016` are reserved by later drafts, `014` is not written, `017` is not renumbered, and `001` through `010` are not renumbered.
+- Drafts #46 through #50 must not merge before the rebase in this note.
+- Whether `config_error` stops the whole service is UNKNOWN.
 
 ## Rebase plan for stacked drafts
 
@@ -203,7 +229,7 @@ Expected conflicts:
 - `docs/migration-plan.md` and a new `docs/migration-plan.vN.md` on every feature commit. `#46` archives `v2`, `#47` archives `v3`, `#48` archives `v4`, `#49` archives `v5`, `#50` archives `v6`. Those numbers now collide with the key-custody archives already on `#45` (`v3` and `v4`, and `v5` once this note is archived). Keep the archives that are already on the parent. Append the feature changelog as the next free version. Do not replace an existing archive with the feature branch's copy.
 - `docs/key-custody.md`, `service/README.md`, and `service/.env.example` on `#46`. The feature text still says `GAB_SYNTHETIC_DATA=1` allows the env provider in production. Keep the parent text. Add only the keyed-identifier sentences.
 - `service/tests/test_package_data.py` on each step. Keep every migration filename. The sorted list grows by `011`, then `012`, then `015`, then `016`, then `013`, and already includes `017`.
-- `service/kata_service/keys.py` on `#49` only. Start from the `#45` file. Re-apply ledger behavior onto it: `seal_detached` now requires the store, `put` does not replace a key, `InProcessDekStore` and `DatabaseDekStore` take a 32-byte subject key, and `opaque_subject` is a keyed HMAC. `asgi.py` on that branch constructs `DatabaseDekStore` with only a connection and `InProcessDekStore` with no arguments. Pass the subject key. `get` hashes its argument. `test_ledger_hygiene.py` calls `dek_store.get` with the ledger body's `subject_ref` (`v1:...`) and then passes that same string to `open_detached` as `subject_id`. Hashing it again will miss the row. Pass the raw principal id, or read the stored reference without hashing twice.
+- `service/kata_service/keys.py` on `#49` only. Start from the `#45` file. Re-apply ledger behavior onto it: `seal_detached` now requires the store, `put` does not replace a key, `InProcessDekStore` and `DatabaseDekStore` take the 32-byte subject-reference secret (not the kek), and `opaque_subject` is a keyed HMAC of that secret. Pass `previous_keys` when older subject-reference secrets must still shred. `asgi.py` on that branch constructs `DatabaseDekStore` with only a connection and `InProcessDekStore` with no arguments. Pass the subject-reference key. `get` hashes its argument. `test_ledger_hygiene.py` calls `dek_store.get` with the ledger body's `subject_ref` (`v1:...`) and then passes that same string to `open_detached` as `subject_id`. Hashing it again will miss the row. Pass the raw principal id, or read the stored reference without hashing twice. A caller who keeps the wrapped bytes returned by `seal_detached` can still open after shred.
 - `service/kata_service/settings.py` should take the feature flag fields. It should not restore a production bypass.
 
 Tests to adapt. `test_keys.py` on the stacked tips is the old file from `0ea7846`. Leave `#45`'s `test_keys.py` in place. Do not put back tests that expect `GAB_SYNTHETIC_DATA=1` to load the env provider in production.
