@@ -1,0 +1,182 @@
+{
+  "memory": {
+    "after_replay": {
+      "allows": [
+        {
+          "action_id": "act_once",
+          "outcome": "allowed",
+          "sequence": 1
+        }
+      ],
+      "ledger": [],
+      "ledger_head": "sha256:2847dd80d6b6daa70345f0b64e2aca76656df7bc4d7d226079400743576a515e",
+      "ledger_sequence": 1,
+      "spend_summary": {
+        "CAD": {
+          "int_laptop": "10"
+        }
+      }
+    },
+    "after_restore": {
+      "allows": [
+        {
+          "action_id": "act_once",
+          "outcome": "allowed",
+          "sequence": 1
+        }
+      ],
+      "ledger": [],
+      "ledger_head": "sha256:2847dd80d6b6daa70345f0b64e2aca76656df7bc4d7d226079400743576a515e",
+      "ledger_sequence": 1,
+      "spend_summary": {
+        "CAD": {
+          "int_laptop": "10"
+        }
+      }
+    },
+    "before": {
+      "allows": [
+        {
+          "action_id": "act_once",
+          "outcome": "allowed",
+          "sequence": 1
+        }
+      ],
+      "ledger": [],
+      "ledger_head": "sha256:2847dd80d6b6daa70345f0b64e2aca76656df7bc4d7d226079400743576a515e",
+      "ledger_sequence": 1,
+      "spend_summary": {
+        "CAD": {
+          "int_laptop": "10"
+        }
+      }
+    },
+    "first_store": 200,
+    "first_verify": "ALLOW",
+    "label": "SYNTHETIC TEST DATA",
+    "mutated_body": {
+      "error": "agreement_id is already stored"
+    },
+    "mutated_status": 409,
+    "new_agreement_id": "agr_next",
+    "new_agreement_status": 200,
+    "original_after_new": {
+      "allows": [
+        {
+          "action_id": "act_once",
+          "outcome": "allowed",
+          "sequence": 1
+        }
+      ],
+      "ledger": [],
+      "ledger_head": "sha256:2847dd80d6b6daa70345f0b64e2aca76656df7bc4d7d226079400743576a515e",
+      "ledger_sequence": 1,
+      "spend_summary": {
+        "CAD": {
+          "int_laptop": "10"
+        }
+      }
+    },
+    "replay_body": {
+      "reasons": [
+        "ACTION_REPLAY"
+      ],
+      "verdict": "DENY"
+    },
+    "replay_status": 200,
+    "restored_body": {
+      "error": "agreement_id is already stored"
+    },
+    "restored_status": 409
+  },
+  "postgres": {
+    "after_replay": {
+      "allows": [
+        {
+          "action_id": "act_once",
+          "outcome": "allowed",
+          "sequence": 1
+        }
+      ],
+      "ledger": [],
+      "ledger_head": "sha256:2847dd80d6b6daa70345f0b64e2aca76656df7bc4d7d226079400743576a515e",
+      "ledger_sequence": 1,
+      "spend_summary": {
+        "CAD": {
+          "int_laptop": 10
+        }
+      }
+    },
+    "after_restore": {
+      "allows": [
+        {
+          "action_id": "act_once",
+          "outcome": "allowed",
+          "sequence": 1
+        }
+      ],
+      "ledger": [],
+      "ledger_head": "sha256:2847dd80d6b6daa70345f0b64e2aca76656df7bc4d7d226079400743576a515e",
+      "ledger_sequence": 1,
+      "spend_summary": {
+        "CAD": {
+          "int_laptop": 10
+        }
+      }
+    },
+    "before": {
+      "allows": [
+        {
+          "action_id": "act_once",
+          "outcome": "allowed",
+          "sequence": 1
+        }
+      ],
+      "ledger": [],
+      "ledger_head": "sha256:2847dd80d6b6daa70345f0b64e2aca76656df7bc4d7d226079400743576a515e",
+      "ledger_sequence": 1,
+      "spend_summary": {
+        "CAD": {
+          "int_laptop": 10
+        }
+      }
+    },
+    "first_store": 200,
+    "first_verify": "ALLOW",
+    "label": "SYNTHETIC TEST DATA",
+    "mutated_body": {
+      "error": "agreement_id is already stored"
+    },
+    "mutated_status": 409,
+    "new_agreement_id": "agr_next",
+    "new_agreement_status": 200,
+    "original_after_new": {
+      "allows": [
+        {
+          "action_id": "act_once",
+          "outcome": "allowed",
+          "sequence": 1
+        }
+      ],
+      "ledger": [],
+      "ledger_head": "sha256:2847dd80d6b6daa70345f0b64e2aca76656df7bc4d7d226079400743576a515e",
+      "ledger_sequence": 1,
+      "spend_summary": {
+        "CAD": {
+          "int_laptop": 10
+        }
+      }
+    },
+    "replay_body": {
+      "reasons": [
+        "ACTION_REPLAY"
+      ],
+      "verdict": "DENY"
+    },
+    "replay_status": 200,
+    "restored_body": {
+      "error": "agreement_id is already stored"
+    },
+    "restored_status": 409
+  }
+}

@@ -1585,6 +1585,8 @@ class BureauService:
             raise BureauError(400, "agreement document is not valid") from None
         if agreement.status not in {"active", "accepted"}:
             raise BureauError(400, "agreement is not active")
+        if self.repo.get_agreement(agreement.agreement_id) is not None:
+            raise BureauError(409, "agreement_id is already stored")
         for mandate in agreement.mandates:
             embedded = (mandate.get("agent") or {}).get("agent_id")
             if embedded != agent_id:
