@@ -733,6 +733,41 @@ def shred_subject(provider, store, subject_id: str) -> bool:
     return removed
 
 
+class FileDekStore:
+    """Wrapped DEK files for a test process that has no database.
+
+    The proof-of-concept store is ``DatabaseDekStore``. Those rows live in
+    ``gab_subject_deks`` and travel with the Neon backup.
+    """
+
+    def __init__(self, directory: str) -> None:
+        from pathlib import Path
+
+        self.directory = Path(directory)
+        self.directory.mkdir(parents=True, exist_ok=True)
+
+    def put(self, subject_id: str, wrapped: bytes) -> None:
+        path = self._path(subject_id)
+        path.write_bytes(bytes(wrapped))
+        path.chmod(0o600)
+
+    def get(self, subject_id: str) -> bytes | None:
+        path = self._path(subject_id)
+        if not path.is_file():
+            return None
+        return path.read_bytes()
+
+    def destroy(self, subject_id: str) -> bool:
+        path = self._path(subject_id)
+        if not path.is_file():
+            return False
+        path.unlink()
+        return True
+
+    def _path(self, subject_id: str):
+        return self.directory / opaque_subject(subject_id)
+
+
 def provider_from_env(env: dict[str, str], *, deployment_env: str) -> EnvKeyProvider | AwsKmsEnvelopeProvider | None:
     """Build the configured provider.
 

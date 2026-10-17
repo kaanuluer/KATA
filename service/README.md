@@ -88,6 +88,7 @@ Set these in the host environment. The current proof-of-concept host is a Vercel
 | `GAB_CONSENT_NETWORK` | no | no | Default off. Requires consent events. On: a network signal needs a granted network consent event. |
 | `GAB_ENTITY_ONLY` | no | no | Default off. On: verify, report, and dispute reject unknown fields and email or phone patterns in free text, and registration requires `entity_kind` of `business` or `personal`. The plan's suggested default of on is not applied here. |
 | `GAB_NETWORK_STEP_UP` | no | no | Default off. On: a DENY whose reasons are only network-signal reasons becomes STEP_UP. Velocity and mandate DENY stay DENY. |
+| `GAB_LEDGER_HYGIENE` | no | no | Default off. On: ledger bodies are limited to identifiers, hashes, and timestamps. Payloads are envelope-encrypted. Ciphertext goes in `gab_payloads`. The wrapped data key goes in `gab_subject_deks`. Needs a key provider, and `DATABASE_URL` when `GAB_ENV` is production. |
 
 Generate a log seed, a push notifier, and an append token:
 

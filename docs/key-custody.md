@@ -30,6 +30,8 @@ Keep a copy of `GAB_MASTER_KEY` in a separate place Kaan controls, such as a pas
 
 Wrapped per-person data keys live in `gab_subject_deks` and travel with the Neon backup. Restoring the database restores those keys. Deleting a row shreds the live database. A backup taken before the delete still contains the wrapped key, and restoring that backup brings the key back.
 
+Ledger payload ciphertext is a separate table, `gab_payloads`. Its wrapped data key is the `gab_subject_deks` row, not a file beside the database.
+
 ## AWS HMAC wrap context
 
 This block is the future option, not the proof-of-concept path. Wrap each HMAC data key with `Encrypt` under the KMS master key and this encryption context. Store only the ciphertext blob, base64, in `GAB_KMS_WRAPPED_HMAC_KEYS`.
