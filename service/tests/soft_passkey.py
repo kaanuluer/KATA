@@ -21,12 +21,12 @@ class SoftPasskey:
         self.cred_id = secrets.token_bytes(16)
         self.sign_count = 0
 
-    def registration(self, options: dict, origin: str) -> dict:
+    def registration(self, options: dict, origin: str, *, verified: bool = True) -> dict:
         numbers = self.key.public_key().public_numbers()
         cose = encode_cbor(
             {1: 2, 3: -7, -1: 1, -2: numbers.x.to_bytes(32, "big"), -3: numbers.y.to_bytes(32, "big")}
         )
-        auth_data = _auth_data(options["rp"]["id"], 0x01 | 0x04 | 0x40, 0) + (b"\x00" * 16)
+        auth_data = _auth_data(options["rp"]["id"], _flags(0x40, verified), 0) + (b"\x00" * 16)
         auth_data += len(self.cred_id).to_bytes(2, "big") + self.cred_id + cose
         attestation = encode_cbor({"fmt": "none", "attStmt": {}, "authData": auth_data})
         client_data = _client_data("webauthn.create", options["challenge"], origin)
@@ -40,9 +40,9 @@ class SoftPasskey:
             },
         }
 
-    def authentication(self, options: dict, origin: str) -> dict:
+    def authentication(self, options: dict, origin: str, *, verified: bool = True) -> dict:
         self.sign_count += 1
-        auth_data = _auth_data(options["rpId"], 0x01 | 0x04, self.sign_count)
+        auth_data = _auth_data(options["rpId"], _flags(0, verified), self.sign_count)
         client_data = _client_data("webauthn.get", options["challenge"], origin)
         signature = self.key.sign(auth_data + hashlib.sha256(client_data).digest(), ec.ECDSA(hashes.SHA256()))
         return {
@@ -85,6 +85,13 @@ def assertion_for(client, token: str, soft: SoftPasskey) -> dict:
     options = client.post("/v1/portal/passkeys/assert/options", headers=_auth(token))
     assert options.status_code == 200, options.text
     return soft.authentication(options.json(), origin_of(client))
+
+
+def _flags(extra: int, verified: bool) -> int:
+    flags = 0x01 | extra
+    if verified:
+        flags |= 0x04
+    return flags
 
 
 def _auth_data(rp_id: str, flags: int, sign_count: int) -> bytes:

@@ -1,4 +1,4 @@
-var CACHE = "gab-portal-shell-1";
+var CACHE = "gab-portal-shell-2";
 var SHELL = [
   "/portal",
   "/assets/portal.js",

@@ -332,6 +332,7 @@ footer.site p { margin: 0 0 8px; }
 .portal-home .device { display: flex; justify-content: space-between; gap: 12px; align-items: center; border-top: 1px solid var(--line); padding-top: 8px; }
 .portal-home .device button { width: auto; min-width: 44px; }
 .portal-home .check { margin-top: 16px; }
+.portal-home .passkey-miss { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--wash); }
 .portal-home ul { margin: 0; padding-left: 18px; }
 @media (max-width: 720px) {
   .portal-home .ops-head { flex-direction: column; align-items: stretch; }
