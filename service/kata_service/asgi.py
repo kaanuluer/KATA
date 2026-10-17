@@ -519,6 +519,9 @@ def ensure_bureau(app: FastAPI):
             keyed_identifiers=settings.keyed_identifiers,
             hmac_rate_subject=settings.hmac_rate_subject,
             stop_plaintext_email=settings.stop_plaintext_email,
+            consent_events=settings.consent_events,
+            consent_push=settings.consent_push,
+            consent_network=settings.consent_network,
         )
         if settings.demo:
             from kata_service.seed import seed_demo
@@ -559,6 +562,9 @@ def ensure_bureau(app: FastAPI):
         keyed_identifiers=settings.keyed_identifiers,
         hmac_rate_subject=settings.hmac_rate_subject,
         stop_plaintext_email=settings.stop_plaintext_email,
+        consent_events=settings.consent_events,
+        consent_push=settings.consent_push,
+        consent_network=settings.consent_network,
     )
     app.state.bureau = service
     return service

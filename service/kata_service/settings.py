@@ -59,6 +59,9 @@ class Settings:
     keyed_identifiers: bool = False
     hmac_rate_subject: bool = False
     stop_plaintext_email: bool = False
+    consent_events: bool = False
+    consent_push: bool = False
+    consent_network: bool = False
 
     def log_key(self) -> PrivateKey | None:
         if self.log_signing_seed is None:
@@ -99,6 +102,11 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
         error = "GAB_STOP_PLAINTEXT_EMAIL requires GAB_KEYED_IDENTIFIERS=1"
     if error is None and (keyed_identifiers or hmac_rate_subject) and key_provider is None:
         error = "keyed identifiers and rate subjects need GAB_KEY_PROVIDER"
+    consent_events = _flag(env.get("GAB_CONSENT_EVENTS"))
+    consent_push = _flag(env.get("GAB_CONSENT_PUSH"))
+    consent_network = _flag(env.get("GAB_CONSENT_NETWORK"))
+    if error is None and (consent_push or consent_network) and not consent_events:
+        error = "consent purposes need GAB_CONSENT_EVENTS=1"
     return Settings(
         database_url=database_url,
         schema_url=schema_url,
@@ -137,6 +145,9 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
         keyed_identifiers=keyed_identifiers,
         hmac_rate_subject=hmac_rate_subject,
         stop_plaintext_email=stop_plaintext_email,
+        consent_events=consent_events,
+        consent_push=consent_push,
+        consent_network=consent_network,
     )
 
 
