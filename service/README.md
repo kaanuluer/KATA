@@ -72,8 +72,9 @@ Set these in the host environment. The current proof-of-concept host is a Vercel
 | `GAB_REQUIRE_PROOFING` | no | no | Default on, including when `GAB_DEFENSES=0`. `0` scores the claimed verification level. `POST /v1/agents/{id}/proofing` files an operator review or an institution attestation hash. |
 | `GAB_SCORE_WEIGHTS` | no | no | Optional JSON override of the weights at `GET /v1/score-model`. Invalid JSON or an out-of-range value makes `/v1` return 500. |
 | `GAB_CONSORTIUM_MATCH_THRESHOLD` | no | no | Default 2 other members. Below that, `POST /v1/consortium/match` returns `matched: false` and omits the count. |
-| `GAB_KEY_PROVIDER` | no | no | Unset by default. `aws-kms` uses a KMS master key. `env` is non-production (tests and the PoC) and needs `GAB_ALLOW_ENV_KEYS=1` when `GAB_ENV` is production. |
-| `GAB_ALLOW_ENV_KEYS` | no | no | `1` acknowledges the non-production env provider on the PoC. It does not make those keys production custody. |
+| `GAB_KEY_PROVIDER` | no | no | Unset by default. A `GAB_MASTER_KEY` with no provider name selects `env`, the proof-of-concept default for synthetic data. `aws-kms` is used only when this is set to `aws-kms`. |
+| `GAB_MASTER_KEY` | for the env provider | yes | 32-byte key, base64. On Vercel, mark it Sensitive. It wraps per-person data keys. It is not written to the database. |
+| `GAB_SYNTHETIC_DATA` | with `env` when `GAB_ENV` is production | no | `1` confirms the database holds synthetic rows. Real customer personal data requires a KMS decision and the hosting migration first. |
 | `GAB_HMAC_KEYS` | with `env` | yes | JSON map of key id to 32-byte secret. Never commit a value. |
 | `GAB_HMAC_ACTIVE_KID` | no | no | Active key id, or a JSON object of purpose to key id. |
 | `GAB_KMS_KEY_ID` | with `aws-kms` | no | Master key id or ARN. The key itself stays in KMS. |
