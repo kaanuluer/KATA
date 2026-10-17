@@ -63,6 +63,9 @@ class Settings:
     push_notifier_unusable: bool = False
     subject_ref_unusable: bool = False
     master_key_configured: bool = False
+    keyed_identifiers: bool = False
+    hmac_rate_subject: bool = False
+    stop_plaintext_email: bool = False
 
     def log_key(self) -> PrivateKey | None:
         if self.log_signing_seed is None:
@@ -119,6 +122,13 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
     except (KataError, ValueError, json.JSONDecodeError, KeyCustodyError) as exc:
         if error is None:
             error = str(exc)
+    keyed_identifiers = _flag(env.get("GAB_KEYED_IDENTIFIERS"))
+    hmac_rate_subject = _flag(env.get("GAB_HMAC_RATE_SUBJECT"))
+    stop_plaintext_email = _flag(env.get("GAB_STOP_PLAINTEXT_EMAIL"))
+    if error is None and stop_plaintext_email and not keyed_identifiers:
+        error = "GAB_STOP_PLAINTEXT_EMAIL requires GAB_KEYED_IDENTIFIERS=1"
+    if error is None and (keyed_identifiers or hmac_rate_subject) and key_provider is None:
+        error = "keyed identifiers and rate subjects need GAB_KEY_PROVIDER"
     return Settings(
         database_url=database_url,
         schema_url=schema_url,
@@ -157,6 +167,9 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
         push_notifier_unusable=notifier_unusable,
         subject_ref_unusable=subject_ref_unusable,
         master_key_configured=master_key_configured,
+        keyed_identifiers=keyed_identifiers,
+        hmac_rate_subject=hmac_rate_subject,
+        stop_plaintext_email=stop_plaintext_email,
     )
 
 

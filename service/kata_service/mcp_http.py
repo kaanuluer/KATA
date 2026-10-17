@@ -19,7 +19,9 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 
 from kata_service.asgi import _endpoint_rate_cap, ensure_bureau
-from kata_service.bureau import BureauError, reset_test_mode, token_hash, use_test_mode
+from kata_service.bureau import BureauError, reset_test_mode, use_test_mode
+from kata_service.identifiers import rate_limit_subject
+from kata_service.keys import KeyCustodyError
 from kata_service.bureau_http import _plain
 
 PROTOCOL_VERSION = "2026-07-28"
@@ -499,7 +501,15 @@ def _api_key(request: Request, bureau, settings, token: str):
 
 
 def _limit(request: Request, bureau, settings, token: str, method: Any, name: str | None) -> None:
-    subject = token_hash(token) if token else (request.client.host if request.client else "anonymous")
+    try:
+        subject = rate_limit_subject(
+            token,
+            request.client.host if request.client else None,
+            keyed=settings.hmac_rate_subject,
+            provider=settings.key_provider,
+        )
+    except KeyCustodyError as exc:
+        raise _RpcFailure(500, -32000, str(exc)) from exc
     if bureau.hit_rate(subject) > settings.rate_limit_per_minute:
         raise _RpcFailure(429, -32000, "rate limit exceeded")
     if method != "tools/call" or name not in _TOOL_RATE:
