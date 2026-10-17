@@ -544,6 +544,8 @@ def ensure_bureau(app: FastAPI):
             consent_events=settings.consent_events,
             consent_push=settings.consent_push,
             consent_network=settings.consent_network,
+            entity_only=settings.entity_only,
+            network_step_up=settings.network_step_up,
         )
         if settings.demo:
             from kata_service.seed import seed_demo
@@ -588,6 +590,8 @@ def ensure_bureau(app: FastAPI):
         consent_events=settings.consent_events,
         consent_push=settings.consent_push,
         consent_network=settings.consent_network,
+        entity_only=settings.entity_only,
+        network_step_up=settings.network_step_up,
     )
     _bind_subject_keys(service, settings, repo._connect)
     app.state.bureau = service
