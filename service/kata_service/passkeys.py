@@ -1,6 +1,10 @@
 # Copyright 2026 Kaan Uluer
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-"""Passkey ceremonies for the individual portal."""
+"""Passkey ceremonies and the fixed approval push sentence.
+
+The push sender accepts one sentence. Merchant, amount, and agent name never
+enter that sentence.
+"""
 
 from __future__ import annotations
 
@@ -26,7 +30,18 @@ from webauthn.helpers.structs import (
 
 from kata_service.bureau import BureauError
 
+PUSH_TEXT = "an agent is waiting for your approval, open to review"
 CHALLENGE_TTL_SECONDS = 300
+
+
+def push_text() -> str:
+    return PUSH_TEXT
+
+
+def require_push_text(text: str) -> str:
+    if text != PUSH_TEXT:
+        raise BureauError(500, "push text is fixed")
+    return text
 
 
 def relying_party(origin: str) -> str:
@@ -109,3 +124,36 @@ def encode_key(value: bytes) -> str:
 
 def decode_key(value: str) -> bytes:
     return base64url_to_bytes(value)
+
+
+def deliver_web_push(
+    device: dict[str, Any],
+    text: str,
+    *,
+    public_key: str | None,
+    private_key: str | None,
+    subject: str | None,
+) -> str:
+    """Send the fixed sentence, or report that the host has no push keys.
+
+    The text is checked before the device is read, so a merchant, amount, or
+    agent name cannot be substituted.
+    """
+
+    require_push_text(text)
+    if not public_key or not private_key:
+        return "not_configured"
+    try:
+        from pywebpush import webpush
+    except ImportError:
+        return "not_configured"
+    webpush(
+        subscription_info={
+            "endpoint": device["endpoint"],
+            "keys": {"p256dh": device["p256dh"], "auth": device["auth_secret"]},
+        },
+        data=text,
+        vapid_private_key=private_key,
+        vapid_claims={"sub": subject or "mailto:info@globalagentbureau.com"},
+    )
+    return "sent"

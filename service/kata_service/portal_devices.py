@@ -1,14 +1,17 @@
 # Copyright 2026 Kaan Uluer
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-"""Devices and passkeys for an individual.
+"""Devices, passkeys, and step-up approvals for an individual.
 
-The individual portal does not score a person.
+The individual portal does not score a person. Approval notices use one
+fixed sentence.
 """
 
 from __future__ import annotations
 
 from datetime import timedelta
 from typing import Any
+
+from kata_intent.values import hash_document
 
 from kata_service.bureau import BureauError, _id
 from kata_service.passkeys import (
@@ -17,7 +20,9 @@ from kata_service.passkeys import (
     challenge_bytes,
     credential_id,
     decode_key,
+    deliver_web_push,
     encode_key,
+    push_text,
     registration_options,
     verify_assertion,
     verify_registration,
@@ -26,6 +31,8 @@ from kata_service.passkeys import (
 STORED = (
     "The email address used to sign in, and a pseudonymous principal id.",
     "For each registered device: a credential id, the public half of the passkey, a sign counter, a label, and the time it was added.",
+    "A browser push address, and the keys the browser issued for that address, only after explicit consent.",
+    "A short-lived approval record bound to one action, only while approval notices are on. The action text is removed when the approval is used or expires.",
     "Session tokens are stored as hashes.",
 )
 
@@ -36,6 +43,47 @@ def individual_view(view: dict[str, Any]) -> dict[str, Any]:
     for key in _HIDDEN:
         view.pop(key, None)
     return view
+
+
+def queue_step_up(service, agent: dict[str, Any], action: dict[str, Any] | None) -> None:
+    if not service.step_up_approval or not isinstance(action, dict):
+        return
+    principal_id = agent.get("principal_id")
+    if not principal_id:
+        return
+    digest = hash_document(action)
+    now = service.stamp()
+    if service.repo.pending_approval(principal_id, digest, now) is not None:
+        return
+    expires = (service.now() + timedelta(seconds=service.approval_ttl_seconds)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    service.repo.put_approval(
+        {
+            "approval_id": _id("apr"),
+            "principal_id": principal_id,
+            "action_hash": digest,
+            "action": action,
+            "status": "pending",
+            "expires_at": expires,
+            "used_at": None,
+            "created_at": now,
+        }
+    )
+    devices = [item for item in service.repo.list_push(principal_id) if item.get("consent_at")]
+    if not devices:
+        return
+    text = push_text()
+    for device in devices:
+        service.push_outbox.append({"endpoint": device["endpoint"], "body": text})
+        try:
+            deliver_web_push(
+                device,
+                text,
+                public_key=service.vapid_public_key,
+                private_key=service.vapid_private_key,
+                subject=service.vapid_subject,
+            )
+        except Exception:
+            service.push_outbox[-1]["delivery"] = "not_delivered"
 
 
 def registration_challenge(service, auth, origin: str) -> dict[str, Any]:
@@ -126,6 +174,7 @@ def list_devices(service, auth) -> dict[str, Any]:
     principal_id = auth.principal_id or ""
     return {
         "devices": [_public_device(item) for item in service.repo.list_passkeys(principal_id)],
+        "push_devices": [_public_push(item) for item in service.repo.list_push(principal_id)],
         "stored": list(STORED),
         "individual_score": False,
     }
@@ -136,6 +185,84 @@ def remove_device(service, auth, credential: str, assertion: dict[str, Any] | No
     if not service.repo.delete_passkey(credential, auth.principal_id or ""):
         raise BureauError(404, "device was not found")
     return {"removed": True}
+
+
+def register_push(service, auth, body: dict[str, Any]) -> dict[str, Any]:
+    service._portal(auth)
+    if body.get("consent") is not True:
+        raise BureauError(400, "push registration needs consent")
+    endpoint = str(body.get("endpoint") or "").strip()
+    if not endpoint.startswith("https://") or len(endpoint) > 500:
+        raise BureauError(400, "push endpoint must be https")
+    keys = body.get("keys")
+    if not isinstance(keys, dict):
+        raise BureauError(400, "push keys are required")
+    p256dh = str(keys.get("p256dh") or "")
+    auth_secret = str(keys.get("auth") or "")
+    if not p256dh or not auth_secret or len(p256dh) > 200 or len(auth_secret) > 200:
+        raise BureauError(400, "push keys are required")
+    record = {
+        "device_id": _id("psh"),
+        "principal_id": auth.principal_id,
+        "endpoint": endpoint,
+        "p256dh": p256dh,
+        "auth_secret": auth_secret,
+        "consent_at": service.stamp(),
+        "created_at": service.stamp(),
+    }
+    service.repo.put_push(record)
+    return _public_push(record)
+
+
+def remove_push(service, auth, device_id: str, assertion: dict[str, Any] | None, origin: str) -> dict[str, bool]:
+    require_assertion(service, auth, assertion, origin)
+    if not service.repo.delete_push(device_id, auth.principal_id or ""):
+        raise BureauError(404, "push device was not found")
+    return {"removed": True}
+
+
+def push_public_key(service, auth) -> dict[str, str]:
+    service._portal(auth)
+    if not service.step_up_approval or not service.vapid_public_key:
+        raise BureauError(404, "push is off")
+    return {"public_key": service.vapid_public_key}
+
+
+def list_approvals(service, auth) -> list[dict[str, Any]]:
+    service._portal(auth)
+    _require_flag(service)
+    now = service.stamp()
+    rows = []
+    for item in service.repo.list_approvals(auth.principal_id or ""):
+        rows.append(_public_approval(_settle(service, item, now), now))
+    return rows
+
+
+def decide_approval(service, auth, approval_id: str, decision: str, assertion: dict[str, Any] | None, origin: str) -> dict[str, str]:
+    _require_flag(service)
+    require_assertion(service, auth, assertion, origin)
+    record = service.repo.get_approval(approval_id)
+    if record is None or record["principal_id"] != auth.principal_id:
+        raise BureauError(404, "approval was not found")
+    now = service.stamp()
+    if record.get("used_at") or record["status"] != "pending":
+        raise BureauError(409, "approval was already used")
+    if record["expires_at"] < now:
+        record["status"] = "expired"
+        record["action"] = None
+        record["used_at"] = now
+        service.repo.save_approval(record)
+        raise BureauError(410, "approval has expired")
+    record["status"] = decision
+    record["used_at"] = now
+    record["action"] = None
+    service.repo.save_approval(record)
+    return {"approval_id": approval_id, "status": decision}
+
+
+def _require_flag(service) -> None:
+    if not service.step_up_approval:
+        raise BureauError(404, "step-up approval is off")
 
 
 def _store_challenge(service, principal_id: str | None, kind: str, challenge: bytes, origin: str) -> None:
@@ -196,3 +323,33 @@ def _public_device(record: dict[str, Any]) -> dict[str, Any]:
         "last_used_at": record.get("last_used_at"),
     }
 
+
+def _public_push(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "device_id": record["device_id"],
+        "endpoint": record["endpoint"],
+        "consent_at": record["consent_at"],
+        "created_at": record["created_at"],
+    }
+
+
+def _settle(service, record: dict[str, Any], now: str) -> dict[str, Any]:
+    if record["status"] == "pending" and record["expires_at"] < now:
+        record["status"] = "expired"
+        record["action"] = None
+        record["used_at"] = record.get("used_at") or now
+        service.repo.save_approval(record)
+    return record
+
+
+def _public_approval(record: dict[str, Any], now: str) -> dict[str, Any]:
+    pending = record["status"] == "pending" and record["expires_at"] >= now and record.get("action")
+    view: dict[str, Any] = {
+        "approval_id": record["approval_id"],
+        "status": record["status"],
+        "expires_at": record["expires_at"],
+        "created_at": record["created_at"],
+    }
+    if pending:
+        view["action"] = record["action"]
+    return view

@@ -993,7 +993,7 @@ _ENDPOINTS: tuple[dict[str, str], ...] = (
     {
         "method": "GET",
         "path": "/v1/portal/devices",
-        "summary": "Lists registered passkeys, plus the storage note. The response has no trust score.",
+        "summary": "Lists registered passkeys and consented push devices, plus the storage note. The response has no trust score.",
         "response": '{\n  "devices": [{"credential_id": "…", "label": "Phone"}],\n  "stored": ["…"],\n  "individual_score": false\n}',
         "errors": "401 without a portal session.",
     },
@@ -1004,6 +1004,13 @@ _ENDPOINTS: tuple[dict[str, str], ...] = (
         "request": '{\n  "report_id": "rpt_…",\n  "statement": "…",\n  "assertion": {}\n}',
         "response": '{\n  "dispute_id": "dsp_…",\n  "status": "open"\n}',
         "errors": "401 when no device is registered or the assertion is missing.",
+    },
+    {
+        "method": "GET",
+        "path": "/v1/portal/approvals",
+        "summary": "Lists step-up approvals for this individual. Off unless GAB_STEP_UP_APPROVAL is set. The push text is a fixed sentence and does not include a merchant, an amount, or an agent name.",
+        "response": '[\n  {"approval_id": "apr_…", "status": "pending", "action": {}}\n]',
+        "errors": "404 when step-up approval is off.",
     },
     {
         "method": "POST",

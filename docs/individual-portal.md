@@ -1,6 +1,6 @@
 # Individual portal on a phone
 
-This note is the design for the individual portal: a phone layout, an installable home-screen app, passkey sign-in, and device registration. It is not a public product claim. Approval notices are a separate change and are not part of this one.
+This note is the design for the individual portal: a phone layout, an installable home-screen app, passkey sign-in, and device registration. It is not a public product claim. Approval notices are specified in `docs/step-up-approval.md` and stay off unless the host sets the flag.
 
 ## What this covers
 
@@ -19,7 +19,7 @@ These four rules bind this portal and any approval notice built on it.
 3. Revoking an agent, revoking an intent, and filing a dispute require a fresh passkey assertion. An email-link session alone is not enough.
 4. Storing a browser push address requires explicit consent. A request without that consent is refused.
 
-This change implements rule 3. It does not send a push, and it does not store a push address or an approval. Rules 1, 2, and 4 stay in force for the separate approval change.
+Passkey registration implements rule 3. The approval note implements rules 1, 2, and 4, and approve and reject use the same passkey check.
 
 ## Effort
 
@@ -48,4 +48,4 @@ New rows, and only these:
 | Passkey | Credential id, COSE public key, sign counter, device label, created time, last-used time | The individual registers the device |
 | Challenge | Challenge, kind (`register`, `authenticate`, or `assert`), relying party id, origin, expiry, used time | Issued for a ceremony, then marked used |
 
-Not stored on this change: the private half of a passkey, a score of the individual, a government identifier, a browser push address, or an approval record. The portal page states the same storage list.
+Not stored here: the private half of a passkey, a score of the individual, or a government identifier. A browser push address and an approval record are stored only by the approval flow, and only under the rules above. The portal page states the storage list for the rows this host actually keeps.
