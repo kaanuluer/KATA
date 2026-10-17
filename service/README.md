@@ -35,7 +35,7 @@ The first request creates the tables `kata_revocations`, `kata_log_entries`, `ka
 
 ## Environment variables
 
-Set these on the Vercel project. Generate the secret values on your machine and paste them into Vercel. The repo ships names only, in [`.env.example`](.env.example).
+Set these in the host environment. The current proof-of-concept host is a Vercel project; the names are not tied to that host. Generate secret values on your machine and paste them into the host. The repo ships names only, in [`.env.example`](.env.example). Key custody is described in [docs/key-custody.md](../docs/key-custody.md).
 
 | Variable | Required | Secret | Purpose |
 |---|---|---|---|
@@ -72,6 +72,16 @@ Set these on the Vercel project. Generate the secret values on your machine and 
 | `GAB_REQUIRE_PROOFING` | no | no | Default on, including when `GAB_DEFENSES=0`. `0` scores the claimed verification level. `POST /v1/agents/{id}/proofing` files an operator review or an institution attestation hash. |
 | `GAB_SCORE_WEIGHTS` | no | no | Optional JSON override of the weights at `GET /v1/score-model`. Invalid JSON or an out-of-range value makes `/v1` return 500. |
 | `GAB_CONSORTIUM_MATCH_THRESHOLD` | no | no | Default 2 other members. Below that, `POST /v1/consortium/match` returns `matched: false` and omits the count. |
+| `GAB_KEY_PROVIDER` | no | no | Unset by default. A `GAB_MASTER_KEY` with no provider name selects `env` when `GAB_ENV` is not `production`. Unset `GAB_ENV` is `production`, so the master key is then a config error and no provider is selected. `aws-kms` is used only when this is set to `aws-kms`. |
+| `GAB_MASTER_KEY` | for the env provider | yes | 32-byte key, base64. On Vercel, mark it Sensitive. It wraps per-person data keys. It does not key `subject_ref`. It is not written to the database. Keep a copy in a password manager. |
+| `GAB_MASTER_KEY_ID` | no | no | Id stored in each wrapped data key. Unset means `master`. Do not replace the secret behind an existing id. Rotation uses a new id and keeps the old secret in `GAB_HMAC_KEYS` under purpose `kek`. |
+| `GAB_HMAC_KEYS` | with `env` | yes | JSON map of key id to 32-byte secret. Never commit a value. Keep a copy outside Vercel. The env provider is refused when `GAB_ENV` is `production`. No flag overrides that. Purpose `ref` is a subject-reference key, not an HMAC key. |
+| `GAB_HMAC_ACTIVE_KID` | no | no | Active key id, or a JSON object of purpose to key id. |
+| `GAB_KMS_KEY_ID` | with `aws-kms` | no | Master key id or ARN. The key itself stays in KMS. |
+| `GAB_KMS_REGION` | with `aws-kms` | no | Region of that master key. |
+| `GAB_KMS_WRAPPED_HMAC_KEYS` | no | yes | JSON of HMAC keys already wrapped by the master key. Ciphertext only. |
+| `GAB_SUBJECT_REF_KEY` | for subject refs | yes | 32-byte key, base64. Keys `subject_ref` on both `env` and `aws-kms`. It is not the wrapping key. Rotating the wrapping key does not change `subject_ref`. |
+| `GAB_SUBJECT_REF_KID` | no | no | Id of `GAB_SUBJECT_REF_KEY`. Unset means `subject-ref`. |
 
 Generate a log seed, a push notifier, and an append token:
 

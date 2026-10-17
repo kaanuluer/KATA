@@ -1,0 +1,9 @@
+title = "KATA secret scan"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "HMAC label in a docstring. Not a credential."
+regexTarget = "match"
+regexes = ['''key, ``gab-subject-v1''']

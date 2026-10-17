@@ -13,6 +13,7 @@ from kata_intent.errors import KataError
 from kata_intent.keys import PrivateKey, public_key_from_jwk
 
 from kata_service.defenses import ScorePolicy
+from kata_service.keys import KeyCustodyError, provider_from_env
 from kata_service.score_model import ScoreWeights, weights_from_json
 
 DEFAULT_FX_SOURCE_URL = "https://api.frankfurter.dev/v1"
@@ -54,6 +55,7 @@ class Settings:
     vapid_public_key: str | None = None
     vapid_private_key: str | None = None
     vapid_subject: str | None = None
+    key_provider: object | None = None
 
     def log_key(self) -> PrivateKey | None:
         if self.log_signing_seed is None:
@@ -76,13 +78,17 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
     notifier = None
     published: tuple[dict, ...] = ()
     weights = ScoreWeights()
+    key_provider = None
     try:
         seed = _seed(env.get("KATA_LOG_SIGNING_SEED"))
         notifier = _notifier(env.get("KATA_PUSH_NOTIFIER_JWK"))
         published = _published(env.get("KATA_PUBLISHED_KEYS"))
         weights = weights_from_json(_blank(env.get("GAB_SCORE_WEIGHTS")))
-    except (KataError, ValueError, json.JSONDecodeError) as exc:
-        error = str(exc)
+        if error is None:
+            key_provider = provider_from_env(env, deployment_env=deployment_env)
+    except (KataError, ValueError, json.JSONDecodeError, KeyCustodyError) as exc:
+        if error is None:
+            error = str(exc)
     return Settings(
         database_url=database_url,
         schema_url=schema_url,
@@ -117,6 +123,7 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
         vapid_public_key=_blank(env.get("GAB_VAPID_PUBLIC_KEY")),
         vapid_private_key=_blank(env.get("GAB_VAPID_PRIVATE_KEY")),
         vapid_subject=_blank(env.get("GAB_VAPID_SUBJECT")),
+        key_provider=key_provider,
     )
 
 
