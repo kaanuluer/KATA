@@ -562,8 +562,6 @@ class MemoryRepo:
         self.sessions: dict[str, dict[str, Any]] = {}
         self.passkeys: dict[str, dict[str, Any]] = {}
         self.challenges: dict[str, dict[str, Any]] = {}
-        self.push_devices: dict[str, dict[str, Any]] = {}
-        self.approvals: dict[str, dict[str, Any]] = {}
         self.org_logins: dict[str, dict[str, Any]] = {}
         self.agents: dict[str, dict[str, Any]] = {}
         self.by_fingerprint: dict[str, str] = {}
@@ -770,52 +768,6 @@ class MemoryRepo:
             chosen = max(matches, key=lambda item: item["expires_at"])
             chosen["used_at"] = now
             return dict(chosen)
-
-    def put_push(self, record: dict[str, Any]) -> None:
-        with self._lock:
-            self.push_devices[record["device_id"]] = dict(record)
-
-    def list_push(self, principal_id: str) -> list[dict[str, Any]]:
-        with self._lock:
-            return [dict(item) for item in self.push_devices.values() if item["principal_id"] == principal_id]
-
-    def delete_push(self, device_id: str, principal_id: str) -> bool:
-        with self._lock:
-            item = self.push_devices.get(device_id)
-            if item is None or item["principal_id"] != principal_id:
-                return False
-            del self.push_devices[device_id]
-            return True
-
-    def put_approval(self, record: dict[str, Any]) -> None:
-        with self._lock:
-            self.approvals[record["approval_id"]] = dict(record)
-
-    def pending_approval(self, principal_id: str, action_hash: str, now: str) -> dict[str, Any] | None:
-        with self._lock:
-            for item in self.approvals.values():
-                if (
-                    item["principal_id"] == principal_id
-                    and item["action_hash"] == action_hash
-                    and item["status"] == "pending"
-                    and not item.get("used_at")
-                    and item["expires_at"] >= now
-                ):
-                    return dict(item)
-            return None
-
-    def list_approvals(self, principal_id: str) -> list[dict[str, Any]]:
-        with self._lock:
-            return [dict(item) for item in self.approvals.values() if item["principal_id"] == principal_id]
-
-    def get_approval(self, approval_id: str) -> dict[str, Any] | None:
-        with self._lock:
-            item = self.approvals.get(approval_id)
-            return dict(item) if item else None
-
-    def save_approval(self, record: dict[str, Any]) -> None:
-        with self._lock:
-            self.approvals[record["approval_id"]] = dict(record)
 
     def save_agent(self, record: dict[str, Any]) -> None:
         with self._lock:
@@ -1133,11 +1085,6 @@ class BureauService:
         webhook_attempts: int = 4,
         webhook_base_delay: float = 0.5,
         webhook_sleep=None,
-        step_up_approval: bool = False,
-        approval_ttl_seconds: int = 300,
-        vapid_public_key: str | None = None,
-        vapid_private_key: str | None = None,
-        vapid_subject: str | None = None,
     ) -> None:
         self.repo = repo
         self.deployment_env = deployment_env if deployment_env in {"production", "sandbox"} else "production"
@@ -1156,12 +1103,6 @@ class BureauService:
         self.webhook_attempts = webhook_attempts
         self.webhook_base_delay = webhook_base_delay
         self.webhook_sleep = webhook_sleep or time.sleep
-        self.step_up_approval = step_up_approval
-        self.approval_ttl_seconds = approval_ttl_seconds
-        self.vapid_public_key = vapid_public_key
-        self.vapid_private_key = vapid_private_key
-        self.vapid_subject = vapid_subject
-        self.push_outbox: list[dict[str, str]] = []
         self.dev_mailbox: list[dict[str, str]] = []
 
     def now(self) -> datetime:
@@ -2517,10 +2458,6 @@ class BureauService:
             raise BureauError(403, "admin credentials are required")
 
     def _after_verify(self, agent: dict[str, Any], action: Any, payload: dict[str, Any]) -> dict[str, Any]:
-        if payload.get("verdict") == "STEP_UP":
-            from kata_service.portal_devices import queue_step_up
-
-            queue_step_up(self, agent, action if isinstance(action, dict) else None)
         return payload
 
     def _portal(self, auth: Auth) -> None:

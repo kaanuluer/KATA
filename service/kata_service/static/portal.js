@@ -122,61 +122,6 @@
       row.append(button);
       deviceBox.append(row);
     });
-    const pushBox = $("portal-push");
-    pushBox.innerHTML = "";
-    devices.push_devices.forEach((item) => {
-      const row = document.createElement("div");
-      row.className = "device";
-      row.append(line("Notices · " + item.endpoint));
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "ghost";
-      button.textContent = "Remove notices";
-      button.addEventListener("click", async () => {
-        const proof = await assertion();
-        await api("/v1/portal/push/" + encodeURIComponent(item.device_id) + "/remove", {
-          method: "POST",
-          headers: headers(),
-          body: JSON.stringify({ assertion: proof }),
-        });
-        await load();
-      });
-      row.append(button);
-      pushBox.append(row);
-    });
-    const approvalBox = $("portal-approvals");
-    approvalBox.innerHTML = "";
-    try {
-      const approvals = await api("/v1/portal/approvals", { headers: headers() });
-      if (!approvals.length) approvalBox.append(line("No approval is waiting."));
-      approvals.forEach((item) => {
-        const card = document.createElement("article");
-        card.className = "agent-card";
-        card.append(line(item.approval_id + " · " + item.status + " · until " + item.expires_at));
-        if (item.action) card.append(line(JSON.stringify(item.action)));
-        if (item.status === "pending") {
-          ["approve", "reject"].forEach((decision) => {
-            const button = document.createElement("button");
-            button.type = "button";
-            button.className = decision === "reject" ? "ghost" : "";
-            button.textContent = decision === "approve" ? "Approve" : "Reject";
-            button.addEventListener("click", async () => {
-              const proof = await assertion();
-              await api("/v1/portal/approvals/" + encodeURIComponent(item.approval_id) + "/" + decision, {
-                method: "POST",
-                headers: headers(),
-                body: JSON.stringify({ assertion: proof }),
-              });
-              await load();
-            });
-            card.append(button);
-          });
-        }
-        approvalBox.append(card);
-      });
-    } catch (error) {
-      approvalBox.append(line(error.status === 404 ? "Approval notices are off on this host." : error.message));
-    }
     const agents = await api("/v1/portal/agents", { headers: headers() });
     const agentBox = $("portal-agents");
     agentBox.innerHTML = "";
@@ -321,35 +266,6 @@
         method: "POST",
         headers: headers(),
         body: JSON.stringify({ label: $("device-label").value.trim(), credential: credentialJSON(credential) }),
-      });
-      await load();
-    } catch (error) {
-      setStatus(error.message);
-    }
-  });
-
-  $("push-form").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    if (!$("push-consent").checked) {
-      setStatus("Approval notices stay off until you agree.");
-      return;
-    }
-    try {
-      const key = await api("/v1/portal/push/key", { headers: headers() });
-      const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: base64urlToBytes(key.public_key),
-      });
-      const json = subscription.toJSON();
-      await api("/v1/portal/push", {
-        method: "POST",
-        headers: headers(),
-        body: JSON.stringify({
-          consent: true,
-          endpoint: json.endpoint,
-          keys: json.keys,
-        }),
       });
       await load();
     } catch (error) {

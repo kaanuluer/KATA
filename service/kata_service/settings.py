@@ -49,11 +49,6 @@ class Settings:
     inquiry_rate_limit_per_minute: int = 30
     report_rate_limit_per_minute: int = 10
     deployment_env: str = "production"
-    step_up_approval: bool = False
-    approval_ttl_seconds: int = 300
-    vapid_public_key: str | None = None
-    vapid_private_key: str | None = None
-    vapid_subject: str | None = None
 
     def log_key(self) -> PrivateKey | None:
         if self.log_signing_seed is None:
@@ -112,11 +107,6 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
         inquiry_rate_limit_per_minute=_positive_int(env.get("GAB_INQUIRY_RATE_LIMIT_PER_MINUTE"), 30),
         report_rate_limit_per_minute=_positive_int(env.get("GAB_REPORT_RATE_LIMIT_PER_MINUTE"), 10),
         deployment_env=deployment_env,
-        step_up_approval=_flag(env.get("GAB_STEP_UP_APPROVAL")),
-        approval_ttl_seconds=min(_positive_int(env.get("GAB_STEP_UP_TTL_SECONDS"), 300), 900),
-        vapid_public_key=_blank(env.get("GAB_VAPID_PUBLIC_KEY")),
-        vapid_private_key=_blank(env.get("GAB_VAPID_PRIVATE_KEY")),
-        vapid_subject=_blank(env.get("GAB_VAPID_SUBJECT")),
     )
 
 

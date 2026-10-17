@@ -10,8 +10,6 @@
   <ul>
     <li>The email address used to sign in, and a pseudonymous principal id.</li>
     <li>For each registered device: a credential id, the public half of the passkey, a sign counter, a label, and the time it was added.</li>
-    <li>A browser push address, and the keys the browser issued for that address, only after explicit consent.</li>
-    <li>A short-lived approval record bound to one action, only while approval notices are on. The action text is removed when the approval is used or expires.</li>
     <li>Session tokens are stored as hashes.</li>
   </ul>
   <p>This portal does not store a trust score for you, and it does not score individuals.</p>
@@ -45,15 +43,6 @@
       <button type="submit">Register this device</button>
     </form>
     <div id="portal-devices"></div>
-    <form id="push-form">
-      <label class="check" for="push-consent"><input id="push-consent" type="checkbox"> I agree to store the browser address for approval notices</label>
-      <button type="submit" class="ghost">Turn on approval notices</button>
-    </form>
-    <div id="portal-push"></div>
-  </section>
-  <section class="panel">
-    <h2>Approval requests</h2>
-    <div id="portal-approvals"></div>
   </section>
   <section class="panel">
     <h2>Agents</h2>

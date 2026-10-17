@@ -505,11 +505,6 @@ def ensure_bureau(app: FastAPI):
             policy=settings.score_policy,
             consortium_match_threshold=settings.consortium_match_threshold,
             deployment_env=settings.deployment_env,
-            step_up_approval=settings.step_up_approval,
-            approval_ttl_seconds=settings.approval_ttl_seconds,
-            vapid_public_key=settings.vapid_public_key,
-            vapid_private_key=settings.vapid_private_key,
-            vapid_subject=settings.vapid_subject,
         )
         if settings.demo:
             from kata_service.seed import seed_demo
@@ -541,11 +536,6 @@ def ensure_bureau(app: FastAPI):
         policy=settings.score_policy,
         consortium_match_threshold=settings.consortium_match_threshold,
         deployment_env=settings.deployment_env,
-        step_up_approval=settings.step_up_approval,
-        approval_ttl_seconds=settings.approval_ttl_seconds,
-        vapid_public_key=settings.vapid_public_key,
-        vapid_private_key=settings.vapid_private_key,
-        vapid_subject=settings.vapid_subject,
     )
     app.state.bureau = service
     return service
