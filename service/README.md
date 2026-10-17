@@ -86,6 +86,8 @@ Set these in the host environment. The current proof-of-concept host is a Vercel
 | `GAB_CONSENT_EVENTS` | no | no | Default off. On: `POST /v1/portal/consent` appends a hash-chained consent event. |
 | `GAB_CONSENT_PUSH` | no | no | Default off. Requires consent events. On: push registration appends a push consent event. |
 | `GAB_CONSENT_NETWORK` | no | no | Default off. Requires consent events. On: a network signal needs a granted network consent event. |
+| `GAB_ENTITY_ONLY` | no | no | Default off. On: verify, report, and dispute reject unknown fields and email or phone patterns in free text, and registration requires `entity_kind` of `business` or `personal`. The plan's suggested default of on is not applied here. |
+| `GAB_NETWORK_STEP_UP` | no | no | Default off. On: a DENY whose reasons are only network-signal reasons becomes STEP_UP. Velocity and mandate DENY stay DENY. |
 
 Generate a log seed, a push notifier, and an append token:
 

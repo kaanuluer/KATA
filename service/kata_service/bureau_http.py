@@ -22,7 +22,15 @@ def build_router() -> APIRouter:
 
     @router.post("/v1/orgs", summary="Create a participant organization")
     async def create_org(request: Request):
-        return await _run(request, lambda auth, body: _bureau(request).create_org(auth, str(body.get("name") or ""), str(body.get("org_type") or "")))
+        return await _run(
+            request,
+            lambda auth, body: _bureau(request).create_org(
+                auth,
+                str(body.get("name") or ""),
+                str(body.get("org_type") or ""),
+                None if body.get("entity_kind") is None else str(body.get("entity_kind")),
+            ),
+        )
 
     @router.post("/v1/orgs/{org_id}/keys", summary="Issue an API key")
     async def create_key(request: Request, org_id: str):
@@ -206,16 +214,18 @@ def build_router() -> APIRouter:
 
     @router.post("/v1/portal/disputes", summary="Dispute an incident")
     async def file_dispute(request: Request):
-        return await _run(
-            request,
-            lambda auth, body: _bureau(request).file_dispute(
+        def action(auth, body):
+            bureau = _bureau(request)
+            bureau._screen("dispute", body)
+            return bureau.file_dispute(
                 auth,
                 str(body.get("report_id") or ""),
                 str(body.get("statement") or ""),
                 assertion=_assertion(body),
                 origin=_origin(request),
-            ),
-        )
+            )
+
+        return await _run(request, action)
 
     @router.post("/v1/portal/passkeys/register/options", summary="Start passkey registration")
     async def passkey_register_options(request: Request):

@@ -127,18 +127,24 @@ class PostgresRepo:
 
     def create_org(self, record: dict[str, Any]) -> None:
         self._execute(
-            "INSERT INTO gab_organizations (org_id, name, org_type, status, created_at) VALUES (%s, %s, %s, %s, %s)",
-            (record["org_id"], record["name"], record["org_type"], record["status"], record["created_at"]),
+            "INSERT INTO gab_organizations (org_id, name, org_type, status, created_at, entity_kind) VALUES (%s, %s, %s, %s, %s, %s)",
+            (record["org_id"], record["name"], record["org_type"], record["status"], record["created_at"], record.get("entity_kind")),
         )
 
     def set_org_created_at(self, org_id: str, created_at: str) -> None:
         self._execute("UPDATE gab_organizations SET created_at = %s WHERE org_id = %s", (created_at, org_id))
 
     def get_org(self, org_id: str) -> dict[str, Any] | None:
-        row = self._one("SELECT org_id, name, org_type, status, created_at FROM gab_organizations WHERE org_id = %s", (org_id,))
+        row = self._one(
+            "SELECT org_id, name, org_type, status, created_at, entity_kind FROM gab_organizations WHERE org_id = %s",
+            (org_id,),
+        )
         if row is None:
             return None
-        return {"org_id": row[0], "name": row[1], "org_type": row[2], "status": row[3], "created_at": row[4]}
+        record = {"org_id": row[0], "name": row[1], "org_type": row[2], "status": row[3], "created_at": row[4]}
+        if row[5]:
+            record["entity_kind"] = row[5]
+        return record
 
     def create_key(self, record: dict[str, Any]) -> None:
         self._execute(
@@ -521,8 +527,8 @@ class PostgresRepo:
             INSERT INTO gab_agents (
               agent_id, operator_org_id, principal_id, status, verification_level, algorithm,
               fingerprint, public_key, created_at, updated_at, score, score_reasons, cold_start,
-              principal_public_key, is_test
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+              principal_public_key, is_test, entity_kind
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (agent_id, is_test) DO UPDATE SET
               status = EXCLUDED.status,
               verification_level = EXCLUDED.verification_level,
@@ -530,7 +536,8 @@ class PostgresRepo:
               score = EXCLUDED.score,
               score_reasons = EXCLUDED.score_reasons,
               cold_start = EXCLUDED.cold_start,
-              principal_public_key = EXCLUDED.principal_public_key
+              principal_public_key = EXCLUDED.principal_public_key,
+              entity_kind = EXCLUDED.entity_kind
             """,
             (
                 record["agent_id"],
@@ -548,6 +555,7 @@ class PostgresRepo:
                 1 if record.get("cold_start", True) else 0,
                 json.dumps(record["principal_public_key"]) if record.get("principal_public_key") else None,
                 _test_row(),
+                record.get("entity_kind"),
             ),
         )
 
@@ -1511,6 +1519,7 @@ def _agent_row(row) -> dict[str, Any]:
         "cold_start": bool(row[12]),
         "principal_public_key": json.loads(row[13]) if len(row) > 13 and row[13] else None,
         "is_test": bool(row[14]) if len(row) > 14 else False,
+        "entity_kind": row[15] if len(row) > 15 and row[15] else None,
     }
 
 

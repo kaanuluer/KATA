@@ -608,6 +608,7 @@ class MemoryRepo:
             "010_step_up.sql",
             "011_keyed_identifiers.sql",
             "012_consent_events.sql",
+            "015_entity_kind.sql",
             "017_subject_deks.sql",
         ]
 
@@ -1301,6 +1302,8 @@ class BureauService:
         consent_events: bool = False,
         consent_push: bool = False,
         consent_network: bool = False,
+        entity_only: bool = False,
+        network_step_up: bool = False,
     ) -> None:
         self.repo = repo
         self.deployment_env = deployment_env if deployment_env in {"production", "sandbox"} else "production"
@@ -1331,6 +1334,8 @@ class BureauService:
         self.consent_events_enabled = consent_events
         self.consent_push = consent_push
         self.consent_network = consent_network
+        self.entity_only = entity_only
+        self.network_step_up = network_step_up
         self._rate_purged_before: str | None = None
         if keyed_identifiers:
             from kata_service.identifiers import IdentifierMode
@@ -1454,11 +1459,13 @@ class BureauService:
         window = self.now().strftime("%Y-%m-%dT%H:%M")
         return self.repo.hit_rate(subject, window)
 
-    def create_org(self, auth: Auth, name: str, org_type: str) -> dict[str, Any]:
+    def create_org(self, auth: Auth, name: str, org_type: str, entity_kind_value: str | None = None) -> dict[str, Any]:
         self._admin(auth)
         if org_type not in ORG_TYPES:
             raise BureauError(400, "org_type is not a bureau participant type")
         name = _short(name, "name", 120)
+        from kata_service.entity_mode import entity_kind as checked_kind
+
         record = {
             "org_id": _id("org"),
             "name": name,
@@ -1466,6 +1473,9 @@ class BureauService:
             "status": "active",
             "created_at": self.stamp(),
         }
+        kind = checked_kind(entity_kind_value, required=self.entity_only)
+        if kind:
+            record["entity_kind"] = kind
         self.repo.create_org(record)
         return record
 
@@ -1602,6 +1612,8 @@ class BureauService:
         at = self.stamp()
         self.repo.ensure_principal(principal_id, at)
         if body.get("principal_email"):
+            if self.entity_only:
+                raise BureauError(400, "personal email is not accepted")
             self._bind_principal_email(str(body.get("principal_email")), principal_id, at)
         record = {
             "agent_id": agent_id,
@@ -1619,6 +1631,11 @@ class BureauService:
             "cold_start": True,
             "principal_public_key": None,
         }
+        from kata_service.entity_mode import entity_kind as checked_kind
+
+        kind = checked_kind(body.get("entity_kind"), required=self.entity_only)
+        if kind:
+            record["entity_kind"] = kind
         if self.consent_network and _registration_signals(body):
             self._require_network_consent(principal_id)
         links = self._link_denied_identity(record, body, at)
@@ -1782,21 +1799,22 @@ class BureauService:
     def verify(self, auth: Auth, body: dict[str, Any]) -> dict[str, Any]:
         self._scope(auth, "verify")
         reject_deep_json(body)
+        self._screen("verify", body)
         agent_id = str(body.get("agent_id") or "")
         agent = self._agent(agent_id)
         action = body.get("action")
         if not isinstance(action, dict):
             raise BureauError(400, "action must be an object")
         if agent["status"] != "active":
-            return {"verdict": "DENY", "kata_decision": "BLOCK", "reasons": ["AGENT_NOT_ACTIVE"], "messages": ["Agent is not active."], "agent_id": agent_id}
+            return self._present_verify(agent, action, {"verdict": "DENY", "kata_decision": "BLOCK", "reasons": ["AGENT_NOT_ACTIVE"], "messages": ["Agent is not active."], "agent_id": agent_id})
         active = [item for item in self.repo.list_agreements(agent_id) if item["status"] == "active"]
         chosen_id = body.get("agreement_id")
         if chosen_id:
             active = [item for item in active if item["agreement_id"] == chosen_id]
         if not active:
-            return {"verdict": "DENY", "kata_decision": "BLOCK", "reasons": ["NO_ACTIVE_AGREEMENT"], "messages": ["No active agreement is stored."], "agent_id": agent_id}
+            return self._present_verify(agent, action, {"verdict": "DENY", "kata_decision": "BLOCK", "reasons": ["NO_ACTIVE_AGREEMENT"], "messages": ["No active agreement is stored."], "agent_id": agent_id})
         if len(active) > 1 and not chosen_id:
-            return self._after_verify(
+            return self._present_verify(
                 agent,
                 action,
                 {
@@ -1843,7 +1861,7 @@ class BureauService:
                 ]
                 payload["agent_id"] = agent_id
                 payload["agreement_id"] = record["agreement_id"]
-                return payload
+                return self._present_verify(agent, action, payload)
             try:
                 agreement.record_allowed(action, at=at, intent_id=body.get("intent_id"))
             except KataError as exc:
@@ -1855,7 +1873,7 @@ class BureauService:
         payload = result.to_dict()
         payload["agent_id"] = agent_id
         payload["agreement_id"] = record["agreement_id"]
-        return self._after_verify(agent, action, payload)
+        return self._present_verify(agent, action, payload)
 
     def verify_checkout(self, auth: Auth, body: dict[str, Any]) -> dict[str, Any]:
         """Check a UCP checkout as an action. Sandbox test keys only."""
@@ -1870,6 +1888,10 @@ class BureauService:
         checkout = body.get("checkout")
         if not isinstance(checkout, dict):
             raise BureauError(400, "checkout must be an object")
+        if self.entity_only:
+            from kata_service.entity_mode import reject_contact_text
+
+            reject_contact_text(checkout)
         from kata_service.ucp_checkout import CheckoutRejected, translate_checkout
 
         try:
@@ -1909,6 +1931,7 @@ class BureauService:
     def report(self, auth: Auth, body: dict[str, Any]) -> dict[str, Any]:
         self._scope(auth, "report")
         reject_deep_json(body)
+        self._screen("report", body)
         org = self._caller_org(auth)
         agent = self._agent(str(body.get("agent_id") or ""))
         kind = str(body.get("kind") or "")
@@ -2235,6 +2258,7 @@ class BureauService:
         from kata_service.portal_devices import require_assertion
 
         require_assertion(self, auth, assertion, origin or "")
+        self._screen("dispute", {"report_id": report_id, "statement": statement, **({} if assertion is None else {"assertion": assertion})})
         report = self.repo.get_report(report_id)
         if report is None:
             raise BureauError(404, "report was not found")
@@ -2761,6 +2785,24 @@ class BureauService:
         if not auth.admin:
             raise BureauError(403, "admin credentials are required")
 
+    def _screen(self, kind: str, body: dict[str, Any]) -> None:
+        if not self.entity_only:
+            return
+        from kata_service.entity_mode import screen_request
+
+        screen_request(kind, body)
+
+    def _present_verify(self, agent: dict[str, Any], action: Any, payload: dict[str, Any]) -> dict[str, Any]:
+        if self.entity_only:
+            from kata_service.entity_mode import strip_person
+
+            payload = strip_person(payload)
+        if self.network_step_up:
+            from kata_service.entity_mode import downgrade_network_deny
+
+            payload = downgrade_network_deny(payload)
+        return self._after_verify(agent, action, payload)
+
     def _after_verify(self, agent: dict[str, Any], action: Any, payload: dict[str, Any]) -> dict[str, Any]:
         if payload.get("verdict") == "STEP_UP":
             from kata_service.portal_devices import queue_step_up
@@ -2797,6 +2839,8 @@ class BureauService:
             "created_at": agent["created_at"],
             "updated_at": agent["updated_at"],
         }
+        if agent.get("entity_kind"):
+            view["entity_kind"] = agent["entity_kind"]
         if auth.admin or auth.org_id == agent["operator_org_id"] or auth.principal_id == agent["principal_id"]:
             view["principal_id"] = agent["principal_id"]
             view["proofings"] = [_public_proof(item) for item in self.repo.proofings_for_agent(agent["agent_id"])]
