@@ -1,0 +1,9 @@
+SYNTHETIC TEST DATA
+python3 -m pytest -q --tb=line
+
+147 passed, 5 skipped, 5 warnings in 8.84s
+SKIPPED tests/test_keys.py boto3 import (5)
+
+The loopback load is service/tests/load_loopback.py. It is not collected by pytest.
+synthetic data, shared VM, loopback, no upstream.
+Raw rows: service/tests/output/load/summary.txt and runs.json.
