@@ -278,12 +278,14 @@ Schema changes are SQL files under `service/kata_service/migrations/`. The seed 
 
 Set secrets in the host. Do not commit values.
 
+`public_key_from_jwk` is the shared parser. Agent registration, mandate and agreement keys, institution keys, `KATA_PUBLISHED_KEYS`, the SDK, and `KATA_PUSH_NOTIFIER_JWK` all go through it. The object may contain only `kty`, `crv`, `x`, `y`, `kid`, `alg`, `use`, and `key_ops`, and it must be Ed25519 or P-256. A private `d` is rejected. Any other member is rejected, including a WebCrypto `ext` field. If `use` is present it must be `sig`. If `key_ops` is present it must be an array whose values are only `verify`. If `alg` is present it must be `EdDSA` for Ed25519 and `ES256` for P-256.
+
 | Variable | Required | Secret | Purpose |
 |---|---|---|---|
 | `DATABASE_URL` | Production | yes | Neon Postgres. Pooled URL. |
 | `DATABASE_URL_UNPOOLED` | No | yes | Direct Neon URL for `CREATE TABLE`. |
 | `KATA_LOG_SIGNING_SEED` | Yes for signed log heads and outbound alerts | yes | Base64 32-byte Ed25519 seed. |
-| `KATA_PUSH_NOTIFIER_JWK` | Yes for inbound revocation push | no | Public JWK. A private `d` is rejected. |
+| `KATA_PUSH_NOTIFIER_JWK` | Yes for inbound revocation push | no | Public JWK for revocation push. Parsed by the shared `public_key_from_jwk` rules in the note above this table. |
 | `KATA_APPEND_TOKEN` | Yes for `POST /v1/log/entries` | yes | Bearer for manual log append. |
 | `GAB_ADMIN_TOKEN` | Yes to create organizations | yes | Admin bearer. |
 | `GAB_RATE_LIMIT_PER_MINUTE` | No | no | Default 120. |
