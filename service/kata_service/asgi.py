@@ -430,6 +430,22 @@ def create_app(
             destroyed = shred_subject(settings_now.key_provider, store, subject_id)
         return {"destroyed": destroyed}
 
+    @app.post("/internal/breach")
+    async def record_breach(request: Request):
+        return await _breach_call(app, request, "record")
+
+    @app.get("/internal/breach")
+    async def list_breaches(request: Request):
+        return await _breach_call(app, request, "list")
+
+    @app.post("/internal/breach/revoke")
+    async def revoke_breach(request: Request):
+        return await _breach_call(app, request, "revoke")
+
+    @app.post("/internal/breach/notify")
+    async def notify_breach(request: Request):
+        return await _breach_call(app, request, "notify")
+
     @app.get("/v1/log/entries/{sequence}")
     def get_entry(sequence: int):
         held = _require_store(app)
@@ -608,6 +624,7 @@ def ensure_bureau(app: FastAPI):
             entity_only=settings.entity_only,
             network_step_up=settings.network_step_up,
             ledger_hygiene=settings.ledger_hygiene,
+            breach_tools=settings.breach_tools,
         )
         if settings.demo:
             from kata_service.seed import seed_demo
@@ -657,6 +674,7 @@ def ensure_bureau(app: FastAPI):
         entity_only=settings.entity_only,
         network_step_up=settings.network_step_up,
         ledger_hygiene=settings.ledger_hygiene,
+        breach_tools=settings.breach_tools,
     )
     _bind_subject_keys(service, settings, repo._connect)
     _ensure_ledger_store(service, settings)
@@ -753,6 +771,38 @@ def _configured(app: FastAPI) -> JSONResponse | None:
     if app.state.settings.config_error:
         return _error(500, app.state.settings.config_error)
     return None
+
+
+async def _breach_call(app: FastAPI, request: Request, action: str):
+    blocked = _configured(app)
+    if blocked is not None:
+        return blocked
+    settings_now = app.state.settings
+    if not getattr(settings_now, "breach_tools", False):
+        return _error(404, "breach tools are off")
+    if not settings_now.admin_token or not _bearer_matches(request, settings_now.admin_token):
+        return _error(401, "admin credentials are required")
+    payload: dict[str, Any] = {}
+    if action != "list":
+        try:
+            loaded = await request.json()
+        except Exception:  # noqa: BLE001
+            loaded = None
+        if action in {"record", "notify"} and not isinstance(loaded, dict):
+            return _error(400, "breach body must be JSON")
+        if isinstance(loaded, dict):
+            payload = loaded
+    try:
+        bureau = ensure_bureau(app)
+        if action == "record":
+            return bureau.record_breach(payload)
+        if action == "list":
+            return {"records": bureau.list_breaches()}
+        if action == "revoke":
+            return bureau.revoke_live_credentials()
+        return bureau.notify_breach(payload)
+    except BureauError as exc:
+        return _error(exc.status, exc.message)
 
 
 def _bearer_matches(request: Request, expected: str) -> bool:
