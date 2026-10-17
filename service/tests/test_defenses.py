@@ -140,10 +140,17 @@ def test_linked_chargeback_is_held_while_a_young_reporter_is_disputed():
     client.post("/v1/portal/magic-link", json={"email": "owner@example.com"})
     token = service.dev_mailbox[-1]["token"]
     portal = client.post("/v1/sessions", json={"token": token}).json()["token"]
+    from soft_passkey import assertion_for, bind_device
+
+    soft = bind_device(client, portal)
     dispute = client.post(
         "/v1/portal/disputes",
         headers=_auth(portal),
-        json={"report_id": filed.json()["report_id"], "statement": "The verify was legitimate."},
+        json={
+            "report_id": filed.json()["report_id"],
+            "statement": "The verify was legitimate.",
+            "assertion": assertion_for(client, portal, soft),
+        },
     )
     assert dispute.status_code == 200, dispute.text
     held = client.get("/v1/agents/shopper-01", headers=_auth(operator_key)).json()

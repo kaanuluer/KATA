@@ -1,10 +1,26 @@
+<div class="portal-home">
 <section class="hero">
   <p class="kicker">Individuals</p>
   <h1>Your agents</h1>
-  <p class="lede">Sign in with the email bound to your pseudonymous principal id. You can see your agents, their assurance level, score, and risk, their authorizations, who inquired about them, and the incidents filed against them. You can revoke an agent or an intent, and you can dispute an incident and see the disputes you have filed.</p>
+  <p class="lede">Sign in with a passkey on this device, or with the email bound to your pseudonymous principal id. You can see your agents, their assurance level, their authorizations, who inquired about them, and the incidents filed against them. You can revoke an agent or an intent, and you can dispute an incident. Revoke and dispute ask for the passkey again.</p>
+</section>
+
+<section class="panel" id="portal-stored">
+  <h2>What is stored</h2>
+  <ul>
+    <li>The email address used to sign in, and a pseudonymous principal id.</li>
+    <li>For each registered device: a credential id, the public half of the passkey, a sign counter, a label, and the time it was added.</li>
+    <li>Session tokens are stored as hashes.</li>
+  </ul>
+  <p>This portal does not store a trust score for you, and it does not score individuals.</p>
 </section>
 
 <form id="portal-login" class="panel">
+  <div class="actions">
+    <button type="button" id="portal-passkey">Sign in with a passkey</button>
+    <button type="button" class="ghost" id="portal-install" hidden>Add to home screen</button>
+  </div>
+  <p class="meta" id="portal-ios">On iPhone, use Share, then Add to Home Screen.</p>
   <label for="portal-email">Email</label>
   <input id="portal-email" type="email" value="principal@example.com" autocomplete="username" required>
   <div class="actions">
@@ -19,6 +35,15 @@
     <p id="portal-who" class="meta"></p>
     <button id="portal-out" class="ghost" type="button">Sign out</button>
   </div>
+  <section class="panel">
+    <h2>This device</h2>
+    <form id="device-form">
+      <label for="device-label">Device label</label>
+      <input id="device-label" value="This phone" maxlength="80" required>
+      <button type="submit">Register this device</button>
+    </form>
+    <div id="portal-devices"></div>
+  </section>
   <section class="panel">
     <h2>Agents</h2>
     <div id="portal-agents"></div>
@@ -42,4 +67,5 @@
     </form>
     <div id="dispute-result" class="result" hidden></div>
   </section>
+</div>
 </div>

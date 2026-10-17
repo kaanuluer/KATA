@@ -219,6 +219,8 @@ def create_app(
             "gab-logo.png": "image/png",
             "gab-icon.svg": "image/svg+xml",
             "gab-icon-180.png": "image/png",
+            "gab-icon-192.png": "image/png",
+            "gab-icon-512.png": "image/png",
             "favicon-32.png": "image/png",
             "kata-icon.svg": "image/svg+xml",
             "kata-logo.svg": "image/svg+xml",
@@ -236,6 +238,18 @@ def create_app(
         if media is None:
             return _error(404, "asset was not found")
         return FileResponse(pages / name, media_type=media)
+
+    @app.get("/manifest.webmanifest")
+    def manifest():
+        return FileResponse(pages / "manifest.webmanifest", media_type="application/manifest+json")
+
+    @app.get("/sw.js")
+    def service_worker():
+        return FileResponse(
+            pages / "sw.js",
+            media_type="text/javascript",
+            headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"},
+        )
 
     @app.post("/demo/check")
     async def demo_check(request: Request):

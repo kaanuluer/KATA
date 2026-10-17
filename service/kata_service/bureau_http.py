@@ -188,17 +188,95 @@ def build_router() -> APIRouter:
     @router.post("/v1/portal/agents/{agent_id}/revoke", summary="Principal revokes an agent")
     async def portal_revoke_agent(request: Request, agent_id: str):
         request.state.agent_id = agent_id
-        return await _run(request, lambda auth, body: _bureau(request).set_status(auth, agent_id, "revoked"), read_body=False)
+        return await _run(
+            request,
+            lambda auth, body: _bureau(request).set_status(
+                auth, agent_id, "revoked", assertion=_assertion(body), origin=_origin(request)
+            ),
+        )
 
     @router.post("/v1/portal/agreements/{agreement_id}/revoke", summary="Principal revokes a stored agreement")
     async def portal_revoke_agreement(request: Request, agreement_id: str):
-        return await _run(request, lambda auth, body: _bureau(request).portal_revoke_agreement(auth, agreement_id), read_body=False)
+        return await _run(
+            request,
+            lambda auth, body: _bureau(request).portal_revoke_agreement(
+                auth, agreement_id, assertion=_assertion(body), origin=_origin(request)
+            ),
+        )
 
     @router.post("/v1/portal/disputes", summary="Dispute an incident")
     async def file_dispute(request: Request):
         return await _run(
             request,
-            lambda auth, body: _bureau(request).file_dispute(auth, str(body.get("report_id") or ""), str(body.get("statement") or "")),
+            lambda auth, body: _bureau(request).file_dispute(
+                auth,
+                str(body.get("report_id") or ""),
+                str(body.get("statement") or ""),
+                assertion=_assertion(body),
+                origin=_origin(request),
+            ),
+        )
+
+    @router.post("/v1/portal/passkeys/register/options", summary="Start passkey registration")
+    async def passkey_register_options(request: Request):
+        from kata_service.portal_devices import registration_challenge
+
+        return await _run(
+            request,
+            lambda auth, body: registration_challenge(_bureau(request), auth, _origin(request)),
+            read_body=False,
+        )
+
+    @router.post("/v1/portal/passkeys", summary="Store a passkey for this principal")
+    async def passkey_register(request: Request):
+        from kata_service.portal_devices import register_device
+
+        return await _run(request, lambda auth, body: register_device(_bureau(request), auth, body, _origin(request)))
+
+    @router.post("/v1/portal/passkeys/authenticate/options", summary="Start passkey sign-in")
+    async def passkey_auth_options(request: Request):
+        from kata_service.portal_devices import authentication_challenge
+
+        return await _run(
+            request,
+            lambda auth, body: authentication_challenge(_bureau(request), _origin(request)),
+            anonymous=True,
+            read_body=False,
+        )
+
+    @router.post("/v1/portal/passkeys/authenticate", summary="Exchange a passkey assertion for a portal session")
+    async def passkey_auth(request: Request):
+        from kata_service.portal_devices import authenticate_device
+
+        return await _run(
+            request,
+            lambda auth, body: authenticate_device(_bureau(request), body.get("credential"), _origin(request)),
+            anonymous=True,
+        )
+
+    @router.post("/v1/portal/passkeys/assert/options", summary="Start a passkey check for revoke or dispute")
+    async def passkey_assert_options(request: Request):
+        from kata_service.portal_devices import assertion_challenge
+
+        return await _run(
+            request,
+            lambda auth, body: assertion_challenge(_bureau(request), auth, _origin(request)),
+            read_body=False,
+        )
+
+    @router.get("/v1/portal/devices", summary="List registered devices and what the portal stores")
+    async def portal_devices(request: Request):
+        from kata_service.portal_devices import list_devices
+
+        return await _run(request, lambda auth, body: list_devices(_bureau(request), auth), read_body=False)
+
+    @router.post("/v1/portal/devices/{credential_id}/remove", summary="Remove a registered passkey")
+    async def portal_remove_device(request: Request, credential_id: str):
+        from kata_service.portal_devices import remove_device
+
+        return await _run(
+            request,
+            lambda auth, body: remove_device(_bureau(request), auth, credential_id, _assertion(body), _origin(request)),
         )
 
     @router.get("/v1/portal/disputes", summary="List the principal's disputes")
@@ -298,6 +376,20 @@ def _auth(request: Request) -> Auth:
     if auth.principal_id:
         request.state.principal_id = auth.principal_id
     return auth
+
+
+def _origin(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-host")
+    if forwarded:
+        host = forwarded.split(",")[0].strip()
+        proto = (request.headers.get("x-forwarded-proto") or "https").split(",")[0].strip()
+        return f"{proto}://{host}"
+    return str(request.base_url).rstrip("/")
+
+
+def _assertion(body: dict[str, Any]) -> dict[str, Any] | None:
+    value = body.get("assertion")
+    return value if isinstance(value, dict) else None
 
 
 def _bearer(request: Request) -> str:

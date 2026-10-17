@@ -560,6 +560,8 @@ class MemoryRepo:
         self.logins: dict[str, dict[str, Any]] = {}
         self.magic: dict[str, dict[str, Any]] = {}
         self.sessions: dict[str, dict[str, Any]] = {}
+        self.passkeys: dict[str, dict[str, Any]] = {}
+        self.challenges: dict[str, dict[str, Any]] = {}
         self.org_logins: dict[str, dict[str, Any]] = {}
         self.agents: dict[str, dict[str, Any]] = {}
         self.by_fingerprint: dict[str, str] = {}
@@ -715,6 +717,57 @@ class MemoryRepo:
         with self._lock:
             item = self.sessions.get(token_hash_value)
             return dict(item) if item else None
+
+    def put_passkey(self, record: dict[str, Any]) -> None:
+        with self._lock:
+            self.passkeys[record["credential_id"]] = dict(record)
+
+    def list_passkeys(self, principal_id: str) -> list[dict[str, Any]]:
+        with self._lock:
+            return [dict(item) for item in self.passkeys.values() if item["principal_id"] == principal_id]
+
+    def passkey_by_id(self, credential_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            item = self.passkeys.get(credential_id)
+            return dict(item) if item else None
+
+    def delete_passkey(self, credential_id: str, principal_id: str) -> bool:
+        with self._lock:
+            item = self.passkeys.get(credential_id)
+            if item is None or item["principal_id"] != principal_id:
+                return False
+            del self.passkeys[credential_id]
+            return True
+
+    def update_passkey_use(self, credential_id: str, sign_count: int, at: str) -> None:
+        with self._lock:
+            item = self.passkeys[credential_id]
+            item["sign_count"] = sign_count
+            item["last_used_at"] = at
+
+    def put_challenge(self, record: dict[str, Any]) -> None:
+        with self._lock:
+            self.challenges[record["challenge_id"]] = dict(record)
+
+    def take_challenge(
+        self, kind: str, challenge: str, principal_id: str | None, origin: str, now: str
+    ) -> dict[str, Any] | None:
+        with self._lock:
+            matches = [
+                item
+                for item in self.challenges.values()
+                if item["kind"] == kind
+                and item["challenge"] == challenge
+                and item["origin"] == origin
+                and not item.get("used_at")
+                and item["expires_at"] >= now
+                and item.get("principal_id") == principal_id
+            ]
+            if not matches:
+                return None
+            chosen = max(matches, key=lambda item: item["expires_at"])
+            chosen["used_at"] = now
+            return dict(chosen)
 
     def save_agent(self, record: dict[str, Any]) -> None:
         with self._lock:
@@ -1328,7 +1381,14 @@ class BureauService:
         view["proofing"] = _public_proof(record)
         return view
 
-    def set_status(self, auth: Auth, agent_id: str, status: str) -> dict[str, Any]:
+    def set_status(
+        self,
+        auth: Auth,
+        agent_id: str,
+        status: str,
+        assertion: dict[str, Any] | None = None,
+        origin: str | None = None,
+    ) -> dict[str, Any]:
         if status not in AGENT_STATUSES:
             raise BureauError(400, "status is not active, suspended, or revoked")
         agent = self._agent(agent_id)
@@ -1336,6 +1396,10 @@ class BureauService:
             raise BureauError(404, "agent was not found")
         if auth.principal_id and status != "revoked":
             raise BureauError(403, "a principal can revoke the agent")
+        if auth.principal_id and not auth.admin and not auth.org_id:
+            from kata_service.portal_devices import require_assertion
+
+            require_assertion(self, auth, assertion, origin or "")
         if not auth.admin and auth.principal_id is None:
             self._scope(auth, "registry:write")
         previous = agent["status"]
@@ -1354,7 +1418,12 @@ class BureauService:
                 },
             )
             self._alert(agent, "revocation", {"status": "revoked"})
-        return self._agent_view(auth, agent)
+        view = self._agent_view(auth, agent)
+        if auth.principal_id and not auth.admin and not auth.org_id:
+            from kata_service.portal_devices import individual_view
+
+            return individual_view(view)
+        return view
 
     def get_agent(self, auth: Auth, agent_id: str) -> dict[str, Any]:
         self._scope(auth, "registry:read")
@@ -1430,7 +1499,17 @@ class BureauService:
         if not active:
             return {"verdict": "DENY", "kata_decision": "BLOCK", "reasons": ["NO_ACTIVE_AGREEMENT"], "messages": ["No active agreement is stored."], "agent_id": agent_id}
         if len(active) > 1 and not chosen_id:
-            return {"verdict": "STEP_UP", "kata_decision": "STEP_UP", "reasons": ["AGREEMENT_NOT_SELECTED"], "messages": ["More than one active agreement is stored."], "agent_id": agent_id}
+            return self._after_verify(
+                agent,
+                action,
+                {
+                    "verdict": "STEP_UP",
+                    "kata_decision": "STEP_UP",
+                    "reasons": ["AGREEMENT_NOT_SELECTED"],
+                    "messages": ["More than one active agreement is stored."],
+                    "agent_id": agent_id,
+                },
+            )
         record = active[0]
         agreement = Agreement.from_dict(record["document"])
         at = self.stamp()
@@ -1479,7 +1558,7 @@ class BureauService:
         payload = result.to_dict()
         payload["agent_id"] = agent_id
         payload["agreement_id"] = record["agreement_id"]
-        return payload
+        return self._after_verify(agent, action, payload)
 
     def verify_checkout(self, auth: Auth, body: dict[str, Any]) -> dict[str, Any]:
         """Check a UCP checkout as an action. Sandbox test keys only."""
@@ -1790,7 +1869,9 @@ class BureauService:
 
     def portal_agents(self, auth: Auth) -> list[dict[str, Any]]:
         self._portal(auth)
-        return [self._agent_view(auth, item) for item in self.repo.list_agents(principal_id=auth.principal_id)]
+        from kata_service.portal_devices import individual_view
+
+        return [individual_view(self._agent_view(auth, item)) for item in self.repo.list_agents(principal_id=auth.principal_id)]
 
     def portal_authorizations(self, auth: Auth, agent_id: str) -> list[dict[str, Any]]:
         self._portal(auth)
@@ -1819,8 +1900,13 @@ class BureauService:
             )
         return rows
 
-    def portal_revoke_agreement(self, auth: Auth, agreement_id: str) -> dict[str, Any]:
+    def portal_revoke_agreement(
+        self, auth: Auth, agreement_id: str, assertion: dict[str, Any] | None = None, origin: str | None = None
+    ) -> dict[str, Any]:
         self._portal(auth)
+        from kata_service.portal_devices import require_assertion
+
+        require_assertion(self, auth, assertion, origin or "")
         record = self.repo.get_agreement(agreement_id)
         if record is None:
             raise BureauError(404, "agreement was not found")
@@ -1839,8 +1925,18 @@ class BureauService:
         )
         return _agreement_summary(record)
 
-    def file_dispute(self, auth: Auth, report_id: str, statement: str) -> dict[str, Any]:
+    def file_dispute(
+        self,
+        auth: Auth,
+        report_id: str,
+        statement: str,
+        assertion: dict[str, Any] | None = None,
+        origin: str | None = None,
+    ) -> dict[str, Any]:
         self._portal(auth)
+        from kata_service.portal_devices import require_assertion
+
+        require_assertion(self, auth, assertion, origin or "")
         report = self.repo.get_report(report_id)
         if report is None:
             raise BureauError(404, "report was not found")
@@ -2360,6 +2456,9 @@ class BureauService:
     def _admin(self, auth: Auth) -> None:
         if not auth.admin:
             raise BureauError(403, "admin credentials are required")
+
+    def _after_verify(self, agent: dict[str, Any], action: Any, payload: dict[str, Any]) -> dict[str, Any]:
+        return payload
 
     def _portal(self, auth: Auth) -> None:
         if not auth.principal_id:

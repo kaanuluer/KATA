@@ -165,6 +165,13 @@ def portal_page() -> str:
         fragment,
         current="/portal",
         scripts=("portal.js",),
+        extra_head=(
+            '<link rel="manifest" href="/manifest.webmanifest">'
+            '<meta name="theme-color" content="#13203B">'
+            '<meta name="mobile-web-app-capable" content="yes">'
+            '<meta name="apple-mobile-web-app-capable" content="yes">'
+            '<meta name="apple-mobile-web-app-title" content="GAB">'
+        ),
     )
 
 
@@ -345,7 +352,16 @@ def history_section() -> str:
     )
 
 
-def shell(title: str, description: str, body: str, *, current: str, script: bool = False, scripts: tuple[str, ...] = ()) -> str:
+def shell(
+    title: str,
+    description: str,
+    body: str,
+    *,
+    current: str,
+    script: bool = False,
+    scripts: tuple[str, ...] = (),
+    extra_head: str = "",
+) -> str:
     tags = []
     if script:
         tags.append('<script src="/assets/app.js"></script>')
@@ -364,6 +380,7 @@ def shell(title: str, description: str, body: str, *, current: str, script: bool
   <link rel="icon" href="/assets/favicon-32.png" type="image/png" sizes="32x32">
   <link rel="apple-touch-icon" href="/assets/gab-icon-180.png">
   <link rel="stylesheet" href="/assets/app.css">
+  {extra_head}
   <script>
     try {{
       var storedTheme = localStorage.getItem("gab-theme");
@@ -964,6 +981,29 @@ _ENDPOINTS: tuple[dict[str, str], ...] = (
         "request": '{\n  "email": "principal@example.com"\n}',
         "response": '{\n  "sent": true\n}',
         "errors": "POST /v1/sessions exchanges the token. A new email creates a new principal id. Registering principal_email on the agent binds the portal to that principal.",
+    },
+    {
+        "method": "POST",
+        "path": "/v1/portal/passkeys/authenticate",
+        "summary": "Exchanges a passkey assertion for a portal session. The email link remains available at POST /v1/portal/magic-link.",
+        "request": '{\n  "credential": {"id": "…", "type": "public-key", "response": {}}\n}',
+        "response": '{\n  "token": "gab_sess_…",\n  "kind": "portal",\n  "principal_id": "prn_…"\n}',
+        "errors": "401 when the passkey or the challenge is not valid.",
+    },
+    {
+        "method": "GET",
+        "path": "/v1/portal/devices",
+        "summary": "Lists registered passkeys, plus the storage note. The response has no trust score.",
+        "response": '{\n  "devices": [{"credential_id": "…", "label": "Phone"}],\n  "stored": ["…"],\n  "individual_score": false\n}',
+        "errors": "401 without a portal session.",
+    },
+    {
+        "method": "POST",
+        "path": "/v1/portal/disputes",
+        "summary": "Files a dispute. The body includes a fresh passkey assertion, the same check used to revoke an agent or an intent.",
+        "request": '{\n  "report_id": "rpt_…",\n  "statement": "…",\n  "assertion": {}\n}',
+        "response": '{\n  "dispute_id": "dsp_…",\n  "status": "open"\n}',
+        "errors": "401 when no device is registered or the assertion is missing.",
     },
     {
         "method": "POST",

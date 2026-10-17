@@ -87,10 +87,16 @@ def _register(client: TestClient, operator_key: str, principal_id: str = "prn_pe
     return response.json()
 
 
-def _agreement(principal_id: str = "prn_person", intent_id: str = "int_laptop", maximum: int = 1500, cumulative: int = 2000):
+def _agreement(
+    principal_id: str = "prn_person",
+    intent_id: str = "int_laptop",
+    maximum: int = 1500,
+    cumulative: int = 2000,
+    agreement_id: str = "agr_test",
+):
     principal, agent = _agent_keys()
     agreement = Agreement.propose(
-        agreement_id="agr_test",
+        agreement_id=agreement_id,
         principal={"display_name": "A Principal", "id": principal_id, "type": "human"},
         agent={"agent_id": "shopper-01"},
         agent_public_key=agent.public,
@@ -373,11 +379,16 @@ def test_portal_revoke_and_admin_dispute_review():
     assert session.json()["principal_id"] == "prn_owner"
     assert session.status_code == 200, session.text
     portal = session.json()["token"]
+    from soft_passkey import assertion_for, bind_device
+
+    soft = bind_device(client, portal)
     agents = client.get("/v1/portal/agents", headers=_auth(portal))
     assert agents.status_code == 200
     assert agents.json()[0]["agent_id"] == "shopper-01"
     assert agents.json()[0]["assurance_level"] == "key_bound"
-    assert agents.json()[0]["risk"] == 1000 - agents.json()[0]["score"]
+    assert "score" not in agents.json()[0]
+    assert "risk" not in agents.json()[0]
+    assert "score_reasons" not in agents.json()[0]
     reports = client.get("/v1/portal/agents/shopper-01/reports", headers=_auth(portal))
     assert reports.status_code == 200
     assert reports.json()[0]["report_id"] == filed.json()["report_id"]
@@ -394,7 +405,11 @@ def test_portal_revoke_and_admin_dispute_review():
     dispute = client.post(
         "/v1/portal/disputes",
         headers=_auth(portal),
-        json={"report_id": filed.json()["report_id"], "statement": "This charge was in policy."},
+        json={
+            "report_id": filed.json()["report_id"],
+            "statement": "This charge was in policy.",
+            "assertion": assertion_for(client, portal, soft),
+        },
     )
     assert dispute.status_code == 200, dispute.text
     queued = client.get("/v1/portal/disputes", headers=_auth(portal))
@@ -409,7 +424,11 @@ def test_portal_revoke_and_admin_dispute_review():
     assert reviewed.status_code == 200
     after = client.get("/v1/agents/shopper-01", headers=_auth(operator_key)).json()["score"]
     assert after >= before
-    revoked = client.post("/v1/portal/agents/shopper-01/revoke", headers=_auth(portal))
+    revoked = client.post(
+        "/v1/portal/agents/shopper-01/revoke",
+        headers=_auth(portal),
+        json={"assertion": assertion_for(client, portal, soft)},
+    )
     assert revoked.status_code == 200
     assert revoked.json()["status"] == "revoked"
     blocked = client.post("/v1/verify", headers=_auth(operator_key), json={"agent_id": "shopper-01", "action": _action(10, "act_9")})
