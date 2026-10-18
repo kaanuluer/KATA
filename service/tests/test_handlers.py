@@ -307,6 +307,95 @@ def test_a_bad_notifier_jwk_returns_503_and_leaves_other_routes_up():
     assert "missing" not in again.text
 
 
+def test_a_bad_subject_ref_key_returns_503_and_leaves_log_and_keys_up(caplog):
+    from kata_service.settings import SUBJECT_REF_UNUSABLE, Settings
+
+    seed = generate_keypair("EdDSA")
+    master = base64.b64encode(b"m" * 32).decode()
+    short = base64.b64encode(b"SYNTHETICBADKEYVALUE").decode()
+    invalid = "not-a-key"
+    notifier = json.dumps(seed.public.to_jwk())
+    common = {
+        "GAB_ENV": "sandbox",
+        "GAB_MASTER_KEY": master,
+        "KATA_LOG_SIGNING_SEED": base64.b64encode(seed.seed).decode(),
+        "KATA_PUSH_NOTIFIER_JWK": notifier,
+        "KATA_APPEND_TOKEN": "append-secret",
+    }
+    caplog.set_level("ERROR", logger="kata_service.settings")
+    short_settings = settings_from_env({**common, "GAB_SUBJECT_REF_KEY": short})
+    assert short_settings.config_error is None
+    assert short_settings.subject_ref_unusable is True
+    assert short_settings.key_provider is not None
+    invalid_settings = settings_from_env({**common, "GAB_SUBJECT_REF_KEY": invalid})
+    assert invalid_settings.config_error is None
+    assert invalid_settings.subject_ref_unusable is True
+    assert invalid_settings.key_provider is not None
+    messages = [record.message for record in caplog.records if record.name == "kata_service.settings"]
+    assert messages == [SUBJECT_REF_UNUSABLE, SUBJECT_REF_UNUSABLE]
+    logged = "\n".join(messages)
+    assert short not in logged
+    assert invalid not in logged
+    assert "base64" not in logged
+    assert "32 bytes" not in logged
+    alone = settings_from_env({"GAB_SUBJECT_REF_KEY": invalid})
+    assert alone.config_error is None
+    assert alone.subject_ref_unusable is True
+    assert alone.key_provider is None
+    usable = settings_from_env({**common, "GAB_SUBJECT_REF_KEY": base64.b64encode(b"s" * 32).decode()})
+    assert usable.config_error is None
+    assert usable.subject_ref_unusable is False
+    production = settings_from_env({"GAB_MASTER_KEY": master, "GAB_SUBJECT_REF_KEY": invalid})
+    assert production.subject_ref_unusable is True
+    assert production.config_error is not None
+    assert "refused" in production.config_error
+    assert invalid not in production.config_error
+    assert "base64" not in production.config_error
+
+    client = TestClient(create_app(short_settings, MemoryStore()))
+    pushed = client.post("/v1/revocations/push", json={"notice": {}})
+    assert pushed.status_code == 503
+    assert pushed.json() == {"error": SUBJECT_REF_UNUSABLE}
+    assert short not in pushed.text
+    assert "base64" not in pushed.text
+    assert "32 bytes" not in pushed.text
+    keys = client.get("/.well-known/kata-keys.json")
+    assert keys.status_code == 200
+    assert keys.json()["keys"]
+    refused = client.post(
+        "/v1/log/entries",
+        json={"kind": "agreement", "body": {"agreement_id": "agr_service"}},
+        headers={"Authorization": "Bearer wrong"},
+    )
+    assert refused.status_code == 401
+    appended = client.post(
+        "/v1/log/entries",
+        json={"kind": "agreement", "body": {"agreement_id": "agr_service"}},
+        headers={"Authorization": "Bearer append-secret"},
+    )
+    assert appended.status_code == 200
+    request_branch = TestClient(
+        create_app(
+            Settings(
+                None,
+                None,
+                seed.seed,
+                seed.public.to_jwk(),
+                "append-secret",
+                (),
+                "https://fx.test",
+                subject_ref_unusable=True,
+            ),
+            MemoryStore(),
+        )
+    )
+    again = request_branch.post("/v1/revocations/push", json={"notice": {}})
+    assert again.status_code == 503
+    assert again.json() == {"error": SUBJECT_REF_UNUSABLE}
+    assert "base64" not in again.text
+    assert "32 bytes" not in again.text
+
+
 def test_frankfurter_parser_reads_the_reference_rate():
     def opener(url: str) -> str:
         assert url == "https://api.frankfurter.dev/v1/2026-10-04?from=CAD&to=USD"
