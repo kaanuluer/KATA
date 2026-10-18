@@ -936,6 +936,74 @@ class PostgresRepo:
             (record["status"], record.get("outcome"), record["updated_at"], record["dispute_id"], _test_row()),
         )
 
+    def remove_portal_subject(self, principal_id: str, at: str) -> None:
+        """Remove this principal's portal rows from the live database in this process.
+
+        Organization logins stay. Dispute rows stay with a cleared statement and
+        principal_id. Inquiry rows stay with a cleared principal_id. Both is_test
+        partitions are included. gab_sandbox copies are included when that schema
+        exists. A backup or a restore can bring the data back.
+        """
+
+        self._ensure()
+        with self._connect() as conn:
+            with conn.transaction():
+                digests = [
+                    row[0]
+                    for row in conn.execute(
+                        "SELECT email_hash FROM gab_logins WHERE principal_id = %s",
+                        (principal_id,),
+                    ).fetchall()
+                ]
+                if digests:
+                    conn.execute(
+                        "DELETE FROM gab_magic_links WHERE kind = 'portal' AND subject_hash = ANY(%s)",
+                        (digests,),
+                    )
+                conn.execute("DELETE FROM gab_logins WHERE principal_id = %s", (principal_id,))
+                conn.execute(
+                    "DELETE FROM gab_sessions WHERE kind = 'portal' AND subject_id = %s",
+                    (principal_id,),
+                )
+                conn.execute("DELETE FROM gab_passkeys WHERE principal_id = %s", (principal_id,))
+                conn.execute("DELETE FROM gab_webauthn_challenges WHERE principal_id = %s", (principal_id,))
+                conn.execute("DELETE FROM gab_push_devices WHERE principal_id = %s", (principal_id,))
+                conn.execute("DELETE FROM gab_approvals WHERE principal_id = %s", (principal_id,))
+                conn.execute(
+                    """
+                    UPDATE gab_disputes
+                    SET statement = '', principal_id = NULL, updated_at = %s
+                    WHERE principal_id = %s
+                    """,
+                    (at, principal_id),
+                )
+                conn.execute(
+                    "UPDATE gab_inquiries SET principal_id = NULL WHERE principal_id = %s",
+                    (principal_id,),
+                )
+                sandbox = conn.execute("SELECT to_regclass('gab_sandbox.gab_agents')").fetchone()
+                if sandbox is not None and sandbox[0] is not None:
+                    conn.execute(
+                        """
+                        UPDATE gab_sandbox.gab_agents
+                        SET status = 'revoked', updated_at = %s
+                        WHERE principal_id = %s AND status <> 'revoked'
+                        """,
+                        (at, principal_id),
+                    )
+                    conn.execute(
+                        """
+                        UPDATE gab_sandbox.gab_disputes
+                        SET statement = '', principal_id = NULL, updated_at = %s
+                        WHERE principal_id = %s
+                        """,
+                        (at, principal_id),
+                    )
+                    conn.execute(
+                        "UPDATE gab_sandbox.gab_inquiries SET principal_id = NULL WHERE principal_id = %s",
+                        (principal_id,),
+                    )
+
     def reporter_types(self) -> dict[str, str]:
         rows = self._all("SELECT org_id, org_type FROM gab_organizations", ())
         return {row[0]: row[1] for row in rows}

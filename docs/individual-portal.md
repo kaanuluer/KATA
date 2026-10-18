@@ -49,3 +49,9 @@ New rows, and only these:
 | Challenge | Challenge, kind (`register`, `authenticate`, or `assert`), relying party id, origin, expiry, used time | Issued for a ceremony, then marked used |
 
 Not stored here: the private half of a passkey, a score of the individual, or a government identifier. A browser push address and an approval record are stored only by the approval flow, and only under the rules above. The portal page states the storage list for the rows this host actually keeps.
+
+## Removal
+
+`DELETE /v1/portal/subject` is the signed-in principal, with a fresh passkey assertion. Organization logins stay. The principal's agents become revoked. Agents, agreements, ALLOW ledger rows, reports, scores, and subscriptions stay. Dispute rows stay, with the statement and principal_id cleared. Inquiry rows stay, with principal_id cleared.
+
+The login, session, magic link, passkey, challenge, push device, and approval rows are removed from the live database in this process. A backup or a restore can bring the data back. An embedded seal string cannot be shredded. Another process may hold the data key for up to 300 seconds. A repeat of the request is 401. Moving the portal email onto `seal_detached` is a separate later change.

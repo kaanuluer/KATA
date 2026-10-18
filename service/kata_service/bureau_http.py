@@ -204,6 +204,18 @@ def build_router() -> APIRouter:
             ),
         )
 
+    @router.delete(
+        "/v1/portal/subject",
+        summary="Remove the signed-in principal from the live database in this process",
+    )
+    async def remove_portal_subject(request: Request):
+        return await _run(
+            request,
+            lambda auth, body: _bureau(request).remove_portal_subject(
+                auth, assertion=_assertion(body), origin=_origin(request)
+            ),
+        )
+
     @router.post("/v1/portal/disputes", summary="Dispute an incident")
     async def file_dispute(request: Request):
         return await _run(
