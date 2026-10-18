@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import os
 from dataclasses import dataclass, field
 
@@ -13,12 +14,14 @@ from kata_intent.errors import KataError
 from kata_intent.keys import PrivateKey, public_key_from_jwk
 
 from kata_service.defenses import ScorePolicy
-from kata_service.keys import KeyCustodyError, provider_from_env
+from kata_service.keys import KeyCustodyError, provider_from_env, subject_ref_key_problem
 from kata_service.score_model import ScoreWeights, weights_from_json
 
 DEFAULT_FX_SOURCE_URL = "https://api.frankfurter.dev/v1"
 REVOCATION_MAX_AGE_SECONDS = 300
 NOTIFIER_JWK_UNUSABLE = "KATA_PUSH_NOTIFIER_JWK is not a usable public JWK"
+SUBJECT_REF_UNUSABLE = "GAB_SUBJECT_REF_KEY is not a usable subject ref key"
+log = logging.getLogger("kata_service.settings")
 
 
 @dataclass(frozen=True)
@@ -58,6 +61,7 @@ class Settings:
     vapid_subject: str | None = None
     key_provider: object | None = None
     push_notifier_unusable: bool = False
+    subject_ref_unusable: bool = False
 
     def log_key(self) -> PrivateKey | None:
         if self.log_signing_seed is None:
@@ -69,7 +73,9 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
     """Read deployment settings. A bad notifier JWK does not crash import.
 
     That key is not a process-wide configuration error. Push reports it as 503.
-    The parser text and the JWK are not stored.
+    The parser text and the JWK are not stored. A set but unusable subject ref
+    key is logged as one fixed sentence. The value is not logged and is not
+    stored in config_error.
     """
 
     env = os.environ if environ is None else environ
@@ -86,6 +92,12 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
     published: tuple[dict, ...] = ()
     weights = ScoreWeights()
     key_provider = None
+    subject_ref_unusable = False
+    provider_env = env
+    if subject_ref_key_problem(env.get("GAB_SUBJECT_REF_KEY")) is not None:
+        log.error(SUBJECT_REF_UNUSABLE)
+        subject_ref_unusable = True
+        provider_env = {key: value for key, value in env.items() if key != "GAB_SUBJECT_REF_KEY"}
     try:
         seed = _seed(env.get("KATA_LOG_SIGNING_SEED"))
     except ValueError as exc:
@@ -101,7 +113,7 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
         published = _published(env.get("KATA_PUBLISHED_KEYS"))
         weights = weights_from_json(_blank(env.get("GAB_SCORE_WEIGHTS")))
         if error is None:
-            key_provider = provider_from_env(env, deployment_env=deployment_env)
+            key_provider = provider_from_env(provider_env, deployment_env=deployment_env)
     except (KataError, ValueError, json.JSONDecodeError, KeyCustodyError) as exc:
         if error is None:
             error = str(exc)
@@ -141,6 +153,7 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
         vapid_subject=_blank(env.get("GAB_VAPID_SUBJECT")),
         key_provider=key_provider,
         push_notifier_unusable=notifier_unusable,
+        subject_ref_unusable=subject_ref_unusable,
     )
 
 

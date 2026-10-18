@@ -39,7 +39,13 @@ from kata_intent.revocation import TransparencyLog, verify_revocation_push
 from kata_intent.values import prefixed_hash
 
 from kata_service.fx import FrankfurterFx, FxFetcher
-from kata_service.settings import NOTIFIER_JWK_UNUSABLE, REVOCATION_MAX_AGE_SECONDS, Settings, settings_from_env
+from kata_service.settings import (
+    NOTIFIER_JWK_UNUSABLE,
+    REVOCATION_MAX_AGE_SECONDS,
+    SUBJECT_REF_UNUSABLE,
+    Settings,
+    settings_from_env,
+)
 from kata_service.store import Store, open_store, utcnow
 
 _DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -284,6 +290,8 @@ def create_app(
         settings_now = app.state.settings
         if settings_now.push_notifier_unusable:
             return _error(503, NOTIFIER_JWK_UNUSABLE)
+        if settings_now.subject_ref_unusable:
+            return _error(503, SUBJECT_REF_UNUSABLE)
         if settings_now.push_notifier_jwk is None:
             return _error(503, "KATA_PUSH_NOTIFIER_JWK is not set")
         if settings_now.log_key() is None:

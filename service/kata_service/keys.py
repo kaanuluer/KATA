@@ -1369,6 +1369,21 @@ def _subject_key(key: bytes) -> bytes:
     return bytes(key)
 
 
+def subject_ref_key_problem(raw: str | None) -> str | None:
+    """Return an error when a subject ref key is set but not usable.
+
+    An unset value returns None. The text does not include the key.
+    """
+
+    if _blank(raw) is None:
+        return None
+    try:
+        _parse_subject_key(raw)
+    except KeyCustodyError as exc:
+        return str(exc)
+    return None
+
+
 def _parse_subject_key(raw: str | None) -> bytes | None:
     text = _blank(raw)
     if text is None:
