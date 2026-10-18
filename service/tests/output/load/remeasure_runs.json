@@ -1,0 +1,2509 @@
+[
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 3000
+    },
+    "reasons": {
+      "ALLOW:": 3000
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 3000,
+    "latency_ms": {
+      "p50": 788.9,
+      "p95": 1416.2,
+      "p99": 1534.9
+    },
+    "latency_ms_p50": 788.9,
+    "latency_ms_200": {
+      "p50": 788.9,
+      "p95": 1416.2,
+      "p99": 1534.9
+    },
+    "latency_ms_429": {
+      "p50": null,
+      "p95": null,
+      "p99": null
+    },
+    "health_samples": 203,
+    "health_status": {
+      "200": 202,
+      "ReadTimeout": 1
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 10,
+    "count": 3000,
+    "rep": 1,
+    "client_mode": "keepalive",
+    "workers": 1,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "rate_limits_off_velocity_off",
+    "verify_rate_limit_per_minute": 1000000,
+    "rate_limit_per_minute": 1000000,
+    "velocity_daily_count": null
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 3000
+    },
+    "reasons": {
+      "ALLOW:": 3000
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 3000,
+    "latency_ms": {
+      "p50": 789.2,
+      "p95": 1393.1,
+      "p99": 1481.7
+    },
+    "latency_ms_p50": 789.2,
+    "latency_ms_200": {
+      "p50": 789.2,
+      "p95": 1393.1,
+      "p99": 1481.7
+    },
+    "latency_ms_429": {
+      "p50": null,
+      "p95": null,
+      "p99": null
+    },
+    "health_samples": 210,
+    "health_status": {
+      "200": 210
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 10,
+    "count": 3000,
+    "rep": 2,
+    "client_mode": "keepalive",
+    "workers": 1,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "rate_limits_off_velocity_off",
+    "verify_rate_limit_per_minute": 1000000,
+    "rate_limit_per_minute": 1000000,
+    "velocity_daily_count": null
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 3000
+    },
+    "reasons": {
+      "ALLOW:": 3000
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 3000,
+    "latency_ms": {
+      "p50": 740.8,
+      "p95": 1402.6,
+      "p99": 1468.8
+    },
+    "latency_ms_p50": 740.8,
+    "latency_ms_200": {
+      "p50": 740.8,
+      "p95": 1402.6,
+      "p99": 1468.8
+    },
+    "latency_ms_429": {
+      "p50": null,
+      "p95": null,
+      "p99": null
+    },
+    "health_samples": 196,
+    "health_status": {
+      "200": 196
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 10,
+    "count": 3000,
+    "rep": 3,
+    "client_mode": "keepalive",
+    "workers": 1,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "rate_limits_off_velocity_off",
+    "verify_rate_limit_per_minute": 1000000,
+    "rate_limit_per_minute": 1000000,
+    "velocity_daily_count": null
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 3000
+    },
+    "reasons": {
+      "ALLOW:": 3000
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 3000,
+    "latency_ms": {
+      "p50": 3661.2,
+      "p95": 6845.8,
+      "p99": 7481.1
+    },
+    "latency_ms_p50": 3661.2,
+    "latency_ms_200": {
+      "p50": 3661.2,
+      "p95": 6845.8,
+      "p99": 7481.1
+    },
+    "latency_ms_429": {
+      "p50": null,
+      "p95": null,
+      "p99": null
+    },
+    "health_samples": 108,
+    "health_status": {
+      "200": 19,
+      "ReadTimeout": 89
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 50,
+    "count": 3000,
+    "rep": 1,
+    "client_mode": "keepalive",
+    "workers": 1,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "rate_limits_off_velocity_off",
+    "verify_rate_limit_per_minute": 1000000,
+    "rate_limit_per_minute": 1000000,
+    "velocity_daily_count": null
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 3000
+    },
+    "reasons": {
+      "ALLOW:": 3000
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 3000,
+    "latency_ms": {
+      "p50": 3556.7,
+      "p95": 6785.1,
+      "p99": 7079.1
+    },
+    "latency_ms_p50": 3556.7,
+    "latency_ms_200": {
+      "p50": 3556.7,
+      "p95": 6785.1,
+      "p99": 7079.1
+    },
+    "latency_ms_429": {
+      "p50": null,
+      "p95": null,
+      "p99": null
+    },
+    "health_samples": 108,
+    "health_status": {
+      "200": 18,
+      "ReadTimeout": 90
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 50,
+    "count": 3000,
+    "rep": 2,
+    "client_mode": "keepalive",
+    "workers": 1,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "rate_limits_off_velocity_off",
+    "verify_rate_limit_per_minute": 1000000,
+    "rate_limit_per_minute": 1000000,
+    "velocity_daily_count": null
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 3000
+    },
+    "reasons": {
+      "ALLOW:": 3000
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 3000,
+    "latency_ms": {
+      "p50": 3779.4,
+      "p95": 6969.9,
+      "p99": 7308.8
+    },
+    "latency_ms_p50": 3779.4,
+    "latency_ms_200": {
+      "p50": 3779.4,
+      "p95": 6969.9,
+      "p99": 7308.8
+    },
+    "latency_ms_429": {
+      "p50": null,
+      "p95": null,
+      "p99": null
+    },
+    "health_samples": 109,
+    "health_status": {
+      "200": 14,
+      "ReadTimeout": 95
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 50,
+    "count": 3000,
+    "rep": 3,
+    "client_mode": "keepalive",
+    "workers": 1,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "rate_limits_off_velocity_off",
+    "verify_rate_limit_per_minute": 1000000,
+    "rate_limit_per_minute": 1000000,
+    "velocity_daily_count": null
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 2978
+    },
+    "reasons": {
+      "ALLOW:": 2978
+    },
+    "errors": {
+      "ReadError": 22
+    },
+    "error_count": 22,
+    "allow_count": 2978,
+    "latency_ms": {
+      "p50": 16744.4,
+      "p95": 26093.1,
+      "p99": 26622.7
+    },
+    "latency_ms_p50": 16744.4,
+    "latency_ms_200": {
+      "p50": 16744.4,
+      "p95": 26093.1,
+      "p99": 26622.7
+    },
+    "latency_ms_429": {
+      "p50": null,
+      "p95": null,
+      "p99": null
+    },
+    "health_samples": 112,
+    "health_status": {
+      "200": 21,
+      "ReadTimeout": 91
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 200,
+    "count": 3000,
+    "rep": 1,
+    "client_mode": "keepalive",
+    "workers": 1,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "rate_limits_off_velocity_off",
+    "verify_rate_limit_per_minute": 1000000,
+    "rate_limit_per_minute": 1000000,
+    "velocity_daily_count": null
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 3000
+    },
+    "reasons": {
+      "ALLOW:": 3000
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 3000,
+    "latency_ms": {
+      "p50": 16459.5,
+      "p95": 26656.0,
+      "p99": 28148.6
+    },
+    "latency_ms_p50": 16459.5,
+    "latency_ms_200": {
+      "p50": 16459.5,
+      "p95": 26656.0,
+      "p99": 28148.6
+    },
+    "latency_ms_429": {
+      "p50": null,
+      "p95": null,
+      "p99": null
+    },
+    "health_samples": 115,
+    "health_status": {
+      "200": 26,
+      "ReadTimeout": 89
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 200,
+    "count": 3000,
+    "rep": 2,
+    "client_mode": "keepalive",
+    "workers": 1,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "rate_limits_off_velocity_off",
+    "verify_rate_limit_per_minute": 1000000,
+    "rate_limit_per_minute": 1000000,
+    "velocity_daily_count": null
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 3000
+    },
+    "reasons": {
+      "ALLOW:": 3000
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 3000,
+    "latency_ms": {
+      "p50": 16837.8,
+      "p95": 26843.6,
+      "p99": 27450.8
+    },
+    "latency_ms_p50": 16837.8,
+    "latency_ms_200": {
+      "p50": 16837.8,
+      "p95": 26843.6,
+      "p99": 27450.8
+    },
+    "latency_ms_429": {
+      "p50": null,
+      "p95": null,
+      "p99": null
+    },
+    "health_samples": 116,
+    "health_status": {
+      "200": 17,
+      "ReadTimeout": 99
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 200,
+    "count": 3000,
+    "rep": 3,
+    "client_mode": "keepalive",
+    "workers": 1,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "rate_limits_off_velocity_off",
+    "verify_rate_limit_per_minute": 1000000,
+    "rate_limit_per_minute": 1000000,
+    "velocity_daily_count": null
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 3000
+    },
+    "reasons": {
+      "ALLOW:": 3000
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 3000,
+    "latency_ms": {
+      "p50": 103.6,
+      "p95": 341.4,
+      "p99": 379.3
+    },
+    "latency_ms_p50": 103.6,
+    "latency_ms_200": {
+      "p50": 103.6,
+      "p95": 341.4,
+      "p99": 379.3
+    },
+    "latency_ms_429": {
+      "p50": null,
+      "p95": null,
+      "p99": null
+    },
+    "health_samples": 105,
+    "health_status": {
+      "200": 105
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 10,
+    "count": 3000,
+    "rep": 1,
+    "client_mode": "keepalive",
+    "workers": 3,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "rate_limits_off_velocity_off",
+    "verify_rate_limit_per_minute": 1000000,
+    "rate_limit_per_minute": 1000000,
+    "velocity_daily_count": null
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 3000
+    },
+    "reasons": {
+      "ALLOW:": 3000
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 3000,
+    "latency_ms": {
+      "p50": 111.6,
+      "p95": 228.0,
+      "p99": 240.1
+    },
+    "latency_ms_p50": 111.6,
+    "latency_ms_200": {
+      "p50": 111.6,
+      "p95": 228.0,
+      "p99": 240.1
+    },
+    "latency_ms_429": {
+      "p50": null,
+      "p95": null,
+      "p99": null
+    },
+    "health_samples": 119,
+    "health_status": {
+      "200": 119
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 10,
+    "count": 3000,
+    "rep": 2,
+    "client_mode": "keepalive",
+    "workers": 3,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "rate_limits_off_velocity_off",
+    "verify_rate_limit_per_minute": 1000000,
+    "rate_limit_per_minute": 1000000,
+    "velocity_daily_count": null
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 3000
+    },
+    "reasons": {
+      "ALLOW:": 3000
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 3000,
+    "latency_ms": {
+      "p50": 123.9,
+      "p95": 375.0,
+      "p99": 419.8
+    },
+    "latency_ms_p50": 123.9,
+    "latency_ms_200": {
+      "p50": 123.9,
+      "p95": 375.0,
+      "p99": 419.8
+    },
+    "latency_ms_429": {
+      "p50": null,
+      "p95": null,
+      "p99": null
+    },
+    "health_samples": 119,
+    "health_status": {
+      "200": 119
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 10,
+    "count": 3000,
+    "rep": 3,
+    "client_mode": "keepalive",
+    "workers": 3,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "rate_limits_off_velocity_off",
+    "verify_rate_limit_per_minute": 1000000,
+    "rate_limit_per_minute": 1000000,
+    "velocity_daily_count": null
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 3000
+    },
+    "reasons": {
+      "ALLOW:": 3000
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 3000,
+    "latency_ms": {
+      "p50": 509.8,
+      "p95": 1120.8,
+      "p99": 1253.4
+    },
+    "latency_ms_p50": 509.8,
+    "latency_ms_200": {
+      "p50": 509.8,
+      "p95": 1120.8,
+      "p99": 1253.4
+    },
+    "latency_ms_429": {
+      "p50": null,
+      "p95": null,
+      "p99": null
+    },
+    "health_samples": 70,
+    "health_status": {
+      "200": 70
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 50,
+    "count": 3000,
+    "rep": 1,
+    "client_mode": "keepalive",
+    "workers": 3,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "rate_limits_off_velocity_off",
+    "verify_rate_limit_per_minute": 1000000,
+    "rate_limit_per_minute": 1000000,
+    "velocity_daily_count": null
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 3000
+    },
+    "reasons": {
+      "ALLOW:": 3000
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 3000,
+    "latency_ms": {
+      "p50": 471.0,
+      "p95": 1117.9,
+      "p99": 1250.6
+    },
+    "latency_ms_p50": 471.0,
+    "latency_ms_200": {
+      "p50": 471.0,
+      "p95": 1117.9,
+      "p99": 1250.6
+    },
+    "latency_ms_429": {
+      "p50": null,
+      "p95": null,
+      "p99": null
+    },
+    "health_samples": 39,
+    "health_status": {
+      "200": 39
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 50,
+    "count": 3000,
+    "rep": 2,
+    "client_mode": "keepalive",
+    "workers": 3,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "rate_limits_off_velocity_off",
+    "verify_rate_limit_per_minute": 1000000,
+    "rate_limit_per_minute": 1000000,
+    "velocity_daily_count": null
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 3000
+    },
+    "reasons": {
+      "ALLOW:": 3000
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 3000,
+    "latency_ms": {
+      "p50": 546.5,
+      "p95": 928.0,
+      "p99": 1011.0
+    },
+    "latency_ms_p50": 546.5,
+    "latency_ms_200": {
+      "p50": 546.5,
+      "p95": 928.0,
+      "p99": 1011.0
+    },
+    "latency_ms_429": {
+      "p50": null,
+      "p95": null,
+      "p99": null
+    },
+    "health_samples": 61,
+    "health_status": {
+      "200": 61
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 50,
+    "count": 3000,
+    "rep": 3,
+    "client_mode": "keepalive",
+    "workers": 3,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "rate_limits_off_velocity_off",
+    "verify_rate_limit_per_minute": 1000000,
+    "rate_limit_per_minute": 1000000,
+    "velocity_daily_count": null
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 2998
+    },
+    "reasons": {
+      "ALLOW:": 2998
+    },
+    "errors": {
+      "ReadError": 2
+    },
+    "error_count": 2,
+    "allow_count": 2998,
+    "latency_ms": {
+      "p50": 2531.8,
+      "p95": 9442.5,
+      "p99": 13635.9
+    },
+    "latency_ms_p50": 2531.8,
+    "latency_ms_200": {
+      "p50": 2531.8,
+      "p95": 9442.5,
+      "p99": 13635.9
+    },
+    "latency_ms_429": {
+      "p50": null,
+      "p95": null,
+      "p99": null
+    },
+    "health_samples": 72,
+    "health_status": {
+      "200": 66,
+      "ReadTimeout": 6
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 200,
+    "count": 3000,
+    "rep": 1,
+    "client_mode": "keepalive",
+    "workers": 3,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "rate_limits_off_velocity_off",
+    "verify_rate_limit_per_minute": 1000000,
+    "rate_limit_per_minute": 1000000,
+    "velocity_daily_count": null
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 2996
+    },
+    "reasons": {
+      "ALLOW:": 2996
+    },
+    "errors": {
+      "ReadError": 4
+    },
+    "error_count": 4,
+    "allow_count": 2996,
+    "latency_ms": {
+      "p50": 2193.7,
+      "p95": 11713.2,
+      "p99": 15487.0
+    },
+    "latency_ms_p50": 2193.7,
+    "latency_ms_200": {
+      "p50": 2193.7,
+      "p95": 11713.2,
+      "p99": 15487.0
+    },
+    "latency_ms_429": {
+      "p50": null,
+      "p95": null,
+      "p99": null
+    },
+    "health_samples": 99,
+    "health_status": {
+      "200": 97,
+      "ReadTimeout": 2
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 200,
+    "count": 3000,
+    "rep": 2,
+    "client_mode": "keepalive",
+    "workers": 3,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "rate_limits_off_velocity_off",
+    "verify_rate_limit_per_minute": 1000000,
+    "rate_limit_per_minute": 1000000,
+    "velocity_daily_count": null
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 3000
+    },
+    "reasons": {
+      "ALLOW:": 3000
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 3000,
+    "latency_ms": {
+      "p50": 1933.2,
+      "p95": 9677.1,
+      "p99": 12255.2
+    },
+    "latency_ms_p50": 1933.2,
+    "latency_ms_200": {
+      "p50": 1933.2,
+      "p95": 9677.1,
+      "p99": 12255.2
+    },
+    "latency_ms_429": {
+      "p50": null,
+      "p95": null,
+      "p99": null
+    },
+    "health_samples": 74,
+    "health_status": {
+      "200": 73,
+      "ReadTimeout": 1
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 200,
+    "count": 3000,
+    "rep": 3,
+    "client_mode": "keepalive",
+    "workers": 3,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "rate_limits_off_velocity_off",
+    "verify_rate_limit_per_minute": 1000000,
+    "rate_limit_per_minute": 1000000,
+    "velocity_daily_count": null
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 3000
+    },
+    "reasons": {
+      "ALLOW:": 3000
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 3000,
+    "latency_ms": {
+      "p50": 88.7,
+      "p95": 182.7,
+      "p99": 207.5
+    },
+    "latency_ms_p50": 88.7,
+    "latency_ms_200": {
+      "p50": 88.7,
+      "p95": 182.7,
+      "p99": 207.5
+    },
+    "latency_ms_429": {
+      "p50": null,
+      "p95": null,
+      "p99": null
+    },
+    "health_samples": 123,
+    "health_status": {
+      "200": 123
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 10,
+    "count": 3000,
+    "rep": 1,
+    "client_mode": "keepalive",
+    "workers": 4,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "rate_limits_off_velocity_off",
+    "verify_rate_limit_per_minute": 1000000,
+    "rate_limit_per_minute": 1000000,
+    "velocity_daily_count": null
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 3000
+    },
+    "reasons": {
+      "ALLOW:": 3000
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 3000,
+    "latency_ms": {
+      "p50": 103.3,
+      "p95": 259.8,
+      "p99": 290.2
+    },
+    "latency_ms_p50": 103.3,
+    "latency_ms_200": {
+      "p50": 103.3,
+      "p95": 259.8,
+      "p99": 290.2
+    },
+    "latency_ms_429": {
+      "p50": null,
+      "p95": null,
+      "p99": null
+    },
+    "health_samples": 176,
+    "health_status": {
+      "200": 176
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 10,
+    "count": 3000,
+    "rep": 2,
+    "client_mode": "keepalive",
+    "workers": 4,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "rate_limits_off_velocity_off",
+    "verify_rate_limit_per_minute": 1000000,
+    "rate_limit_per_minute": 1000000,
+    "velocity_daily_count": null
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 3000
+    },
+    "reasons": {
+      "ALLOW:": 3000
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 3000,
+    "latency_ms": {
+      "p50": 108.0,
+      "p95": 207.9,
+      "p99": 243.9
+    },
+    "latency_ms_p50": 108.0,
+    "latency_ms_200": {
+      "p50": 108.0,
+      "p95": 207.9,
+      "p99": 243.9
+    },
+    "latency_ms_429": {
+      "p50": null,
+      "p95": null,
+      "p99": null
+    },
+    "health_samples": 168,
+    "health_status": {
+      "200": 168
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 10,
+    "count": 3000,
+    "rep": 3,
+    "client_mode": "keepalive",
+    "workers": 4,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "rate_limits_off_velocity_off",
+    "verify_rate_limit_per_minute": 1000000,
+    "rate_limit_per_minute": 1000000,
+    "velocity_daily_count": null
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 3000
+    },
+    "reasons": {
+      "ALLOW:": 3000
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 3000,
+    "latency_ms": {
+      "p50": 478.5,
+      "p95": 896.1,
+      "p99": 993.7
+    },
+    "latency_ms_p50": 478.5,
+    "latency_ms_200": {
+      "p50": 478.5,
+      "p95": 896.1,
+      "p99": 993.7
+    },
+    "latency_ms_429": {
+      "p50": null,
+      "p95": null,
+      "p99": null
+    },
+    "health_samples": 131,
+    "health_status": {
+      "200": 131
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 50,
+    "count": 3000,
+    "rep": 1,
+    "client_mode": "keepalive",
+    "workers": 4,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "rate_limits_off_velocity_off",
+    "verify_rate_limit_per_minute": 1000000,
+    "rate_limit_per_minute": 1000000,
+    "velocity_daily_count": null
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 3000
+    },
+    "reasons": {
+      "ALLOW:": 3000
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 3000,
+    "latency_ms": {
+      "p50": 355.6,
+      "p95": 954.6,
+      "p99": 1094.0
+    },
+    "latency_ms_p50": 355.6,
+    "latency_ms_200": {
+      "p50": 355.6,
+      "p95": 954.6,
+      "p99": 1094.0
+    },
+    "latency_ms_429": {
+      "p50": null,
+      "p95": null,
+      "p99": null
+    },
+    "health_samples": 36,
+    "health_status": {
+      "200": 36
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 50,
+    "count": 3000,
+    "rep": 2,
+    "client_mode": "keepalive",
+    "workers": 4,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "rate_limits_off_velocity_off",
+    "verify_rate_limit_per_minute": 1000000,
+    "rate_limit_per_minute": 1000000,
+    "velocity_daily_count": null
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 3000
+    },
+    "reasons": {
+      "ALLOW:": 3000
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 3000,
+    "latency_ms": {
+      "p50": 279.8,
+      "p95": 1053.4,
+      "p99": 1214.7
+    },
+    "latency_ms_p50": 279.8,
+    "latency_ms_200": {
+      "p50": 279.8,
+      "p95": 1053.4,
+      "p99": 1214.7
+    },
+    "latency_ms_429": {
+      "p50": null,
+      "p95": null,
+      "p99": null
+    },
+    "health_samples": 55,
+    "health_status": {
+      "200": 55
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 50,
+    "count": 3000,
+    "rep": 3,
+    "client_mode": "keepalive",
+    "workers": 4,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "rate_limits_off_velocity_off",
+    "verify_rate_limit_per_minute": 1000000,
+    "rate_limit_per_minute": 1000000,
+    "velocity_daily_count": null
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 3000
+    },
+    "reasons": {
+      "ALLOW:": 3000
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 3000,
+    "latency_ms": {
+      "p50": 1407.8,
+      "p95": 9664.2,
+      "p99": 13603.7
+    },
+    "latency_ms_p50": 1407.8,
+    "latency_ms_200": {
+      "p50": 1407.8,
+      "p95": 9664.2,
+      "p99": 13603.7
+    },
+    "latency_ms_429": {
+      "p50": null,
+      "p95": null,
+      "p99": null
+    },
+    "health_samples": 66,
+    "health_status": {
+      "200": 65,
+      "ReadTimeout": 1
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 200,
+    "count": 3000,
+    "rep": 1,
+    "client_mode": "keepalive",
+    "workers": 4,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "rate_limits_off_velocity_off",
+    "verify_rate_limit_per_minute": 1000000,
+    "rate_limit_per_minute": 1000000,
+    "velocity_daily_count": null
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 2992
+    },
+    "reasons": {
+      "ALLOW:": 2992
+    },
+    "errors": {
+      "ReadError": 8
+    },
+    "error_count": 8,
+    "allow_count": 2992,
+    "latency_ms": {
+      "p50": 2068.3,
+      "p95": 7894.9,
+      "p99": 10462.4
+    },
+    "latency_ms_p50": 2068.3,
+    "latency_ms_200": {
+      "p50": 2068.3,
+      "p95": 7894.9,
+      "p99": 10462.4
+    },
+    "latency_ms_429": {
+      "p50": null,
+      "p95": null,
+      "p99": null
+    },
+    "health_samples": 59,
+    "health_status": {
+      "200": 55,
+      "ReadTimeout": 4
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 200,
+    "count": 3000,
+    "rep": 2,
+    "client_mode": "keepalive",
+    "workers": 4,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "rate_limits_off_velocity_off",
+    "verify_rate_limit_per_minute": 1000000,
+    "rate_limit_per_minute": 1000000,
+    "velocity_daily_count": null
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 2996
+    },
+    "reasons": {
+      "ALLOW:": 2996
+    },
+    "errors": {
+      "ReadError": 4
+    },
+    "error_count": 4,
+    "allow_count": 2996,
+    "latency_ms": {
+      "p50": 1450.7,
+      "p95": 9098.6,
+      "p99": 14506.2
+    },
+    "latency_ms_p50": 1450.7,
+    "latency_ms_200": {
+      "p50": 1450.7,
+      "p95": 9098.6,
+      "p99": 14506.2
+    },
+    "latency_ms_429": {
+      "p50": null,
+      "p95": null,
+      "p99": null
+    },
+    "health_samples": 57,
+    "health_status": {
+      "200": 54,
+      "ReadTimeout": 3
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 200,
+    "count": 3000,
+    "rep": 3,
+    "client_mode": "keepalive",
+    "workers": 4,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "rate_limits_off_velocity_off",
+    "verify_rate_limit_per_minute": 1000000,
+    "rate_limit_per_minute": 1000000,
+    "velocity_daily_count": null
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 60,
+      "429": 2940
+    },
+    "reasons": {
+      "ALLOW:": 25,
+      "DENY:VELOCITY_COUNT": 35,
+      "http:verify": 58,
+      "http:general": 2882
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 25,
+    "latency_ms": {
+      "p50": 10.9,
+      "p95": 25.4,
+      "p99": 62.1
+    },
+    "latency_ms_p50": 10.9,
+    "latency_ms_200": {
+      "p50": 62.0,
+      "p95": 89.1,
+      "p99": 89.6
+    },
+    "latency_ms_429": {
+      "p50": 10.8,
+      "p95": 21.2,
+      "p99": 37.8
+    },
+    "health_samples": 17,
+    "health_status": {
+      "200": 17
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 10,
+    "count": 3000,
+    "rep": 1,
+    "client_mode": "keepalive",
+    "workers": 1,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "defaults_on",
+    "verify_rate_limit_per_minute": 60,
+    "rate_limit_per_minute": 120,
+    "velocity_daily_count": 25
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 60,
+      "429": 2940
+    },
+    "reasons": {
+      "ALLOW:": 25,
+      "DENY:VELOCITY_COUNT": 35,
+      "http:verify": 58,
+      "http:general": 2882
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 25,
+    "latency_ms": {
+      "p50": 10.9,
+      "p95": 29.1,
+      "p99": 61.9
+    },
+    "latency_ms_p50": 10.9,
+    "latency_ms_200": {
+      "p50": 61.5,
+      "p95": 78.9,
+      "p99": 80.7
+    },
+    "latency_ms_429": {
+      "p50": 10.9,
+      "p95": 24.5,
+      "p99": 40.4
+    },
+    "health_samples": 18,
+    "health_status": {
+      "200": 18
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 10,
+    "count": 3000,
+    "rep": 2,
+    "client_mode": "keepalive",
+    "workers": 1,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "defaults_on",
+    "verify_rate_limit_per_minute": 60,
+    "rate_limit_per_minute": 120,
+    "velocity_daily_count": 25
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 60,
+      "429": 2940
+    },
+    "reasons": {
+      "ALLOW:": 25,
+      "DENY:VELOCITY_COUNT": 35,
+      "http:verify": 58,
+      "http:general": 2882
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 25,
+    "latency_ms": {
+      "p50": 11.1,
+      "p95": 30.5,
+      "p99": 61.9
+    },
+    "latency_ms_p50": 11.1,
+    "latency_ms_200": {
+      "p50": 61.5,
+      "p95": 75.3,
+      "p99": 77.1
+    },
+    "latency_ms_429": {
+      "p50": 11.0,
+      "p95": 25.3,
+      "p99": 42.2
+    },
+    "health_samples": 19,
+    "health_status": {
+      "200": 19
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 10,
+    "count": 3000,
+    "rep": 3,
+    "client_mode": "keepalive",
+    "workers": 1,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "defaults_on",
+    "verify_rate_limit_per_minute": 60,
+    "rate_limit_per_minute": 120,
+    "velocity_daily_count": 25
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 60,
+      "429": 2940
+    },
+    "reasons": {
+      "ALLOW:": 25,
+      "DENY:VELOCITY_COUNT": 35,
+      "http:verify": 58,
+      "http:general": 2882
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 25,
+    "latency_ms": {
+      "p50": 77.8,
+      "p95": 400.1,
+      "p99": 699.6
+    },
+    "latency_ms_p50": 77.8,
+    "latency_ms_200": {
+      "p50": 344.9,
+      "p95": 362.7,
+      "p99": 363.3
+    },
+    "latency_ms_429": {
+      "p50": 76.2,
+      "p95": 404.5,
+      "p99": 703.0
+    },
+    "health_samples": 33,
+    "health_status": {
+      "200": 33
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 50,
+    "count": 3000,
+    "rep": 1,
+    "client_mode": "keepalive",
+    "workers": 1,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "defaults_on",
+    "verify_rate_limit_per_minute": 60,
+    "rate_limit_per_minute": 120,
+    "velocity_daily_count": 25
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 60,
+      "429": 2940
+    },
+    "reasons": {
+      "ALLOW:": 25,
+      "DENY:VELOCITY_COUNT": 35,
+      "http:verify": 58,
+      "http:general": 2882
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 25,
+    "latency_ms": {
+      "p50": 77.9,
+      "p95": 394.9,
+      "p99": 677.9
+    },
+    "latency_ms_p50": 77.9,
+    "latency_ms_200": {
+      "p50": 311.1,
+      "p95": 334.0,
+      "p99": 334.3
+    },
+    "latency_ms_429": {
+      "p50": 76.0,
+      "p95": 396.1,
+      "p99": 689.3
+    },
+    "health_samples": 32,
+    "health_status": {
+      "200": 32
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 50,
+    "count": 3000,
+    "rep": 2,
+    "client_mode": "keepalive",
+    "workers": 1,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "defaults_on",
+    "verify_rate_limit_per_minute": 60,
+    "rate_limit_per_minute": 120,
+    "velocity_daily_count": 25
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 60,
+      "429": 2940
+    },
+    "reasons": {
+      "ALLOW:": 25,
+      "DENY:VELOCITY_COUNT": 35,
+      "http:verify": 58,
+      "http:general": 2882
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 25,
+    "latency_ms": {
+      "p50": 77.0,
+      "p95": 388.0,
+      "p99": 673.9
+    },
+    "latency_ms_p50": 77.0,
+    "latency_ms_200": {
+      "p50": 331.8,
+      "p95": 348.9,
+      "p99": 349.1
+    },
+    "latency_ms_429": {
+      "p50": 75.2,
+      "p95": 389.8,
+      "p99": 674.1
+    },
+    "health_samples": 32,
+    "health_status": {
+      "200": 32
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 50,
+    "count": 3000,
+    "rep": 3,
+    "client_mode": "keepalive",
+    "workers": 1,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "defaults_on",
+    "verify_rate_limit_per_minute": 60,
+    "rate_limit_per_minute": 120,
+    "velocity_daily_count": 25
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 60,
+      "429": 2940
+    },
+    "reasons": {
+      "ALLOW:": 25,
+      "DENY:VELOCITY_COUNT": 35,
+      "http:verify": 58,
+      "http:general": 2882
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 25,
+    "latency_ms": {
+      "p50": 364.4,
+      "p95": 3288.5,
+      "p99": 5498.8
+    },
+    "latency_ms_p50": 364.4,
+    "latency_ms_200": {
+      "p50": 863.9,
+      "p95": 938.4,
+      "p99": 961.4
+    },
+    "latency_ms_429": {
+      "p50": 353.6,
+      "p95": 3368.4,
+      "p99": 5500.0
+    },
+    "health_samples": 34,
+    "health_status": {
+      "200": 34
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 200,
+    "count": 3000,
+    "rep": 1,
+    "client_mode": "keepalive",
+    "workers": 1,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "defaults_on",
+    "verify_rate_limit_per_minute": 60,
+    "rate_limit_per_minute": 120,
+    "velocity_daily_count": 25
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 120,
+      "429": 2880
+    },
+    "reasons": {
+      "ALLOW:": 25,
+      "DENY:VELOCITY_COUNT": 95,
+      "http:verify": 118,
+      "http:general": 2762
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 25,
+    "latency_ms": {
+      "p50": 420.1,
+      "p95": 4881.6,
+      "p99": 5932.0
+    },
+    "latency_ms_p50": 420.1,
+    "latency_ms_200": {
+      "p50": 887.1,
+      "p95": 1292.3,
+      "p99": 2286.4
+    },
+    "latency_ms_429": {
+      "p50": 394.1,
+      "p95": 4917.6,
+      "p99": 5937.3
+    },
+    "health_samples": 40,
+    "health_status": {
+      "200": 40
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 200,
+    "count": 3000,
+    "rep": 2,
+    "client_mode": "keepalive",
+    "workers": 1,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "defaults_on",
+    "verify_rate_limit_per_minute": 60,
+    "rate_limit_per_minute": 120,
+    "velocity_daily_count": 25
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 60,
+      "429": 2940
+    },
+    "reasons": {
+      "ALLOW:": 25,
+      "DENY:VELOCITY_COUNT": 35,
+      "http:verify": 58,
+      "http:general": 2882
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 25,
+    "latency_ms": {
+      "p50": 350.1,
+      "p95": 3395.3,
+      "p99": 5600.6
+    },
+    "latency_ms_p50": 350.1,
+    "latency_ms_200": {
+      "p50": 833.0,
+      "p95": 1025.8,
+      "p99": 1032.9
+    },
+    "latency_ms_429": {
+      "p50": 342.0,
+      "p95": 3461.8,
+      "p99": 5607.7
+    },
+    "health_samples": 33,
+    "health_status": {
+      "200": 33
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 200,
+    "count": 3000,
+    "rep": 3,
+    "client_mode": "keepalive",
+    "workers": 1,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "defaults_on",
+    "verify_rate_limit_per_minute": 60,
+    "rate_limit_per_minute": 120,
+    "velocity_daily_count": 25
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 60,
+      "429": 2940
+    },
+    "reasons": {
+      "ALLOW:": 25,
+      "DENY:VELOCITY_COUNT": 35,
+      "http:verify": 58,
+      "http:general": 2882
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 25,
+    "latency_ms": {
+      "p50": 47.2,
+      "p95": 51.7,
+      "p99": 55.3
+    },
+    "latency_ms_p50": 47.2,
+    "latency_ms_200": {
+      "p50": 51.9,
+      "p95": 115.9,
+      "p99": 124.4
+    },
+    "latency_ms_429": {
+      "p50": 47.1,
+      "p95": 51.6,
+      "p99": 54.1
+    },
+    "health_samples": 68,
+    "health_status": {
+      "200": 68
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 10,
+    "count": 3000,
+    "rep": 1,
+    "client_mode": "keepalive",
+    "workers": 3,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "defaults_on",
+    "verify_rate_limit_per_minute": 60,
+    "rate_limit_per_minute": 120,
+    "velocity_daily_count": 25
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 60,
+      "429": 2940
+    },
+    "reasons": {
+      "ALLOW:": 26,
+      "DENY:VELOCITY_COUNT": 34,
+      "http:verify": 58,
+      "http:general": 2882
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 26,
+    "latency_ms": {
+      "p50": 47.2,
+      "p95": 51.7,
+      "p99": 55.5
+    },
+    "latency_ms_p50": 47.2,
+    "latency_ms_200": {
+      "p50": 52.5,
+      "p95": 65.6,
+      "p99": 74.4
+    },
+    "latency_ms_429": {
+      "p50": 47.1,
+      "p95": 51.5,
+      "p99": 53.9
+    },
+    "health_samples": 68,
+    "health_status": {
+      "200": 68
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 10,
+    "count": 3000,
+    "rep": 2,
+    "client_mode": "keepalive",
+    "workers": 3,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "defaults_on",
+    "verify_rate_limit_per_minute": 60,
+    "rate_limit_per_minute": 120,
+    "velocity_daily_count": 25
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 120,
+      "429": 2880
+    },
+    "reasons": {
+      "ALLOW:": 25,
+      "DENY:VELOCITY_COUNT": 95,
+      "http:verify": 118,
+      "http:general": 2762
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 25,
+    "latency_ms": {
+      "p50": 46.9,
+      "p95": 51.9,
+      "p99": 56.2
+    },
+    "latency_ms_p50": 46.9,
+    "latency_ms_200": {
+      "p50": 52.2,
+      "p95": 71.8,
+      "p99": 81.9
+    },
+    "latency_ms_429": {
+      "p50": 46.5,
+      "p95": 51.6,
+      "p99": 54.3
+    },
+    "health_samples": 68,
+    "health_status": {
+      "200": 68
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 10,
+    "count": 3000,
+    "rep": 3,
+    "client_mode": "keepalive",
+    "workers": 3,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "defaults_on",
+    "verify_rate_limit_per_minute": 60,
+    "rate_limit_per_minute": 120,
+    "velocity_daily_count": 25
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 60,
+      "429": 2940
+    },
+    "reasons": {
+      "ALLOW:": 26,
+      "DENY:VELOCITY_COUNT": 34,
+      "http:verify": 58,
+      "http:general": 2882
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 26,
+    "latency_ms": {
+      "p50": 95.0,
+      "p95": 421.6,
+      "p99": 674.2
+    },
+    "latency_ms_p50": 95.0,
+    "latency_ms_200": {
+      "p50": 258.0,
+      "p95": 278.6,
+      "p99": 279.3
+    },
+    "latency_ms_429": {
+      "p50": 93.0,
+      "p95": 428.0,
+      "p99": 679.0
+    },
+    "health_samples": 37,
+    "health_status": {
+      "200": 37
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 50,
+    "count": 3000,
+    "rep": 1,
+    "client_mode": "keepalive",
+    "workers": 3,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "defaults_on",
+    "verify_rate_limit_per_minute": 60,
+    "rate_limit_per_minute": 120,
+    "velocity_daily_count": 25
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 60,
+      "429": 2940
+    },
+    "reasons": {
+      "ALLOW:": 26,
+      "DENY:VELOCITY_COUNT": 34,
+      "http:general": 2882,
+      "http:verify": 58
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 26,
+    "latency_ms": {
+      "p50": 112.3,
+      "p95": 488.1,
+      "p99": 733.0
+    },
+    "latency_ms_p50": 112.3,
+    "latency_ms_200": {
+      "p50": 133.4,
+      "p95": 181.7,
+      "p99": 182.2
+    },
+    "latency_ms_429": {
+      "p50": 110.0,
+      "p95": 491.1,
+      "p99": 733.1
+    },
+    "health_samples": 42,
+    "health_status": {
+      "200": 42
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 50,
+    "count": 3000,
+    "rep": 2,
+    "client_mode": "keepalive",
+    "workers": 3,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "defaults_on",
+    "verify_rate_limit_per_minute": 60,
+    "rate_limit_per_minute": 120,
+    "velocity_daily_count": 25
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 60,
+      "429": 2940
+    },
+    "reasons": {
+      "ALLOW:": 26,
+      "DENY:VELOCITY_COUNT": 34,
+      "http:verify": 58,
+      "http:general": 2882
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 26,
+    "latency_ms": {
+      "p50": 112.7,
+      "p95": 497.7,
+      "p99": 742.8
+    },
+    "latency_ms_p50": 112.7,
+    "latency_ms_200": {
+      "p50": 133.2,
+      "p95": 206.7,
+      "p99": 207.5
+    },
+    "latency_ms_429": {
+      "p50": 111.3,
+      "p95": 503.8,
+      "p99": 743.4
+    },
+    "health_samples": 43,
+    "health_status": {
+      "200": 43
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 50,
+    "count": 3000,
+    "rep": 3,
+    "client_mode": "keepalive",
+    "workers": 3,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "defaults_on",
+    "verify_rate_limit_per_minute": 60,
+    "rate_limit_per_minute": 120,
+    "velocity_daily_count": 25
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 60,
+      "429": 2940
+    },
+    "reasons": {
+      "ALLOW:": 26,
+      "DENY:VELOCITY_COUNT": 34,
+      "http:verify": 58,
+      "http:general": 2882
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 26,
+    "latency_ms": {
+      "p50": 346.4,
+      "p95": 3476.2,
+      "p99": 5428.0
+    },
+    "latency_ms_p50": 346.4,
+    "latency_ms_200": {
+      "p50": 708.8,
+      "p95": 977.7,
+      "p99": 984.2
+    },
+    "latency_ms_429": {
+      "p50": 337.8,
+      "p95": 3542.1,
+      "p99": 5445.5
+    },
+    "health_samples": 33,
+    "health_status": {
+      "200": 33
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 200,
+    "count": 3000,
+    "rep": 1,
+    "client_mode": "keepalive",
+    "workers": 3,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "defaults_on",
+    "verify_rate_limit_per_minute": 60,
+    "rate_limit_per_minute": 120,
+    "velocity_daily_count": 25
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 112,
+      "429": 2888
+    },
+    "reasons": {
+      "ALLOW:": 26,
+      "DENY:VELOCITY_COUNT": 86,
+      "http:verify": 58,
+      "http:general": 2830
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 26,
+    "latency_ms": {
+      "p50": 451.4,
+      "p95": 3561.1,
+      "p99": 5637.6
+    },
+    "latency_ms_p50": 451.4,
+    "latency_ms_200": {
+      "p50": 864.8,
+      "p95": 2167.8,
+      "p99": 3101.3
+    },
+    "latency_ms_429": {
+      "p50": 422.1,
+      "p95": 3639.8,
+      "p99": 5658.3
+    },
+    "health_samples": 41,
+    "health_status": {
+      "200": 41
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 200,
+    "count": 3000,
+    "rep": 2,
+    "client_mode": "keepalive",
+    "workers": 3,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "defaults_on",
+    "verify_rate_limit_per_minute": 60,
+    "rate_limit_per_minute": 120,
+    "velocity_daily_count": 25
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 60,
+      "429": 2940
+    },
+    "reasons": {
+      "ALLOW:": 25,
+      "DENY:VELOCITY_COUNT": 35,
+      "http:verify": 58,
+      "http:general": 2882
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 25,
+    "latency_ms": {
+      "p50": 338.9,
+      "p95": 3353.3,
+      "p99": 5409.2
+    },
+    "latency_ms_p50": 338.9,
+    "latency_ms_200": {
+      "p50": 740.6,
+      "p95": 956.3,
+      "p99": 962.7
+    },
+    "latency_ms_429": {
+      "p50": 328.9,
+      "p95": 3397.6,
+      "p99": 5413.7
+    },
+    "health_samples": 33,
+    "health_status": {
+      "200": 33
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 200,
+    "count": 3000,
+    "rep": 3,
+    "client_mode": "keepalive",
+    "workers": 3,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "defaults_on",
+    "verify_rate_limit_per_minute": 60,
+    "rate_limit_per_minute": 120,
+    "velocity_daily_count": 25
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 60,
+      "429": 2940
+    },
+    "reasons": {
+      "ALLOW:": 25,
+      "DENY:VELOCITY_COUNT": 35,
+      "http:verify": 58,
+      "http:general": 2882
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 25,
+    "latency_ms": {
+      "p50": 47.3,
+      "p95": 51.8,
+      "p99": 59.9
+    },
+    "latency_ms_p50": 47.3,
+    "latency_ms_200": {
+      "p50": 60.0,
+      "p95": 167.0,
+      "p99": 168.6
+    },
+    "latency_ms_429": {
+      "p50": 47.3,
+      "p95": 51.6,
+      "p99": 53.5
+    },
+    "health_samples": 68,
+    "health_status": {
+      "200": 68
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 10,
+    "count": 3000,
+    "rep": 1,
+    "client_mode": "keepalive",
+    "workers": 4,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "defaults_on",
+    "verify_rate_limit_per_minute": 60,
+    "rate_limit_per_minute": 120,
+    "velocity_daily_count": 25
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 60,
+      "429": 2940
+    },
+    "reasons": {
+      "ALLOW:": 25,
+      "DENY:VELOCITY_COUNT": 35,
+      "http:verify": 58,
+      "http:general": 2882
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 25,
+    "latency_ms": {
+      "p50": 47.0,
+      "p95": 51.8,
+      "p99": 56.9
+    },
+    "latency_ms_p50": 47.0,
+    "latency_ms_200": {
+      "p50": 55.7,
+      "p95": 91.8,
+      "p99": 93.5
+    },
+    "latency_ms_429": {
+      "p50": 47.0,
+      "p95": 51.6,
+      "p99": 54.2
+    },
+    "health_samples": 67,
+    "health_status": {
+      "200": 67
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 10,
+    "count": 3000,
+    "rep": 2,
+    "client_mode": "keepalive",
+    "workers": 4,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "defaults_on",
+    "verify_rate_limit_per_minute": 60,
+    "rate_limit_per_minute": 120,
+    "velocity_daily_count": 25
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 60,
+      "429": 2940
+    },
+    "reasons": {
+      "ALLOW:": 26,
+      "DENY:VELOCITY_COUNT": 34,
+      "http:verify": 58,
+      "http:general": 2882
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 26,
+    "latency_ms": {
+      "p50": 47.2,
+      "p95": 52.0,
+      "p99": 55.8
+    },
+    "latency_ms_p50": 47.2,
+    "latency_ms_200": {
+      "p50": 51.8,
+      "p95": 67.2,
+      "p99": 71.4
+    },
+    "latency_ms_429": {
+      "p50": 47.2,
+      "p95": 51.9,
+      "p99": 54.8
+    },
+    "health_samples": 68,
+    "health_status": {
+      "200": 68
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 10,
+    "count": 3000,
+    "rep": 3,
+    "client_mode": "keepalive",
+    "workers": 4,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "defaults_on",
+    "verify_rate_limit_per_minute": 60,
+    "rate_limit_per_minute": 120,
+    "velocity_daily_count": 25
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 120,
+      "429": 2880
+    },
+    "reasons": {
+      "ALLOW:": 27,
+      "DENY:VELOCITY_COUNT": 93,
+      "http:verify": 118,
+      "http:general": 2762
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 27,
+    "latency_ms": {
+      "p50": 116.3,
+      "p95": 505.0,
+      "p99": 794.2
+    },
+    "latency_ms_p50": 116.3,
+    "latency_ms_200": {
+      "p50": 171.7,
+      "p95": 475.8,
+      "p99": 679.0
+    },
+    "latency_ms_429": {
+      "p50": 114.4,
+      "p95": 506.0,
+      "p99": 796.7
+    },
+    "health_samples": 43,
+    "health_status": {
+      "200": 43
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 50,
+    "count": 3000,
+    "rep": 1,
+    "client_mode": "keepalive",
+    "workers": 4,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "defaults_on",
+    "verify_rate_limit_per_minute": 60,
+    "rate_limit_per_minute": 120,
+    "velocity_daily_count": 25
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 60,
+      "429": 2940
+    },
+    "reasons": {
+      "ALLOW:": 26,
+      "DENY:VELOCITY_COUNT": 34,
+      "http:verify": 58,
+      "http:general": 2882
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 26,
+    "latency_ms": {
+      "p50": 117.3,
+      "p95": 547.7,
+      "p99": 825.6
+    },
+    "latency_ms_p50": 117.3,
+    "latency_ms_200": {
+      "p50": 150.4,
+      "p95": 194.1,
+      "p99": 195.6
+    },
+    "latency_ms_429": {
+      "p50": 116.5,
+      "p95": 549.7,
+      "p99": 826.5
+    },
+    "health_samples": 44,
+    "health_status": {
+      "200": 44
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 50,
+    "count": 3000,
+    "rep": 2,
+    "client_mode": "keepalive",
+    "workers": 4,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "defaults_on",
+    "verify_rate_limit_per_minute": 60,
+    "rate_limit_per_minute": 120,
+    "velocity_daily_count": 25
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 60,
+      "429": 2940
+    },
+    "reasons": {
+      "ALLOW:": 26,
+      "DENY:VELOCITY_COUNT": 34,
+      "http:verify": 58,
+      "http:general": 2882
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 26,
+    "latency_ms": {
+      "p50": 117.8,
+      "p95": 505.8,
+      "p99": 774.8
+    },
+    "latency_ms_p50": 117.8,
+    "latency_ms_200": {
+      "p50": 155.6,
+      "p95": 185.9,
+      "p99": 189.8
+    },
+    "latency_ms_429": {
+      "p50": 117.0,
+      "p95": 509.7,
+      "p99": 777.7
+    },
+    "health_samples": 44,
+    "health_status": {
+      "200": 44
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 50,
+    "count": 3000,
+    "rep": 3,
+    "client_mode": "keepalive",
+    "workers": 4,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "defaults_on",
+    "verify_rate_limit_per_minute": 60,
+    "rate_limit_per_minute": 120,
+    "velocity_daily_count": 25
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 60,
+      "429": 2940
+    },
+    "reasons": {
+      "ALLOW:": 28,
+      "DENY:VELOCITY_COUNT": 32,
+      "http:verify": 58,
+      "http:general": 2882
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 28,
+    "latency_ms": {
+      "p50": 396.7,
+      "p95": 3578.4,
+      "p99": 5588.2
+    },
+    "latency_ms_p50": 396.7,
+    "latency_ms_200": {
+      "p50": 838.3,
+      "p95": 913.5,
+      "p99": 916.5
+    },
+    "latency_ms_429": {
+      "p50": 383.6,
+      "p95": 3635.1,
+      "p99": 5604.2
+    },
+    "health_samples": 36,
+    "health_status": {
+      "200": 36
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 200,
+    "count": 3000,
+    "rep": 1,
+    "client_mode": "keepalive",
+    "workers": 4,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "defaults_on",
+    "verify_rate_limit_per_minute": 60,
+    "rate_limit_per_minute": 120,
+    "velocity_daily_count": 25
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 60,
+      "429": 2940
+    },
+    "reasons": {
+      "ALLOW:": 26,
+      "DENY:VELOCITY_COUNT": 34,
+      "http:verify": 58,
+      "http:general": 2882
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 26,
+    "latency_ms": {
+      "p50": 368.5,
+      "p95": 3428.1,
+      "p99": 5603.2
+    },
+    "latency_ms_p50": 368.5,
+    "latency_ms_200": {
+      "p50": 961.0,
+      "p95": 1132.5,
+      "p99": 1140.3
+    },
+    "latency_ms_429": {
+      "p50": 365.4,
+      "p95": 3450.7,
+      "p99": 5605.8
+    },
+    "health_samples": 34,
+    "health_status": {
+      "200": 34
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 200,
+    "count": 3000,
+    "rep": 2,
+    "client_mode": "keepalive",
+    "workers": 4,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "defaults_on",
+    "verify_rate_limit_per_minute": 60,
+    "rate_limit_per_minute": 120,
+    "velocity_daily_count": 25
+  },
+  {
+    "requests": 3000,
+    "statuses": {
+      "200": 120,
+      "429": 2880
+    },
+    "reasons": {
+      "DENY:VELOCITY_COUNT": 95,
+      "ALLOW:": 25,
+      "http:verify": 118,
+      "http:general": 2762
+    },
+    "errors": {},
+    "error_count": 0,
+    "allow_count": 25,
+    "latency_ms": {
+      "p50": 419.4,
+      "p95": 3640.4,
+      "p99": 5411.5
+    },
+    "latency_ms_p50": 419.4,
+    "latency_ms_200": {
+      "p50": 1048.8,
+      "p95": 5150.7,
+      "p99": 5271.5
+    },
+    "latency_ms_429": {
+      "p50": 404.1,
+      "p95": 2885.9,
+      "p99": 5424.4
+    },
+    "health_samples": 37,
+    "health_status": {
+      "200": 37
+    },
+    "label": "synthetic data, shared VM, loopback, no upstream",
+    "concurrency": 200,
+    "count": 3000,
+    "rep": 3,
+    "client_mode": "keepalive",
+    "workers": 4,
+    "timeout_keep_alive": 5,
+    "pool_max_per_worker": 10,
+    "defenses": "defaults_on",
+    "verify_rate_limit_per_minute": 60,
+    "rate_limit_per_minute": 120,
+    "velocity_daily_count": 25
+  }
+]

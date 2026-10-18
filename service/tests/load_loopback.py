@@ -4,9 +4,16 @@
 
 synthetic data, shared VM, loopback, no upstream.
 
-Defenses stay at the service defaults (velocity on, verify cap 60/minute,
-general cap 120/minute). Each repetition uses a new key and a new agent so
-the counters start at zero. GAB_TEST_DATABASE_URL must be localhost.
+Two sets, each 3000 requests per run, c=10/50/200, workers 1, 3, and 4,
+three repetitions, keepalive timeout 5:
+
+- rate limits off: general and verify caps set to 1000000 per minute, and
+  GAB_VELOCITY=0, so the run is not cut off by a 429 or a velocity DENY
+- defenses on: those variables unset, so the defaults apply (general 120/minute,
+  verify 60/minute, velocity daily count 25)
+
+Each repetition uses a new key and a new agent. GAB_TEST_DATABASE_URL must be
+localhost. KATA_LOAD_SMOKE=1 runs a short path check and is not the measurement.
 """
 
 from __future__ import annotations
@@ -77,12 +84,14 @@ def _agreement(agent_id: str, principal_id: str, agreement_id: str) -> Agreement
 
 
 class Server:
-    def __init__(self, url: str, *, workers: int, keep_alive: int) -> None:
+    def __init__(self, url: str, *, workers: int, keep_alive: int, limits_off: bool) -> None:
         self.url = url
         self.workers = workers
         self.keep_alive = keep_alive
+        self.limits_off = limits_off
         self.proc: subprocess.Popen[str] | None = None
-        self.log_path = OUTPUT / f"uvicorn-w{workers}-ka{keep_alive}.log"
+        mode = "off" if limits_off else "on"
+        self.log_path = OUTPUT / f"uvicorn-remeasure-w{workers}-{mode}.log"
 
     def start(self) -> None:
         OUTPUT.mkdir(parents=True, exist_ok=True)
@@ -99,6 +108,10 @@ class Server:
                 "GAB_DB_POOL_MAX": "10",
             }
         )
+        if self.limits_off:
+            env["GAB_RATE_LIMIT_PER_MINUTE"] = "1000000"
+            env["GAB_VERIFY_RATE_LIMIT_PER_MINUTE"] = "1000000"
+            env["GAB_VELOCITY"] = "0"
         log = self.log_path.open("w", encoding="utf-8")
         self.proc = subprocess.Popen(
             [
@@ -271,7 +284,7 @@ async def _burst(base: str, token: str, agent_id: str, agreement_id: str, count:
     headers = {"Connection": "close"} if close else {}
     health: list[dict] = []
     stop = asyncio.Event()
-    async with httpx.AsyncClient(base_url=base, timeout=20, limits=limits, headers=headers) as client:
+    async with httpx.AsyncClient(base_url=base, timeout=60, limits=limits, headers=headers) as client:
         poll = asyncio.create_task(_health_loop(base, stop, health))
         sem = asyncio.Semaphore(concurrency)
 
@@ -285,11 +298,33 @@ async def _burst(base: str, token: str, agent_id: str, agreement_id: str, count:
     return list(rows), health
 
 
+def _percentile(samples: list[float], fraction: float) -> float | None:
+    if not samples:
+        return None
+    if len(samples) == 1:
+        return round(samples[0], 1)
+    rank = (len(samples) - 1) * fraction
+    low = int(rank)
+    high = min(low + 1, len(samples) - 1)
+    weight = rank - low
+    return round(samples[low] * (1 - weight) + samples[high] * weight, 1)
+
+
+def _latency(samples: list[float]) -> dict[str, float | None]:
+    ordered = sorted(samples)
+    return {
+        "p50": _percentile(ordered, 0.50),
+        "p95": _percentile(ordered, 0.95),
+        "p99": _percentile(ordered, 0.99),
+    }
+
+
 def _tally(rows: list[dict], health: list[dict]) -> dict:
     statuses: dict[str, int] = {}
     reasons: dict[str, int] = {}
     errors: dict[str, int] = {}
-    latencies = []
+    latencies: list[float] = []
+    by_status: dict[str, list[float]] = {}
     for row in rows:
         if "error" in row:
             errors[row["error"]] = errors.get(row["error"], 0) + 1
@@ -302,79 +337,146 @@ def _tally(rows: list[dict], health: list[dict]) -> dict:
         elif row.get("reason"):
             reasons[f"http:{row['reason']}"] = reasons.get(f"http:{row['reason']}", 0) + 1
         if isinstance(row.get("ms"), (int, float)):
-            latencies.append(row["ms"])
+            latencies.append(float(row["ms"]))
+            by_status.setdefault(status, []).append(float(row["ms"]))
     health_status: dict[str, int] = {}
     for item in health:
         label = str(item.get("status") or item.get("error"))
         health_status[label] = health_status.get(label, 0) + 1
-    latencies.sort()
+    http_latency = _latency(latencies)
     return {
         "requests": len(rows),
         "statuses": statuses,
         "reasons": reasons,
         "errors": errors,
-        "latency_ms_p50": latencies[len(latencies) // 2] if latencies else None,
+        "error_count": sum(errors.values()),
+        "allow_count": reasons.get("ALLOW:", 0),
+        "latency_ms": http_latency,
+        "latency_ms_p50": http_latency["p50"],
+        "latency_ms_200": _latency(by_status.get("200", [])),
+        "latency_ms_429": _latency(by_status.get("429", [])),
         "health_samples": len(health),
         "health_status": health_status,
     }
 
 
-def _run_case(server: Server, *, concurrency: int, count: int, rep: int, close: bool, client_mode: str) -> dict:
-    agent_id = f"shopper-c{concurrency}-r{rep}-{client_mode}"[:80]
-    with httpx.Client(base_url=f"http://127.0.0.1:{PORT}", timeout=20) as client:
+def _run_case(server: Server, *, concurrency: int, count: int, rep: int) -> dict:
+    mode = "limits-off" if server.limits_off else "defenses-on"
+    agent_id = f"w{server.workers}-c{concurrency}-r{rep}-{mode}"
+    with httpx.Client(base_url=f"http://127.0.0.1:{PORT}", timeout=30) as client:
         token, agreement_id = _prepare(client, agent_id)
     rows, health = asyncio.run(
-        _burst(f"http://127.0.0.1:{PORT}", token, agent_id, agreement_id, count, concurrency, close)
+        _burst(f"http://127.0.0.1:{PORT}", token, agent_id, agreement_id, count, concurrency, False)
     )
     summary = _tally(rows, health)
     summary.update(
         {
             "label": LABEL,
             "concurrency": concurrency,
+            "count": count,
             "rep": rep,
-            "client_mode": client_mode,
+            "client_mode": "keepalive",
             "workers": server.workers,
             "timeout_keep_alive": server.keep_alive,
             "pool_max_per_worker": 10,
-            "defenses": "defaults on",
-            "verify_rate_limit_per_minute": 60,
-            "rate_limit_per_minute": 120,
-            "velocity_daily_count": 25,
+            "defenses": "rate_limits_off_velocity_off" if server.limits_off else "defaults_on",
+            "verify_rate_limit_per_minute": 1000000 if server.limits_off else 60,
+            "rate_limit_per_minute": 1000000 if server.limits_off else 120,
+            "velocity_daily_count": None if server.limits_off else 25,
         }
     )
     return summary
 
 
+def _reset(url: str) -> None:
+    import psycopg
+
+    with psycopg.connect(url, autocommit=True) as conn:
+        conn.execute("DROP SCHEMA IF EXISTS gab_sandbox CASCADE")
+        conn.execute("DROP SCHEMA IF EXISTS public CASCADE")
+        conn.execute("CREATE SCHEMA public")
+        conn.execute("GRANT ALL ON SCHEMA public TO public")
+
+
+def _line(case: dict) -> str:
+    latency = case["latency_ms"]
+    return (
+        "workers={workers} c={concurrency} rep={rep} defenses={defenses} n={count} "
+        "statuses={statuses} reasons={reasons} errors={errors} error_count={error_count} "
+        "allow_count={allow_count} health={health_status} "
+        "p50_ms={p50} p95_ms={p95} p99_ms={p99} "
+        "p50_200_ms={p50_200} p95_200_ms={p95_200} p99_200_ms={p99_200} "
+        "p50_429_ms={p50_429} p95_429_ms={p95_429} p99_429_ms={p99_429}"
+    ).format(
+        p50=latency["p50"],
+        p95=latency["p95"],
+        p99=latency["p99"],
+        p50_200=case["latency_ms_200"]["p50"],
+        p95_200=case["latency_ms_200"]["p95"],
+        p99_200=case["latency_ms_200"]["p99"],
+        p50_429=case["latency_ms_429"]["p50"],
+        p95_429=case["latency_ms_429"]["p95"],
+        p99_429=case["latency_ms_429"]["p99"],
+        **case,
+    )
+
+
 def main() -> None:
     url = _database_url()
     OUTPUT.mkdir(parents=True, exist_ok=True)
+    smoke = os.environ.get("KATA_LOAD_SMOKE") == "1"
+    _reset(url)
+    count = 30 if smoke else 3000
+    reps = (1,) if smoke else (1, 2, 3)
+    worker_counts = (1,) if smoke else (1, 3, 4)
+    concurrencies = (10,) if smoke else (10, 50, 200)
+    modes = (True, False) if not smoke else (True, False)
     cases = []
-    plan = [
-        (5, False, "keepalive", [(10, 80), (50, 120), (200, 240)]),
-        (5, True, "close", [(200, 240)]),
-        (1, False, "keepalive-1s", [(200, 240)]),
+    for limits_off in modes:
+        for workers in worker_counts:
+            server = Server(url, workers=workers, keep_alive=5, limits_off=limits_off)
+            server.start()
+            try:
+                for concurrency in concurrencies:
+                    for rep in reps:
+                        print(
+                            f"workers={workers} c={concurrency} rep={rep} limits_off={limits_off} n={count}",
+                            flush=True,
+                        )
+                        cases.append(_run_case(server, concurrency=concurrency, count=count, rep=rep))
+                        print(_line(cases[-1]), flush=True)
+            finally:
+                tail = server.log_tail()
+                server.stop()
+                mode = "off" if limits_off else "on"
+                (OUTPUT / f"uvicorn-remeasure-w{workers}-{mode}.tail.txt").write_text(tail, encoding="utf-8")
+    name = "smoke" if smoke else "remeasure"
+    (OUTPUT / f"{name}_runs.json").write_text(json.dumps(cases, indent=2) + "\n", encoding="utf-8")
+    lines = [
+        LABEL,
+        "SYNTHETIC TEST DATA",
+        "requests_per_run=" + str(count),
+        "rate_limits_off_velocity_off: GAB_RATE_LIMIT_PER_MINUTE=1000000 GAB_VERIFY_RATE_LIMIT_PER_MINUTE=1000000 GAB_VELOCITY=0",
+        "defaults_on: general 120/minute, verify 60/minute, velocity daily count 25",
+        "workers 1, 3, and 4; c=10, 50, 200; three repetitions; keepalive timeout 5; pool max 10 per worker",
+        "percentiles are client latency for responses that returned an HTTP status",
+        "transport failures are errors, not included in the percentiles",
+        "",
     ]
-    for keep_alive, close, mode, steps in plan:
-        server = Server(url, workers=3, keep_alive=keep_alive)
-        server.start()
-        try:
-            for concurrency, count in steps:
-                for rep in range(1, 4):
-                    print(f"c={concurrency} rep={rep} mode={mode}", flush=True)
-                    cases.append(_run_case(server, concurrency=concurrency, count=count, rep=rep, close=close, client_mode=mode))
-        finally:
-            tail = server.log_tail()
-            server.stop()
-            (OUTPUT / f"uvicorn-w3-ka{keep_alive}.tail.txt").write_text(tail, encoding="utf-8")
-    (OUTPUT / "runs.json").write_text(json.dumps(cases, indent=2) + "\n", encoding="utf-8")
-    lines = [LABEL, "workers=3 pool_max_per_worker=10 defenses=defaults", ""]
     for case in cases:
-        lines.append(
-            "c={concurrency} rep={rep} mode={client_mode} ka={timeout_keep_alive} "
-            "statuses={statuses} reasons={reasons} errors={errors} health={health_status} p50_ms={latency_ms_p50}".format(**case)
-        )
+        lines.append(_line(case))
+    on_three = [case for case in cases if case["defenses"] == "defaults_on" and case["workers"] == 3]
+    over = [case for case in on_three if case["allow_count"] > 25]
+    lines.extend(
+        [
+            "",
+            "velocity finding, defenses on, 3 workers, cap 25:",
+            f"runs={len(on_three)} allow_counts={[case['allow_count'] for case in on_three]}",
+            f"runs_over_25={len(over)}",
+        ]
+    )
     text = "\n".join(lines) + "\n"
-    (OUTPUT / "summary.txt").write_text(text, encoding="utf-8")
+    (OUTPUT / f"{name}_summary.txt").write_text(text, encoding="utf-8")
     print(text, flush=True)
 
 
