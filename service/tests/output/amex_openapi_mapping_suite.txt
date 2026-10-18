@@ -1,0 +1,28 @@
+python3 -m pytest -q --tb=line -m "not long" -rs
+
+....................................................s..s..............ss [ 44%]
+ss...s..s.......ss................sss.s......s........s.......s......... [ 88%]
+...................                                                      [100%]
+=============================== warnings summary ===============================
+../../home/ubuntu/.local/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /home/ubuntu/.local/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/test_amex_adapter.py::test_sandbox_route_accepts_only_a_test_key
+tests/test_amex_adapter.py::test_sandbox_route_accepts_only_a_test_key
+tests/test_ucp_checkout.py::test_route_and_tool_stay_inside_the_sandbox
+tests/test_ucp_checkout.py::test_route_and_tool_stay_inside_the_sandbox
+  /home/ubuntu/.local/lib/python3.12/site-packages/fastapi/openapi/utils.py:303: UserWarning: Duplicate Operation ID mcp_method_not_allowed_mcp_get for function mcp_method_not_allowed at /workspace/service/kata_service/asgi.py
+    warnings.warn(message, stacklevel=1)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+SKIPPED [9] tests/test_postgres_path.py:25: GAB_TEST_DATABASE_URL is not set
+SKIPPED [1] tests/test_keys.py:388: GAB_TEST_DATABASE_URL is not set
+SKIPPED [2] tests/test_keys.py:1049: GAB_TEST_DATABASE_URL is not set
+SKIPPED [1] tests/test_keys.py:459: could not import 'boto3': No module named 'boto3'
+SKIPPED [1] tests/test_keys.py:494: could not import 'boto3': No module named 'boto3'
+SKIPPED [1] tests/test_keys.py:656: could not import 'boto3': No module named 'boto3'
+SKIPPED [1] tests/test_keys.py:915: could not import 'boto3': No module named 'boto3'
+SKIPPED [1] tests/test_keys.py:977: could not import 'boto3': No module named 'boto3'
+146 passed, 17 skipped, 1 deselected, 5 warnings in 7.08s

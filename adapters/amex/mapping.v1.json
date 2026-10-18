@@ -2,17 +2,41 @@
   "schema_version": "amex-intent-mapping.v1",
   "prototype": true,
   "compatibility_claim": "none",
-  "notice": "Prototype field mapping from the public Intent Intelligence framework onto a partial KATA agreement. Bindings are assumed. This file does not assert compatibility with American Express.",
+  "notice": "Prototype field mapping from the public Agentic Commerce OpenAPI document onto a partial KATA agreement. Cited keys are properties in that document. A verified status means the AmEx key was published, not that American Express defined the KATA placement. This file does not assert compatibility with American Express.",
   "source": {
-    "title": "Intent Intelligence: Building Trust in Agentic Commerce",
-    "url": "https://americanexpress.io/intent-intelligence-building-trust-in-agentic-commerce/",
-    "published": "2026-10-13",
-    "read_on": "2026-10-16"
+    "title": "American Express Agentic Commerce Experience - Enrollment, Intent, Payment Credential, and Notification API (1.0.0)",
+    "url": "https://icm.aexp-static.com/Internet/EnterpriseAPIPortal/products/nextgen-agentic-payments/nextgen-agentic-payments-openapi-specification.json",
+    "openapi": "3.1.0",
+    "version": "1.0.0",
+    "x_last_updated": "April 28, 2026",
+    "sha256": "811381ed6dea4e4293f44108b1e8de2d75f1629a4a803729713c7c956ea7c47d",
+    "operations": 8,
+    "schemas": 64,
+    "read_on": "2026-10-18"
+  },
+  "spec": {
+    "purchase_decision": ["NON-DELEGATED", "DELEGATED"],
+    "intent_status_on_create_and_update": ["PENDING_STEP_UP", "ACTIVE"],
+    "intent_status_on_notification": ["ACTIVE", "CANCEL"],
+    "order_context_type": ["INTENT", "CART"],
+    "purchase_criteria_type": ["PRICE", "DATE"],
+    "step_up_challenges": ["ISSUER_SURFACE", "SECURE_PUSH", "SAFEKEY", "SMS_OTP", "EMAIL_OTP"],
+    "agent_properties": ["agentName", "llmPlatform", "llmVersion"],
+    "agent_header": "agentId",
+    "llm_platform": ["OPEN_AI"],
+    "edit": {
+      "method": "PUT",
+      "path": "/payments/digital/v1/agentic-commerce/intents/{intentId}"
+    },
+    "cancel": {
+      "method": "DELETE",
+      "path": "/payments/digital/v1/agentic-commerce/intents/{intentId}"
+    }
   },
   "input_schema_version": {
     "field": "schemaVersion",
     "status": "assumed",
-    "note": "The pages opened on 16 October 2026 do not publish a schema version. When a sender includes schemaVersion, it is kept and reported as assumed."
+    "note": "The OpenAPI document version is 1.0.0. Request schemas do not include schemaVersion. When a sender includes it, the value is kept. 1.0.0 matches the published document version and is still reported as assumed."
   },
   "envelope": {
     "partial": true,
@@ -21,125 +45,129 @@
   "bindings": [
     {
       "id": "intent-id",
-      "status": "assumed",
-      "source_field": "assumed",
+      "status": "verified",
+      "source_field": "verified",
+      "citation": "https://icm.aexp-static.com/Internet/EnterpriseAPIPortal/products/nextgen-agentic-payments/nextgen-agentic-payments-openapi-specification.json",
       "from": "intentId",
       "to": "agreement.agreement_id",
       "transform": "copy",
       "reverse": true,
       "required": true,
-      "note": "The 13 October 2026 page describes an Intent ID as the primary key for later intent requests. It does not publish the JSON key. agreement_id is the closest KATA field."
+      "note": "intentId is a required string on the create and update responses, and the path parameter on PUT and DELETE /payments/digital/v1/agentic-commerce/intents/{intentId}. It is not a property of IntentsRequest. agreement_id is the stable KATA record id."
     },
     {
       "id": "intent-id-on-intent",
-      "status": "assumed",
-      "source_field": "assumed",
+      "status": "verified",
+      "source_field": "verified",
+      "citation": "https://icm.aexp-static.com/Internet/EnterpriseAPIPortal/products/nextgen-agentic-payments/nextgen-agentic-payments-openapi-specification.json",
       "from": "intentId",
       "to": "agreement.mandates.0.intent.intent_id",
       "transform": "copy",
       "reverse": false,
       "required": true,
-      "note": "The same Intent ID is copied onto the intent declaration so the intent object has an id. intent_id is not, by itself, the lifecycle key."
+      "note": "The same intentId is copied onto the intent declaration so the intent object has an id. intent_id is not, by itself, the lifecycle key."
     },
     {
       "id": "mandate-id",
-      "status": "assumed",
-      "source_field": "assumed",
+      "status": "verified",
+      "source_field": "verified",
+      "citation": "https://icm.aexp-static.com/Internet/EnterpriseAPIPortal/products/nextgen-agentic-payments/nextgen-agentic-payments-openapi-specification.json",
       "from": "intentId",
       "to": "agreement.mandates.0.mandate_id",
       "transform": "suffix",
       "suffix": ".v1",
       "reverse": false,
       "required": true,
-      "note": "KATA mandate ids change when the signed version changes. The suffix is a draft stand-in."
+      "note": "KATA mandate ids change when the signed version changes. The suffix is a draft stand-in. The source key intentId is the published identifier."
     },
     {
       "id": "purchase-summary",
       "status": "assumed",
-      "source_field": "assumed",
-      "from": "purchaseSummary",
+      "source_field": "verified",
+      "from": "prompt.promptSummary",
       "to": "agreement.mandates.0.intent.natural_language_source",
       "transform": "copy",
       "reverse": true,
-      "required": false,
-      "note": "Purchase Summary is a prose row on the 13 October page. No sample shows this key. KATA keeps the source sentence on natural_language_source."
+      "required": true,
+      "note": "prompt.promptSummary is a required string: a summary of the purchase intent derived from user input. prompt.nlpConfidence is a separate number from 0 to 1 and is not this binding. Placing the summary on natural_language_source is assumed."
     },
     {
       "id": "max-amount",
       "status": "assumed",
-      "source_field": "assumed",
-      "from": "maxAmount",
+      "source_field": "verified",
+      "from": "spendControl.maxAmount",
       "to": "agreement.mandates.0.intent.maximum_amount",
       "transform": "decimal",
       "reverse": true,
-      "required": false,
-      "note": "Prose Max Amount has no published key. A plain decimal string is read as a major-unit number. The page does not say whether this is the per-transaction ceiling, the cumulative slice, or the sample item maxAmount. Scale was not published."
+      "required": true,
+      "note": "spendControl.maxAmount is a required string: the maximum amount that can be charged using the payment method. A plain decimal string is read as a major-unit number. The document does not publish a minor-unit scale. purchaseCriteria.maxAmount is a different field."
     },
     {
       "id": "max-amount-per-transaction",
       "status": "assumed",
-      "source_field": "assumed",
-      "from": "maxAmount",
+      "source_field": "verified",
+      "from": "spendControl.maxAmount",
       "to": "agreement.mandates.0.limits.per_transaction_maximum",
       "transform": "decimal",
       "reverse": false,
       "required": false,
-      "note": "KATA restates the per-transaction ceiling on limits. This copy stays equal to maximum_amount only while both bindings read the same source."
+      "note": "KATA restates the per-transaction ceiling on limits. This copy stays equal to maximum_amount only while both bindings read spendControl.maxAmount."
     },
     {
       "id": "intent-expiry",
       "status": "assumed",
-      "source_field": "assumed",
-      "from": "intentExpiry",
+      "source_field": "verified",
+      "from": "expirationTs",
       "to": "agreement.mandates.0.intent.time_limit",
       "transform": "copy",
       "reverse": true,
-      "required": false,
-      "note": "Intent Expiry is a prose end date. No sample shows this key. When time_limit and expires_at are both set, KATA expects the same instant."
+      "required": true,
+      "note": "expirationTs on the intent is required, format date-time, described as the intent expiration in ISO 8601. spendControl.expirationTs is a different property, the payment-method expiration, and is not this binding."
     },
     {
       "id": "intent-expiry-on-mandate",
       "status": "assumed",
-      "source_field": "assumed",
-      "from": "intentExpiry",
+      "source_field": "verified",
+      "from": "expirationTs",
       "to": "agreement.mandates.0.expires_at",
       "transform": "copy",
       "reverse": false,
       "required": false,
-      "note": "The mandate end instant is the same prose date as intent.time_limit."
+      "note": "The mandate end instant is the same intent expirationTs as intent.time_limit. When both KATA fields are set they are the same instant."
     },
     {
       "id": "transaction-count",
       "status": "assumed",
-      "source_field": "assumed",
-      "from": "maximumNumberOfTransactions",
+      "source_field": "verified",
+      "from": "maxAllowedTransactions",
       "to": "agreement.mandates.0.limits.frequency.max_count",
       "transform": "integer",
+      "wire": "string",
       "reverse": true,
       "required": false,
-      "note": "The page says this count maps to payment credentials that can be issued. KATA frequency.max_count counts recorded charges. The counters differ."
+      "note": "maxAllowedTransactions is an optional string: the maximum allowed transactions the user authorized to complete the purchase. KATA frequency.max_count counts recorded charges. requestedPaymentCredentialsCount on the payment-credential request is a different integer."
     },
     {
       "id": "item-currency",
       "status": "assumed",
       "source_field": "verified",
-      "from": "orderContext.items.0.currency",
+      "from": "spendControl.currency",
       "to": "agreement.mandates.0.intent.currency",
       "transform": "currency",
       "reverse": true,
-      "required": false,
-      "note": "The item sample shows currency as an ISO 4217 string, required when unitAmount is set. Using the first item currency as the intent currency is assumed."
+      "required": true,
+      "note": "spendControl.currency is a required ISO 4217 string on the spend control. orderContext.currency, items[].currency, and purchaseCriteria.currency are separate properties. Using the spend-control currency as the intent currency is assumed."
     },
     {
       "id": "item-currency-on-limits",
       "status": "assumed",
       "source_field": "verified",
-      "from": "orderContext.items.0.currency",
+      "from": "spendControl.currency",
       "to": "agreement.mandates.0.limits.currency",
       "transform": "currency",
       "reverse": false,
       "required": false,
-      "note": "The same first-item currency is copied onto limits. A mix of item currencies is not resolved here."
+      "note": "The same spendControl.currency is copied onto limits."
     },
     {
       "id": "merchant-names",
@@ -150,45 +178,45 @@
       "transform": "collect",
       "reverse": true,
       "required": false,
-      "note": "Merchant name is a verified sample key. Placing those names in merchant_constraints is assumed. categoryName is left on the preserved record so it is not treated as an allowlist entry."
+      "note": "orderContext.merchants[].name is published. The schema does not mark name required. merchantId is an integer. Placing names in merchant_constraints is assumed. categoryName is preserved and is not an allowlist entry."
     },
     {
       "id": "criteria-start",
       "status": "assumed",
       "source_field": "verified",
-      "from": "orderContext.purchaseCriteria.0.fromDate",
+      "from": "orderContext.items.0.purchaseCriteria.0.fromDate",
       "to": "agreement.mandates.0.not_before",
       "transform": "copy",
       "reverse": true,
       "required": false,
-      "when": {"path": "orderContext.purchaseCriteria.0.type", "equals": "DATE"},
-      "note": "fromDate is a verified sample key when type is DATE. Writing it to not_before is assumed. The sample does not say to do that."
+      "when": {"path": "orderContext.items.0.purchaseCriteria.0.type", "equals": "DATE"},
+      "note": "purchaseCriteria lives on each item, not on orderContext. fromDate is date-time and is required when type is DATE. Writing the first item's first DATE criterion to not_before is assumed. type PRICE is not this binding."
     },
     {
       "id": "criteria-end",
       "status": "assumed",
       "source_field": "verified",
-      "from": "orderContext.purchaseCriteria.0.toDate",
+      "from": "orderContext.items.0.purchaseCriteria.0.toDate",
       "to": "agreement.mandates.0.expires_at",
       "transform": "copy",
       "reverse": true,
       "required": false,
-      "when": {"path": "orderContext.purchaseCriteria.0.type", "equals": "DATE"},
+      "when": {"path": "orderContext.items.0.purchaseCriteria.0.type", "equals": "DATE"},
       "when_target": "empty",
-      "note": "toDate is a verified sample key when type is DATE. It fills expires_at only when Intent Expiry did not. The assignment is assumed."
+      "note": "toDate is date-time and is required when type is DATE. It fills expires_at only when intent expirationTs did not. The assignment is assumed."
     },
     {
       "id": "criteria-end-on-intent",
       "status": "assumed",
       "source_field": "verified",
-      "from": "orderContext.purchaseCriteria.0.toDate",
+      "from": "orderContext.items.0.purchaseCriteria.0.toDate",
       "to": "agreement.mandates.0.intent.time_limit",
       "transform": "copy",
       "reverse": false,
       "required": false,
-      "when": {"path": "orderContext.purchaseCriteria.0.type", "equals": "DATE"},
+      "when": {"path": "orderContext.items.0.purchaseCriteria.0.type", "equals": "DATE"},
       "when_target": "empty",
-      "note": "The same toDate fills time_limit when Intent Expiry did not, so the two KATA end fields stay together."
+      "note": "The same toDate fills time_limit when intent expirationTs did not, so the two KATA end fields stay together."
     }
   ],
   "scaffolds": [
@@ -197,7 +225,7 @@
       "to": "agreement.status",
       "value": "proposed",
       "status": "assumed",
-      "note": "Draft marker for an unsigned agreement. The AmEx pages do not publish this status."
+      "note": "Draft marker for an unsigned agreement. AmEx intentStatus is a different enum."
     },
     {
       "id": "ledger",
@@ -226,7 +254,7 @@
       "value": 1,
       "status": "assumed",
       "when_binding": "mandate-id",
-      "note": "First draft version. An edit would be a new signed version, which this prototype does not build."
+      "note": "First draft version. The OpenAPI update is PUT on the same intentId. This prototype does not build a new signed KATA version."
     },
     {
       "id": "intent-version",
@@ -234,7 +262,7 @@
       "value": 1,
       "status": "assumed",
       "when_binding": "intent-id-on-intent",
-      "note": "KATA requires an intent version. The AmEx pages do not publish one."
+      "note": "KATA requires an intent version. The OpenAPI document does not publish one."
     },
     {
       "id": "frequency-window",
@@ -242,29 +270,29 @@
       "value": "agreement",
       "status": "assumed",
       "when_binding": "transaction-count",
-      "note": "The window is not published. agreement counts across the whole mandate window. AmEx counts credentials. KATA counts recorded charges."
+      "note": "The window is not published. agreement counts across the whole mandate window. KATA counts recorded charges. maxAllowedTransactions does not name a window."
     }
   ],
   "kata_gaps": [
     {
       "id": "principal",
       "path": "agreement.mandates.0.principal",
-      "note": "The opened pages do not publish a principal key. KATA revoke accepts the signing principal."
+      "note": "enrollmentId identifies the enrolled account. The intent user object carries firstName, lastName, a billing address, and email or phone plus PBKDF2-HMAC-SHA256 hashes. Neither is a KATA principal, which needs a type, an id, and the signing public key."
     },
     {
       "id": "agent",
       "path": "agreement.mandates.0.agent",
-      "note": "The opened pages do not publish the agent key bound into the mandate."
+      "note": "IntentsRequest requires agent with agentName, llmPlatform, and llmVersion. The llmPlatform enum is OPEN_AI. The agentId header is required on these operations. KATA agent requires agent_id and a public-key fingerprint. Those AmEx fields are not that object."
     },
     {
       "id": "signature",
       "path": "agreement.mandates.0.signature",
-      "note": "Proof of Intent is described as a JWT. Header, algorithm, and claims were not published, so no KATA JWS is produced."
+      "note": "proofOfIntent is a string on the intent response after step-up and on INTENT_UPDATE notifications. The description is a signed JSON Web Token. The schema does not publish claims or an algorithm. An example on the payment-credentials request uses a placeholder signature. No KATA JWS is produced."
     },
     {
       "id": "purpose",
       "path": "agreement.mandates.0.intent.purpose",
-      "note": "KATA requires a purpose. The framework page does not publish one."
+      "note": "KATA requires a purpose. The OpenAPI document has no purpose field."
     },
     {
       "id": "ledger-as-of",
