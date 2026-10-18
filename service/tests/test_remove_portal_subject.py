@@ -453,7 +453,7 @@ def test_removal_warns_when_the_data_key_store_is_not_configured(caplog):
     token = _portal_token(client)
     soft = bind_device(client, token, "Phone")
     bureau = client.app.state.bureau
-    bureau.key_provider = EnvKeyProvider({}, master_key=b"\x11" * 32)
+    bureau.key_provider = EnvKeyProvider({}, master_key=b"\x11" * 32, subject_key=b"\x22" * 32)
     bureau.dek_store = None
     with caplog.at_level("WARNING", logger="kata_service.bureau"):
         removed = _delete_subject(client, token, soft)
@@ -741,6 +741,76 @@ def test_postgres_and_a_master_key_without_a_subject_ref_key_returns_503():
     with psycopg.connect(url) as conn:
         login = conn.execute("SELECT email FROM gab_logins WHERE principal_id = 'prn_owner'").fetchone()
     assert login is None
+
+
+def test_no_provider_and_this_principals_dek_row_returns_503_and_keeps_the_session():
+    app, url, token, soft, _operator_id, _merchant_id = _postgres_portal()
+    bureau = app.app.state.bureau
+    assert bureau.key_provider is None
+    assert bureau.dek_store is None
+    assert bureau.master_key_configured is False
+    with psycopg.connect(url) as conn:
+        conn.execute(
+            """
+            INSERT INTO gab_subject_deks (subject_ref, wrapped_dek, created_at)
+            VALUES ('prn_owner', 'b3duZXI=', '2026-10-18T00:00:00Z'),
+                   ('prn_other', 'b3RoZXI=', '2026-10-18T00:00:00Z')
+            """
+        )
+    blocked = _delete_subject(app, token, soft)
+    assert blocked.status_code == 503
+    assert blocked.json()["error"] == "The subject data key was not removed from the live store in this process."
+    still = app.get("/v1/portal/agents", headers=_auth(token))
+    assert still.status_code == 200, still.text
+    with psycopg.connect(url) as conn:
+        login = conn.execute("SELECT email FROM gab_logins WHERE principal_id = 'prn_owner'").fetchone()
+        session = conn.execute(
+            "SELECT count(*) FROM gab_sessions WHERE kind = 'portal' AND subject_id = 'prn_owner'"
+        ).fetchone()
+        own = conn.execute("SELECT subject_ref FROM gab_subject_deks WHERE subject_ref = 'prn_owner'").fetchone()
+        other = conn.execute("SELECT subject_ref FROM gab_subject_deks WHERE subject_ref = 'prn_other'").fetchone()
+        audits = conn.execute("SELECT count(*) FROM gab_audit WHERE path = '/v1/portal/subject'").fetchone()
+    assert login is not None
+    assert session[0] == 1
+    assert own is not None
+    assert other is not None
+    assert audits[0] == 0
+    with psycopg.connect(url) as conn:
+        conn.execute("DELETE FROM gab_subject_deks WHERE subject_ref = 'prn_owner'")
+    removed = _delete_subject(app, token, soft)
+    assert removed.status_code == 200, removed.text
+    with psycopg.connect(url) as conn:
+        login = conn.execute("SELECT email FROM gab_logins WHERE principal_id = 'prn_owner'").fetchone()
+        other = conn.execute("SELECT subject_ref FROM gab_subject_deks WHERE subject_ref = 'prn_other'").fetchone()
+    assert login is None
+    assert other is not None
+
+
+def test_a_subject_refs_exception_returns_503_and_keeps_the_session():
+    client = _portal_client(rate_limit_per_minute=1000)
+    token = _portal_token(client)
+    soft = bind_device(client, token, "Phone")
+    bureau = client.app.state.bureau
+
+    class _Refs:
+        def subject_refs(self, subject_id):
+            raise RuntimeError("synthetic subject ref failure")
+
+    bureau.key_provider = _Refs()
+    bureau.dek_store = None
+    bureau.master_key_configured = False
+    blocked = _delete_subject(client, token, soft)
+    assert blocked.status_code == 503
+    assert blocked.json()["error"] == "The subject data key was not removed from the live store in this process."
+    assert "synthetic subject ref failure" not in blocked.text
+    assert bureau.repo.login_by_email("owner@example.com")["principal_id"] == "prn_owner"
+    assert bureau.repo.get_agent("shopper-01")["status"] == "active"
+    assert any(
+        item.get("kind") == "portal" and item.get("subject_id") == "prn_owner" for item in bureau.repo.sessions.values()
+    )
+    assert not any(row["path"] == "/v1/portal/subject" for row in bureau.repo.audit)
+    still = client.get("/v1/portal/agents", headers=_auth(token))
+    assert still.status_code == 200, still.text
 
 
 def test_another_principals_dek_row_does_not_block_removal():

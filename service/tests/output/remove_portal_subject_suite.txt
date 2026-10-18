@@ -1,6 +1,6 @@
 ........................................................................ [ 40%]
 ...ss......s.......ss................................................... [ 80%]
-..................................                                       [100%]
+....................................                                     [100%]
 =============================== warnings summary ===============================
 ../../home/ubuntu/.local/lib/python3.12/site-packages/fastapi/testclient.py:1
   /home/ubuntu/.local/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
@@ -10,8 +10,8 @@ tests/test_amex_adapter.py::test_sandbox_route_accepts_only_a_test_key
 tests/test_amex_adapter.py::test_sandbox_route_accepts_only_a_test_key
 tests/test_ucp_checkout.py::test_route_and_tool_stay_inside_the_sandbox
 tests/test_ucp_checkout.py::test_route_and_tool_stay_inside_the_sandbox
-  /home/ubuntu/.local/lib/python3.12/site-packages/fastapi/openapi/utils.py:303: UserWarning: Duplicate Operation ID mcp_method_not_allowed_mcp_delete for function mcp_method_not_allowed at /workspace/service/kata_service/asgi.py
+  /home/ubuntu/.local/lib/python3.12/site-packages/fastapi/openapi/utils.py:303: UserWarning: Duplicate Operation ID mcp_method_not_allowed_mcp_put for function mcp_method_not_allowed at /workspace/service/kata_service/asgi.py
     warnings.warn(message, stacklevel=1)
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-173 passed, 5 skipped, 1 deselected, 5 warnings in 22.41s
+175 passed, 5 skipped, 1 deselected, 5 warnings in 23.49s

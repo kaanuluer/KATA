@@ -2348,16 +2348,21 @@ class BureauService:
             except Exception:
                 log.exception("The subject data key lookup did not finish.")
                 return True
-            return isinstance(found, (bytes, bytearray)) and bool(found)
-        refs = self._principal_dek_refs(principal_id)
+            if isinstance(found, (bytes, bytearray)) and bool(found):
+                return True
+        candidates = self._principal_dek_refs(principal_id)
         connect = getattr(self.repo, "_connect", None)
-        if not refs or connect is None or not getattr(self.repo, "database_url", None):
+        if connect is None or not getattr(self.repo, "database_url", None):
+            return False
+        if principal_id and principal_id not in candidates:
+            candidates.append(principal_id)
+        if not candidates:
             return False
         try:
             with connect() as conn:
                 row = conn.execute(
                     "SELECT 1 FROM gab_subject_deks WHERE subject_ref = ANY(%s) LIMIT 1",
-                    (refs,),
+                    (candidates,),
                 ).fetchone()
         except Exception:
             log.exception("The subject data key lookup did not finish.")
@@ -2367,24 +2372,28 @@ class BureauService:
     def _principal_dek_refs(self, principal_id: str) -> list[str]:
         """Subject-reference digests for this principal only.
 
-        Another principal's wrapped key is not one of these digests. Without a
-        provider the digests cannot be computed, so no row is treated as this
-        principal's.
+        Another principal's wrapped key is not one of these digests. When no
+        provider can compute them, the table lookup still uses this principal's
+        id. An error while computing the digests is not an empty list.
         """
 
-        provider = self.key_provider
-        if provider is None:
+        source = self.key_provider if self.key_provider is not None else self.dek_store
+        if source is None:
             return []
         try:
-            if hasattr(provider, "subject_refs"):
-                refs = list(provider.subject_refs(principal_id))
-            elif hasattr(provider, "subject_ref"):
-                refs = [provider.subject_ref(principal_id)]
+            if hasattr(source, "subject_refs"):
+                refs = list(source.subject_refs(principal_id))
+            elif hasattr(source, "subject_ref"):
+                refs = [source.subject_ref(principal_id)]
             else:
                 return []
+        except BureauError:
+            raise
         except Exception:
             log.exception("The subject data key lookup did not finish.")
-            return []
+            raise BureauError(
+                503, "The subject data key was not removed from the live store in this process."
+            ) from None
         return [ref for ref in refs if isinstance(ref, str) and ref]
 
     def file_dispute(
