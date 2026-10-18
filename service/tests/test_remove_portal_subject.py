@@ -10,14 +10,17 @@ key for up to 300 seconds.
 from __future__ import annotations
 
 import base64
+import json
 
 import psycopg
+from fastapi.testclient import TestClient
 
 from kata_intent import generate_keypair
 from kata_service.asgi import create_app
 from kata_service.bureau import email_hash
 from kata_service.keys import EnvKeyProvider, InProcessDekStore, open_stored, seal_detached
 from kata_service.settings import settings_from_env
+from kata_service.store import MemoryStore
 
 from soft_passkey import assertion_for, bind_device
 from test_bureau import _action, _auth
@@ -856,6 +859,40 @@ def test_another_principals_dek_row_does_not_block_removal():
     assert other is not None
 
 
+def _assert_bad_subject_ref_key_does_not_500(raw: str) -> None:
+    seed = generate_keypair("EdDSA")
+    settings = settings_from_env(
+        {
+            "GAB_ENV": "sandbox",
+            "GAB_MASTER_KEY": _b64(b"\x11" * 32),
+            "GAB_SUBJECT_REF_KEY": raw,
+            "KATA_LOG_SIGNING_SEED": _b64(seed.seed),
+            "KATA_PUSH_NOTIFIER_JWK": json.dumps(seed.public.to_jwk()),
+            "KATA_APPEND_TOKEN": "append-secret",
+        }
+    )
+    assert settings.config_error is None
+    assert settings.subject_ref_unusable is True
+    assert "GAB_SUBJECT_REF_KEY must decode to 32 bytes" not in (settings.config_error or "")
+    assert "GAB_SUBJECT_REF_KEY is not valid base64" not in (settings.config_error or "")
+    client = TestClient(create_app(settings, MemoryStore()))
+    pushed = client.post("/v1/revocations/push", json={"notice": {}})
+    appended = client.post(
+        "/v1/log/entries",
+        json={"kind": "agreement", "body": {"agreement_id": "agr_subject_ref"}},
+        headers={"Authorization": "Bearer append-secret"},
+    )
+    keys = client.get("/.well-known/kata-keys.json")
+    assert pushed.status_code != 500
+    assert appended.status_code != 500
+    assert keys.status_code != 500
+    assert pushed.status_code == 503
+    assert pushed.json()["error"] == "GAB_SUBJECT_REF_KEY is not a usable subject ref key"
+    assert raw not in pushed.text
+    assert appended.status_code == 200, appended.text
+    assert keys.status_code == 200, keys.text
+
+
 def test_a_short_subject_ref_key_is_an_explicit_error(caplog):
     raw = _b64(b"SYNTHETICBADKEYVALUE")
     with caplog.at_level("ERROR", logger="kata_service.settings"):
@@ -866,12 +903,14 @@ def test_a_short_subject_ref_key_is_an_explicit_error(caplog):
                 "GAB_SUBJECT_REF_KEY": raw,
             }
         )
-    assert settings.key_provider is None
+    assert settings.key_provider is not None
     assert settings.master_key_configured is True
-    assert settings.config_error == "GAB_SUBJECT_REF_KEY must decode to 32 bytes"
+    assert settings.subject_ref_unusable is True
+    assert settings.config_error is None
     assert any(record.message == "GAB_SUBJECT_REF_KEY is not a usable subject ref key" for record in caplog.records)
     assert raw not in (settings.config_error or "")
     assert all(raw not in record.message for record in caplog.records)
+    _assert_bad_subject_ref_key_does_not_500(raw)
 
 
 def test_an_invalid_base64_subject_ref_key_is_an_explicit_error(caplog):
@@ -880,7 +919,9 @@ def test_an_invalid_base64_subject_ref_key_is_an_explicit_error(caplog):
         settings = settings_from_env({"GAB_ENV": "sandbox", "GAB_SUBJECT_REF_KEY": raw})
     assert settings.key_provider is None
     assert settings.master_key_configured is False
-    assert settings.config_error == "GAB_SUBJECT_REF_KEY is not valid base64"
+    assert settings.subject_ref_unusable is True
+    assert settings.config_error is None
     assert any(record.message == "GAB_SUBJECT_REF_KEY is not a usable subject ref key" for record in caplog.records)
     assert raw not in (settings.config_error or "")
     assert all(raw not in record.message for record in caplog.records)
+    _assert_bad_subject_ref_key_does_not_500(raw)
