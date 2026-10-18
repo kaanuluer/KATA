@@ -1600,6 +1600,11 @@ class BureauService:
                     raise BureauError(400, "agreement key does not match the registry")
             except (KataError, TypeError):
                 raise BureauError(400, "agreement key does not match the registry") from None
+        failure = _mandate_signature_failure(agreement)
+        if failure == "MANDATE_TAMPERED":
+            raise BureauError(400, "agreement signature does not match the document")
+        if failure:
+            raise BureauError(400, "agreement signature is not valid")
         principal_jwk = _principal_jwk(agreement)
         bound = agent.get("principal_public_key")
         if bound and public_key_from_jwk(bound).fingerprint != public_key_from_jwk(principal_jwk).fingerprint:
@@ -2766,6 +2771,20 @@ class BureauService:
 def org_name(repo: MemoryRepo, org_id: str) -> str:
     org = repo.get_org(org_id)
     return "" if org is None else org["name"]
+
+
+def _mandate_signature_failure(agreement: Agreement) -> str | None:
+    """Return the first mandate signature failure, or None when every mandate verifies."""
+
+    from kata_intent.evaluate import _verify_signature
+
+    if not agreement.mandates:
+        return "MANDATE_SIGNATURE_INVALID"
+    for mandate in agreement.mandates:
+        failure, _public = _verify_signature(mandate, None)
+        if failure:
+            return failure
+    return None
 
 
 def _principal_jwk(agreement: Agreement) -> dict[str, Any]:
