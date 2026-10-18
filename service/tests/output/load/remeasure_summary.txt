@@ -65,3 +65,8 @@ workers=4 c=200 rep=3 defenses=defaults_on n=3000 statuses={'200': 120, '429': 2
 velocity finding, defenses on, 3 workers, cap 25:
 runs=9 allow_counts=[25, 26, 25, 26, 26, 26, 26, 26, 25]
 runs_over_25=6
+
+velocity finding, defenses on, 4 workers, cap 25:
+runs=9 allow_counts=[25, 25, 26, 27, 26, 26, 28, 26, 25]
+runs_over_25=6
+max_allow=28

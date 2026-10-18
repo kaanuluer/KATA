@@ -465,16 +465,20 @@ def main() -> None:
     ]
     for case in cases:
         lines.append(_line(case))
-    on_three = [case for case in cases if case["defenses"] == "defaults_on" and case["workers"] == 3]
-    over = [case for case in on_three if case["allow_count"] > 25]
-    lines.extend(
-        [
-            "",
-            "velocity finding, defenses on, 3 workers, cap 25:",
-            f"runs={len(on_three)} allow_counts={[case['allow_count'] for case in on_three]}",
-            f"runs_over_25={len(over)}",
-        ]
-    )
+    for workers in (3, 4):
+        selected = [case for case in cases if case["defenses"] == "defaults_on" and case["workers"] == workers]
+        counts = [case["allow_count"] for case in selected]
+        over = [count for count in counts if count > 25]
+        lines.extend(
+            [
+                "",
+                f"velocity finding, defenses on, {workers} workers, cap 25:",
+                f"runs={len(selected)} allow_counts={counts}",
+                f"runs_over_25={len(over)}",
+            ]
+        )
+        if workers == 4 and counts:
+            lines.append(f"max_allow={max(counts)}")
     text = "\n".join(lines) + "\n"
     (OUTPUT / f"{name}_summary.txt").write_text(text, encoding="utf-8")
     print(text, flush=True)
