@@ -2316,7 +2316,7 @@ class BureauService:
                 raise
             except Exception:
                 log.exception("The subject data key was not removed from the live store in this process.")
-                raise BureauError(500, "subject removal did not finish") from None
+                raise BureauError(503, "The subject data key was not removed from the live store in this process.") from None
             return
         if self._subject_key_skip_is_blocked(principal_id):
             log.error("The subject data key was not removed from the live store in this process.")
@@ -2349,16 +2349,43 @@ class BureauService:
                 log.exception("The subject data key lookup did not finish.")
                 return True
             return isinstance(found, (bytes, bytearray)) and bool(found)
+        refs = self._principal_dek_refs(principal_id)
         connect = getattr(self.repo, "_connect", None)
-        if connect is None or not getattr(self.repo, "database_url", None):
+        if not refs or connect is None or not getattr(self.repo, "database_url", None):
             return False
         try:
             with connect() as conn:
-                row = conn.execute("SELECT 1 FROM gab_subject_deks LIMIT 1").fetchone()
+                row = conn.execute(
+                    "SELECT 1 FROM gab_subject_deks WHERE subject_ref = ANY(%s) LIMIT 1",
+                    (refs,),
+                ).fetchone()
         except Exception:
             log.exception("The subject data key lookup did not finish.")
             return True
         return row is not None
+
+    def _principal_dek_refs(self, principal_id: str) -> list[str]:
+        """Subject-reference digests for this principal only.
+
+        Another principal's wrapped key is not one of these digests. Without a
+        provider the digests cannot be computed, so no row is treated as this
+        principal's.
+        """
+
+        provider = self.key_provider
+        if provider is None:
+            return []
+        try:
+            if hasattr(provider, "subject_refs"):
+                refs = list(provider.subject_refs(principal_id))
+            elif hasattr(provider, "subject_ref"):
+                refs = [provider.subject_ref(principal_id)]
+            else:
+                return []
+        except Exception:
+            log.exception("The subject data key lookup did not finish.")
+            return []
+        return [ref for ref in refs if isinstance(ref, str) and ref]
 
     def file_dispute(
         self,

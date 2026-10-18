@@ -14,4 +14,4 @@ tests/test_ucp_checkout.py::test_route_and_tool_stay_inside_the_sandbox
     warnings.warn(message, stacklevel=1)
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-173 passed, 5 skipped, 1 deselected, 5 warnings in 22.66s
+173 passed, 5 skipped, 1 deselected, 5 warnings in 22.41s

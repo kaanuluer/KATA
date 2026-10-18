@@ -477,8 +477,8 @@ def test_a_shred_failure_leaves_the_session_for_a_retry():
 
     store.destroy = fail
     failed = _delete_subject(client, token, soft)
-    assert failed.status_code == 500
-    assert failed.json()["error"] == "subject removal did not finish"
+    assert failed.status_code == 503
+    assert failed.json()["error"] == "The subject data key was not removed from the live store in this process."
     assert bureau.repo.login_by_email("owner@example.com")["principal_id"] == "prn_owner"
     assert bureau.repo.get_agent("shopper-01")["status"] == "active"
     assert store.get("prn_owner") == b"synthetic-wrapped-owner"
@@ -562,8 +562,8 @@ def test_a_postgres_shred_failure_leaves_the_session_for_a_retry():
 
     store.destroy = fail
     failed = _delete_subject(app, token, soft)
-    assert failed.status_code == 500
-    assert failed.json()["error"] == "subject removal did not finish"
+    assert failed.status_code == 503
+    assert failed.json()["error"] == "The subject data key was not removed from the live store in this process."
     with psycopg.connect(url) as conn:
         login = conn.execute("SELECT email FROM gab_logins WHERE principal_id = 'prn_owner'").fetchone()
         agent = conn.execute(
@@ -743,15 +743,24 @@ def test_postgres_and_a_master_key_without_a_subject_ref_key_returns_503():
     assert login is None
 
 
-def test_a_postgres_dek_row_without_key_configuration_returns_503():
+def test_another_principals_dek_row_does_not_block_removal():
     app, url, token, soft, _operator_id, _merchant_id = _postgres_portal()
-    assert app.app.state.bureau.master_key_configured is False
+    bureau = app.app.state.bureau
+    provider = EnvKeyProvider({}, master_key=b"\x11" * 32, subject_key=b"\x22" * 32)
+    bureau.key_provider = provider
+    bureau.dek_store = None
+    bureau.master_key_configured = False
+    owner_ref = provider.subject_ref("prn_owner")
+    other_ref = provider.subject_ref("prn_other")
+    assert owner_ref != other_ref
     with psycopg.connect(url) as conn:
         conn.execute(
             """
             INSERT INTO gab_subject_deks (subject_ref, wrapped_dek, created_at)
-            VALUES ('synthetic-ref', 'c3ludGhldGlj', '2026-10-18T00:00:00Z')
-            """
+            VALUES (%s, 'b3duZXI=', '2026-10-18T00:00:00Z'),
+                   (%s, 'b3RoZXI=', '2026-10-18T00:00:00Z')
+            """,
+            (owner_ref, other_ref),
         )
     blocked = _delete_subject(app, token, soft)
     assert blocked.status_code == 503
@@ -759,11 +768,22 @@ def test_a_postgres_dek_row_without_key_configuration_returns_503():
     still = app.get("/v1/portal/agents", headers=_auth(token))
     assert still.status_code == 200, still.text
     with psycopg.connect(url) as conn:
-        login = conn.execute("SELECT email FROM gab_logins WHERE principal_id = 'prn_owner'").fetchone()
-        conn.execute("DELETE FROM gab_subject_deks WHERE subject_ref = 'synthetic-ref'")
-    assert login is not None
+        conn.execute("DELETE FROM gab_subject_deks WHERE subject_ref = %s", (owner_ref,))
+        left = conn.execute(
+            "SELECT subject_ref FROM gab_subject_deks WHERE subject_ref = %s",
+            (other_ref,),
+        ).fetchone()
+    assert left is not None
     removed = _delete_subject(app, token, soft)
     assert removed.status_code == 200, removed.text
+    with psycopg.connect(url) as conn:
+        login = conn.execute("SELECT email FROM gab_logins WHERE principal_id = 'prn_owner'").fetchone()
+        other = conn.execute(
+            "SELECT subject_ref FROM gab_subject_deks WHERE subject_ref = %s",
+            (other_ref,),
+        ).fetchone()
+    assert login is None
+    assert other is not None
 
 
 def test_a_short_subject_ref_key_is_an_explicit_error(caplog):
