@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """gab_audit row hash chain. SYNTHETIC TEST DATA.
 
-A changed path, a deleted last row, and reordered links were detected in this
-test. The hash is not keyed. Someone with database write access can recompute
-the chain from the start node.
+A changed path, a deleted first row, a deleted middle row, a deleted last row,
+and reordered links were detected in this test. The hash is not keyed. Someone
+with database write access can recompute the chain from the start node.
 """
 
 from __future__ import annotations
@@ -91,6 +91,31 @@ def test_existing_rows_link_from_the_start_node_and_a_change_is_detected():
     assert broken["audit_id"] == "aud_two"
     assert broken["break"] == "hash does not match the row"
     assert broken["rows"] == 3
+
+
+def test_deleting_the_first_row_is_detected():
+    url = _database_url()
+    _reset(url)
+    repo = _linked(url)
+    with psycopg.connect(url) as conn:
+        conn.execute("DELETE FROM gab_audit WHERE audit_id = %s", ("aud_one",))
+    broken = repo.audit_chain()
+    assert broken["ok"] is False, "deleted first row was not detected in this test"
+    assert broken["break"] == "start node is missing"
+    assert broken["rows"] == 2
+
+
+def test_deleting_a_middle_row_is_detected():
+    url = _database_url()
+    _reset(url)
+    repo = _linked(url)
+    with psycopg.connect(url) as conn:
+        conn.execute("DELETE FROM gab_audit WHERE audit_id = %s", ("aud_two",))
+    broken = repo.audit_chain()
+    assert broken["ok"] is False, "deleted middle row was not detected in this test"
+    assert broken["audit_id"] == "aud_three"
+    assert broken["break"] == "row is not linked from the start node"
+    assert broken["rows"] == 2
 
 
 def test_deleting_the_last_row_is_detected():
