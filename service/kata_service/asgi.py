@@ -39,7 +39,7 @@ from kata_intent.revocation import TransparencyLog, verify_revocation_push
 from kata_intent.values import prefixed_hash
 
 from kata_service.fx import FrankfurterFx, FxFetcher
-from kata_service.settings import REVOCATION_MAX_AGE_SECONDS, Settings, settings_from_env
+from kata_service.settings import NOTIFIER_JWK_UNUSABLE, REVOCATION_MAX_AGE_SECONDS, Settings, settings_from_env
 from kata_service.store import Store, open_store, utcnow
 
 _DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -282,6 +282,8 @@ def create_app(
         if isinstance(held, JSONResponse):
             return held
         settings_now = app.state.settings
+        if settings_now.push_notifier_unusable:
+            return _error(503, NOTIFIER_JWK_UNUSABLE)
         if settings_now.push_notifier_jwk is None:
             return _error(503, "KATA_PUSH_NOTIFIER_JWK is not set")
         if settings_now.log_key() is None:
@@ -294,8 +296,8 @@ def create_app(
             return _error(400, "push body must be a JSON object")
         try:
             notifier = public_key_from_jwk(settings_now.push_notifier_jwk)
-        except KataError as exc:
-            return _error(500, str(exc))
+        except KataError:
+            return _error(503, NOTIFIER_JWK_UNUSABLE)
         inner = verify_revocation_push(notice, notifier)
         if inner is None:
             return _error(401, "revocation push did not verify")
