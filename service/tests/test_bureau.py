@@ -561,6 +561,7 @@ def test_endpoint_rate_limits_do_not_block_other_routes():
     limited = client.post("/v1/verify", json={})
     assert limited.status_code == 429
     assert limited.headers["retry-after"] == "60"
+    assert limited.headers["x-rate-limit-reason"] == "verify"
     created = client.post("/v1/orgs", headers=_auth("admin-test-token"), json={"name": "Still Open", "org_type": "merchant"})
     assert created.status_code == 200
     assert client.post("/v1/inquiries", json={}).status_code != 429
