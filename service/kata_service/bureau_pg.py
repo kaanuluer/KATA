@@ -12,8 +12,11 @@ from typing import Any
 from kata_intent.errors import KataError
 
 from kata_service.agreement_ledger import assert_document_bounded
+from kata_service.audit_chain import AUDIT_CHAIN_START, audit_row_hash, audit_stored_fields, verify_audit_chain
 from kata_service.bureau import BureauError, email_hash, in_test_mode
 from kata_service.store import dump_doc, load_doc
+
+_AUDIT_LOCK = 8412554
 
 _MIGRATIONS = Path(__file__).resolve().parent / "migrations"
 _MIGRATION = _MIGRATIONS / "001_bureau.sql"
@@ -128,24 +131,56 @@ class PostgresRepo:
         self._execute("UPDATE gab_api_keys SET revoked_at = %s WHERE key_id = %s", (at, key_id))
 
     def add_audit(self, record: dict[str, Any]) -> None:
-        self._execute(
-            """
-            INSERT INTO gab_audit (audit_id, at, org_id, key_id, method, path, status, purpose_code, agent_id, environment)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """,
-            (
-                record["audit_id"],
-                record["at"],
-                record.get("org_id"),
-                record.get("key_id"),
-                record["method"],
-                record["path"],
-                record["status"],
-                record.get("purpose_code"),
-                record.get("agent_id"),
-                "test" if record.get("environment") == "test" else "live",
-            ),
-        )
+        self._ensure()
+        stored = audit_stored_fields(record)
+        with self._connect() as conn:
+            with conn.transaction():
+                conn.execute("SELECT pg_advisory_xact_lock(%s)", (_AUDIT_LOCK,))
+                prev = _backfill_audit(conn, _audit_tail(conn))
+                digest = audit_row_hash(prev, stored)
+                conn.execute(
+                    """
+                    INSERT INTO gab_audit (
+                      audit_id, at, org_id, key_id, method, path, status, purpose_code, agent_id, environment,
+                      prev_hash, hash
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        stored["audit_id"],
+                        stored["at"],
+                        stored["org_id"],
+                        stored["key_id"],
+                        stored["method"],
+                        stored["path"],
+                        stored["status"],
+                        stored["purpose_code"],
+                        stored["agent_id"],
+                        stored["environment"],
+                        prev,
+                        digest,
+                    ),
+                )
+                _set_audit_tail(conn, digest)
+
+    def audit_chain(self) -> dict[str, Any]:
+        """Check the gab_audit hash chain from the start node.
+
+        The hash is not keyed. Someone with database write access can recompute
+        the chain from the start node.
+        """
+
+        self._ensure()
+        with self._connect() as conn:
+            tail = _audit_tail(conn)
+            rows = conn.execute(
+                """
+                SELECT audit_id, at, org_id, key_id, method, path, status, purpose_code, agent_id, environment,
+                       prev_hash, hash
+                FROM gab_audit
+                """
+            ).fetchall()
+        loaded = [_audit_loaded(row) for row in rows]
+        return verify_audit_chain(loaded, tail_hash=tail)
 
     def list_audit(self, org_id: str | None, environment: str | None = None) -> list[dict[str, Any]]:
         columns = "audit_id, at, org_id, key_id, method, path, status, purpose_code, agent_id, environment"
@@ -1128,6 +1163,15 @@ class PostgresRepo:
                 finally:
                     conn.execute("SELECT pg_advisory_unlock(%s)", (_SCHEMA_LOCK,))
             self._ready = True
+            self._link_existing_audit()
+
+    def _link_existing_audit(self) -> None:
+        import psycopg
+
+        with psycopg.connect(self.database_url) as conn:
+            with conn.transaction():
+                conn.execute("SELECT pg_advisory_xact_lock(%s)", (_AUDIT_LOCK,))
+                _backfill_audit(conn, _audit_tail(conn))
 
     def _connect(self):
         import psycopg
@@ -1346,4 +1390,92 @@ def _dispute_row(row) -> dict[str, Any]:
         "outcome": row[5],
         "created_at": row[6],
         "updated_at": row[7],
+    }
+
+
+def _audit_tail(conn) -> str:
+    """Return the stored tail hash.
+
+    The pointer is missing until the first linked row is recorded. Only that
+    case scans gab_audit. Someone with database write access can recompute the
+    chain from the start node and point this row at the new tail.
+    """
+
+    stored = conn.execute("SELECT tail_hash FROM gab_audit_tail WHERE singleton = 1").fetchone()
+    if stored is not None:
+        return stored[0]
+    rows = conn.execute(
+        """
+        SELECT hash FROM gab_audit
+        WHERE hash IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM gab_audit AS child WHERE child.prev_hash = gab_audit.hash
+          )
+        """
+    ).fetchall()
+    if not rows:
+        return AUDIT_CHAIN_START
+    if len(rows) != 1:
+        raise BureauError(500, "audit chain has more than one tail")
+    _set_audit_tail(conn, rows[0][0])
+    return rows[0][0]
+
+
+def _set_audit_tail(conn, tail_hash: str) -> None:
+    conn.execute(
+        """
+        INSERT INTO gab_audit_tail (singleton, tail_hash) VALUES (1, %s)
+        ON CONFLICT (singleton) DO UPDATE SET tail_hash = EXCLUDED.tail_hash
+        """,
+        (tail_hash,),
+    )
+
+
+def _backfill_audit(conn, prev: str) -> str:
+    rows = conn.execute(
+        """
+        SELECT audit_id, at, org_id, key_id, method, path, status, purpose_code, agent_id, environment
+        FROM gab_audit
+        WHERE hash IS NULL
+        ORDER BY at, audit_id
+        """
+    ).fetchall()
+    for row in rows:
+        stored = {
+            "audit_id": row[0],
+            "at": row[1],
+            "org_id": row[2],
+            "key_id": row[3],
+            "method": row[4],
+            "path": row[5],
+            "status": row[6],
+            "purpose_code": row[7],
+            "agent_id": row[8],
+            "environment": row[9],
+        }
+        digest = audit_row_hash(prev, stored)
+        conn.execute(
+            "UPDATE gab_audit SET prev_hash = %s, hash = %s WHERE audit_id = %s",
+            (prev, digest, stored["audit_id"]),
+        )
+        prev = digest
+    if rows:
+        _set_audit_tail(conn, prev)
+    return prev
+
+
+def _audit_loaded(row) -> dict[str, Any]:
+    return {
+        "audit_id": row[0],
+        "at": row[1],
+        "org_id": row[2],
+        "key_id": row[3],
+        "method": row[4],
+        "path": row[5],
+        "status": row[6],
+        "purpose_code": row[7],
+        "agent_id": row[8],
+        "environment": row[9],
+        "prev_hash": row[10],
+        "hash": row[11],
     }
