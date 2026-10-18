@@ -136,9 +136,7 @@ class PostgresRepo:
         with self._connect() as conn:
             with conn.transaction():
                 conn.execute("SELECT pg_advisory_xact_lock(%s)", (_AUDIT_LOCK,))
-                prev = _audit_tail(conn)
-                _backfill_audit(conn, prev)
-                prev = _audit_tail(conn)
+                prev = _backfill_audit(conn, _audit_tail(conn))
                 digest = audit_row_hash(prev, stored)
                 conn.execute(
                     """
@@ -162,12 +160,18 @@ class PostgresRepo:
                         digest,
                     ),
                 )
+                _set_audit_tail(conn, digest)
 
     def audit_chain(self) -> dict[str, Any]:
-        """Check the gab_audit hash chain from the start node."""
+        """Check the gab_audit hash chain from the start node.
+
+        The hash is not keyed. Someone with database write access can recompute
+        the chain from the start node.
+        """
 
         self._ensure()
         with self._connect() as conn:
+            tail = _audit_tail(conn)
             rows = conn.execute(
                 """
                 SELECT audit_id, at, org_id, key_id, method, path, status, purpose_code, agent_id, environment,
@@ -176,7 +180,7 @@ class PostgresRepo:
                 """
             ).fetchall()
         loaded = [_audit_loaded(row) for row in rows]
-        return verify_audit_chain(loaded)
+        return verify_audit_chain(loaded, tail_hash=tail)
 
     def list_audit(self, org_id: str | None, environment: str | None = None) -> list[dict[str, Any]]:
         columns = "audit_id, at, org_id, key_id, method, path, status, purpose_code, agent_id, environment"
@@ -1390,6 +1394,16 @@ def _dispute_row(row) -> dict[str, Any]:
 
 
 def _audit_tail(conn) -> str:
+    """Return the stored tail hash.
+
+    The pointer is missing until the first linked row is recorded. Only that
+    case scans gab_audit. Someone with database write access can recompute the
+    chain from the start node and point this row at the new tail.
+    """
+
+    stored = conn.execute("SELECT tail_hash FROM gab_audit_tail WHERE singleton = 1").fetchone()
+    if stored is not None:
+        return stored[0]
     rows = conn.execute(
         """
         SELECT hash FROM gab_audit
@@ -1403,10 +1417,21 @@ def _audit_tail(conn) -> str:
         return AUDIT_CHAIN_START
     if len(rows) != 1:
         raise BureauError(500, "audit chain has more than one tail")
+    _set_audit_tail(conn, rows[0][0])
     return rows[0][0]
 
 
-def _backfill_audit(conn, prev: str) -> None:
+def _set_audit_tail(conn, tail_hash: str) -> None:
+    conn.execute(
+        """
+        INSERT INTO gab_audit_tail (singleton, tail_hash) VALUES (1, %s)
+        ON CONFLICT (singleton) DO UPDATE SET tail_hash = EXCLUDED.tail_hash
+        """,
+        (tail_hash,),
+    )
+
+
+def _backfill_audit(conn, prev: str) -> str:
     rows = conn.execute(
         """
         SELECT audit_id, at, org_id, key_id, method, path, status, purpose_code, agent_id, environment
@@ -1434,6 +1459,9 @@ def _backfill_audit(conn, prev: str) -> None:
             (prev, digest, stored["audit_id"]),
         )
         prev = digest
+    if rows:
+        _set_audit_tail(conn, prev)
+    return prev
 
 
 def _audit_loaded(row) -> dict[str, Any]:

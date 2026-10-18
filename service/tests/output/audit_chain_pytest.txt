@@ -1,13 +1,2 @@
-SYNTHETIC TEST DATA
-python3 -m pytest tests/test_audit_chain.py tests/test_package_data.py -q --tb=short
-
-..                                                                       [100%]
-2 passed in 2.40s
-
-python3 -m pytest -q --tb=line
-
-146 passed, 5 skipped, 5 warnings in 13.90s
-SKIPPED tests/test_keys.py boto3 import (5)
-
-The changed path on aud_two was detected in this test (ok false, break "hash does not match the row").
-The chain is tamper-evident. The earliest row's prev_hash is the start node "start".
+....                                                                     [100%]
+4 passed in 3.23s
