@@ -1356,6 +1356,7 @@ class BureauService:
         self.vapid_subject = vapid_subject
         self.key_provider = None
         self.dek_store = None
+        self.master_key_configured = False
         self.push_outbox: list[dict[str, str]] = []
         self.dev_mailbox: list[dict[str, str]] = []
 
@@ -2285,6 +2286,8 @@ class BureauService:
                     },
                 )
                 self._alert(agent, "revocation", {"status": "revoked"})
+            except Exception:
+                log.exception("subject removal committed; the revocation log or alert did not finish")
             finally:
                 reset_test_mode(token)
         return {"deleted": True, "limits": list(_SUBJECT_REMOVAL_LIMITS)}
@@ -2304,25 +2307,58 @@ class BureauService:
         }
 
     def _shred_subject_key(self, principal_id: str) -> None:
+        if self.key_provider is not None and self.dek_store is not None:
+            from kata_service.keys import shred_subject
+
+            try:
+                shred_subject(self.key_provider, self.dek_store, principal_id)
+            except BureauError:
+                raise
+            except Exception:
+                log.exception("The subject data key was not removed from the live store in this process.")
+                raise BureauError(500, "subject removal did not finish") from None
+            return
+        if self._subject_key_skip_is_blocked(principal_id):
+            log.error("The subject data key was not removed from the live store in this process.")
+            raise BureauError(503, "The subject data key was not removed from the live store in this process.")
         if self.key_provider is None:
             log.warning(
                 "The subject data key was not removed from the live store in this process because no key provider is configured."
             )
             return
-        if self.dek_store is None:
-            log.warning(
-                "The subject data key was not removed from the live store in this process because no data key store is configured."
-            )
-            return
-        from kata_service.keys import shred_subject
+        log.warning(
+            "The subject data key was not removed from the live store in this process because no data key store is configured."
+        )
 
+    def _subject_key_skip_is_blocked(self, principal_id: str) -> bool:
+        """A skipped shred is refused when a wrapped key may still be stored.
+
+        No data-key row and no key configuration keeps the warning path.
+        """
+
+        if self._dek_row_visible(principal_id):
+            return True
+        return bool(self.master_key_configured and getattr(self.repo, "database_url", None))
+
+    def _dek_row_visible(self, principal_id: str) -> bool:
+        store = self.dek_store
+        if store is not None:
+            try:
+                found = store.get(principal_id)
+            except Exception:
+                log.exception("The subject data key lookup did not finish.")
+                return True
+            return isinstance(found, (bytes, bytearray)) and bool(found)
+        connect = getattr(self.repo, "_connect", None)
+        if connect is None or not getattr(self.repo, "database_url", None):
+            return False
         try:
-            shred_subject(self.key_provider, self.dek_store, principal_id)
-        except BureauError:
-            raise
+            with connect() as conn:
+                row = conn.execute("SELECT 1 FROM gab_subject_deks LIMIT 1").fetchone()
         except Exception:
-            log.exception("The subject data key was not removed from the live store in this process.")
-            raise BureauError(500, "subject removal did not finish") from None
+            log.exception("The subject data key lookup did not finish.")
+            return True
+        return row is not None
 
     def file_dispute(
         self,

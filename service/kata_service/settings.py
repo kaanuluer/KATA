@@ -62,6 +62,7 @@ class Settings:
     key_provider: object | None = None
     push_notifier_unusable: bool = False
     subject_ref_unusable: bool = False
+    master_key_configured: bool = False
 
     def log_key(self) -> PrivateKey | None:
         if self.log_signing_seed is None:
@@ -98,6 +99,7 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
         log.error(SUBJECT_REF_UNUSABLE)
         subject_ref_unusable = True
         provider_env = {key: value for key, value in env.items() if key != "GAB_SUBJECT_REF_KEY"}
+    master_key_configured = _blank(env.get("GAB_MASTER_KEY")) is not None
     try:
         seed = _seed(env.get("KATA_LOG_SIGNING_SEED"))
     except ValueError as exc:
@@ -154,6 +156,7 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
         key_provider=key_provider,
         push_notifier_unusable=notifier_unusable,
         subject_ref_unusable=subject_ref_unusable,
+        master_key_configured=master_key_configured,
     )
 
 

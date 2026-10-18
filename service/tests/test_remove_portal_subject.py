@@ -662,3 +662,135 @@ def test_a_postgres_audit_failure_rolls_back_the_removal():
     assert sandbox_agent[0] == "revoked"
     assert audits == [("DELETE", "/v1/portal/subject", 200)]
     assert app.app.state.bureau.repo.audit_chain()["ok"] is True
+
+
+def test_a_revocation_alert_failure_still_returns_200(caplog):
+    client = _portal_client(rate_limit_per_minute=1000)
+    token = _portal_token(client)
+    soft = bind_device(client, token, "Phone")
+    bureau = client.app.state.bureau
+
+    def boom(agent, kind, detail):
+        raise RuntimeError("synthetic alert failure")
+
+    bureau._alert = boom
+    with caplog.at_level("ERROR", logger="kata_service.bureau"):
+        removed = _delete_subject(client, token, soft)
+    assert removed.status_code == 200, removed.text
+    assert removed.json()["deleted"] is True
+    assert bureau.repo.login_by_email("owner@example.com") is None
+    assert bureau.repo.get_agent("shopper-01")["status"] == "revoked"
+    assert not any(
+        item.get("kind") == "portal" and item.get("subject_id") == "prn_owner" for item in bureau.repo.sessions.values()
+    )
+    assert any("revocation log or alert did not finish" in record.message for record in caplog.records)
+    assert len([row for row in bureau.repo.audit if row["path"] == "/v1/portal/subject"]) == 1
+
+
+def test_a_dek_row_without_a_provider_returns_503_and_keeps_the_session():
+    client = _portal_client(rate_limit_per_minute=1000)
+    token = _portal_token(client)
+    soft = bind_device(client, token, "Phone")
+    bureau = client.app.state.bureau
+    store = InProcessDekStore(b"\x22" * 32)
+    store.put("prn_owner", b"synthetic-wrapped-owner")
+    bureau.key_provider = None
+    bureau.dek_store = store
+    blocked = _delete_subject(client, token, soft)
+    assert blocked.status_code == 503
+    assert blocked.json()["error"] == "The subject data key was not removed from the live store in this process."
+    assert bureau.repo.login_by_email("owner@example.com")["principal_id"] == "prn_owner"
+    assert bureau.repo.get_agent("shopper-01")["status"] == "active"
+    assert any(item.get("kind") == "portal" and item.get("subject_id") == "prn_owner" for item in bureau.repo.sessions.values())
+    assert not any(row["path"] == "/v1/portal/subject" for row in bureau.repo.audit)
+    still = client.get("/v1/portal/agents", headers=_auth(token))
+    assert still.status_code == 200, still.text
+    bureau.dek_store = None
+    removed = _delete_subject(client, token, soft)
+    assert removed.status_code == 200, removed.text
+    assert bureau.repo.login_by_email("owner@example.com") is None
+
+
+def test_postgres_and_a_master_key_without_a_subject_ref_key_returns_503():
+    app, url, token, soft, _operator_id, _merchant_id = _postgres_portal(master_key=b"\x11" * 32)
+    assert app.app.state.bureau.master_key_configured is True
+    assert app.app.state.bureau.dek_store is None
+    blocked = _delete_subject(app, token, soft)
+    assert blocked.status_code == 503
+    assert blocked.json()["error"] == "The subject data key was not removed from the live store in this process."
+    with psycopg.connect(url) as conn:
+        login = conn.execute("SELECT email FROM gab_logins WHERE principal_id = 'prn_owner'").fetchone()
+        agent = conn.execute(
+            "SELECT status FROM gab_agents WHERE agent_id = 'shopper-01' AND principal_id = 'prn_owner'"
+        ).fetchone()
+        session = conn.execute(
+            "SELECT count(*) FROM gab_sessions WHERE kind = 'portal' AND subject_id = 'prn_owner'"
+        ).fetchone()
+        audits = conn.execute("SELECT count(*) FROM gab_audit WHERE path = '/v1/portal/subject'").fetchone()
+    assert login is not None
+    assert agent[0] == "active"
+    assert session[0] == 1
+    assert audits[0] == 0
+    still = app.get("/v1/portal/agents", headers=_auth(token))
+    assert still.status_code == 200, still.text
+    bureau = app.app.state.bureau
+    bureau.key_provider = EnvKeyProvider({}, master_key=b"\x11" * 32, subject_key=b"\x22" * 32)
+    bureau.dek_store = InProcessDekStore(b"\x22" * 32)
+    removed = _delete_subject(app, token, soft)
+    assert removed.status_code == 200, removed.text
+    with psycopg.connect(url) as conn:
+        login = conn.execute("SELECT email FROM gab_logins WHERE principal_id = 'prn_owner'").fetchone()
+    assert login is None
+
+
+def test_a_postgres_dek_row_without_key_configuration_returns_503():
+    app, url, token, soft, _operator_id, _merchant_id = _postgres_portal()
+    assert app.app.state.bureau.master_key_configured is False
+    with psycopg.connect(url) as conn:
+        conn.execute(
+            """
+            INSERT INTO gab_subject_deks (subject_ref, wrapped_dek, created_at)
+            VALUES ('synthetic-ref', 'c3ludGhldGlj', '2026-10-18T00:00:00Z')
+            """
+        )
+    blocked = _delete_subject(app, token, soft)
+    assert blocked.status_code == 503
+    assert blocked.json()["error"] == "The subject data key was not removed from the live store in this process."
+    still = app.get("/v1/portal/agents", headers=_auth(token))
+    assert still.status_code == 200, still.text
+    with psycopg.connect(url) as conn:
+        login = conn.execute("SELECT email FROM gab_logins WHERE principal_id = 'prn_owner'").fetchone()
+        conn.execute("DELETE FROM gab_subject_deks WHERE subject_ref = 'synthetic-ref'")
+    assert login is not None
+    removed = _delete_subject(app, token, soft)
+    assert removed.status_code == 200, removed.text
+
+
+def test_a_short_subject_ref_key_is_an_explicit_error(caplog):
+    raw = _b64(b"SYNTHETICBADKEYVALUE")
+    with caplog.at_level("ERROR", logger="kata_service.settings"):
+        settings = settings_from_env(
+            {
+                "GAB_ENV": "sandbox",
+                "GAB_MASTER_KEY": _b64(b"\x11" * 32),
+                "GAB_SUBJECT_REF_KEY": raw,
+            }
+        )
+    assert settings.key_provider is None
+    assert settings.master_key_configured is True
+    assert settings.config_error == "GAB_SUBJECT_REF_KEY must decode to 32 bytes"
+    assert any(record.message == "GAB_SUBJECT_REF_KEY is not a usable subject ref key" for record in caplog.records)
+    assert raw not in (settings.config_error or "")
+    assert all(raw not in record.message for record in caplog.records)
+
+
+def test_an_invalid_base64_subject_ref_key_is_an_explicit_error(caplog):
+    raw = "not-a-key"
+    with caplog.at_level("ERROR", logger="kata_service.settings"):
+        settings = settings_from_env({"GAB_ENV": "sandbox", "GAB_SUBJECT_REF_KEY": raw})
+    assert settings.key_provider is None
+    assert settings.master_key_configured is False
+    assert settings.config_error == "GAB_SUBJECT_REF_KEY is not valid base64"
+    assert any(record.message == "GAB_SUBJECT_REF_KEY is not a usable subject ref key" for record in caplog.records)
+    assert raw not in (settings.config_error or "")
+    assert all(raw not in record.message for record in caplog.records)

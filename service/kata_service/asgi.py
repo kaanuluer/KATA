@@ -196,9 +196,8 @@ def create_app(
         else:
             response = await call_next(request)
         # Subject removal writes its one audit row in the removal transaction.
-        # A 401 repeat is not a second row. If that audit write fails, the
-        # removal rolls back and the response is 500. This path does not swallow
-        # an audit error.
+        # A 400, 401, or 403 on this route is not an audit row. If that audit
+        # write fails, the removal rolls back and the response is 500.
         if path == "/v1/portal/subject" and request.method == "DELETE":
             return response
         try:
@@ -565,6 +564,7 @@ def ensure_bureau(app: FastAPI):
 
 
 def _bind_subject_keys(service, settings, connect=None) -> None:
+    service.master_key_configured = bool(getattr(settings, "master_key_configured", False))
     provider = getattr(settings, "key_provider", None)
     if provider is None:
         return
