@@ -195,8 +195,11 @@ def create_app(
             response = _error(429, "rate limit exceeded", {"Retry-After": "60"})
         else:
             response = await call_next(request)
-        # A repeat of subject removal is 401. That response is not a second audit row.
-        if path == "/v1/portal/subject" and request.method == "DELETE" and response.status_code == 401:
+        # Subject removal writes its one audit row in the removal transaction.
+        # A 401 repeat is not a second row. If that audit write fails, the
+        # removal rolls back and the response is 500. This path does not swallow
+        # an audit error.
+        if path == "/v1/portal/subject" and request.method == "DELETE":
             return response
         try:
             bureau.repo.add_audit(

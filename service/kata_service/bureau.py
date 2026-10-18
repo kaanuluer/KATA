@@ -10,10 +10,12 @@ transparency log.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import hmac
 import html
 import json
+import logging
 import re
 import secrets
 import threading
@@ -93,6 +95,13 @@ _AGENT_ID = re.compile(r"^[A-Za-z0-9._-]{1,80}$")
 _EVIDENCE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _EMAIL = re.compile(r"^[^@\s]{1,64}@[^@\s]{1,120}$")
 ALERT_TYP = "kata-bureau-alert+jws"
+log = logging.getLogger("kata_service.bureau")
+_SUBJECT_REMOVAL_LIMITS = (
+    "Removed from the live database in this process.",
+    "A backup or a restore can bring the data back.",
+    "An embedded seal string cannot be shredded.",
+    "Another process may hold the data key for up to 300 seconds.",
+)
 
 
 class BureauError(Exception):
@@ -571,6 +580,50 @@ def _bounded_deny(agent_id: str, agreement_id: str, code: str, message: str) -> 
         "agent_id": agent_id,
         "agreement_id": agreement_id,
     }
+
+
+def _append_removal_audit(rows: list[dict[str, Any]], record: dict[str, Any]) -> None:
+    rows.append(dict(record))
+
+
+def _store_agent_unlocked(repo: Any, record: dict[str, Any]) -> None:
+    stamped = dict(record)
+    prefix = int(bool(stamped.get("is_test")))
+    key = f"{prefix}:{stamped['agent_id']}"
+    repo.agents[key] = stamped
+    repo.by_fingerprint[f"{prefix}:{stamped['fingerprint']}"] = key
+
+
+def _removal_snapshot(repo: Any) -> dict[str, Any]:
+    return {
+        "agents": copy.deepcopy(repo.agents),
+        "by_fingerprint": dict(repo.by_fingerprint),
+        "logins": copy.deepcopy(repo.logins),
+        "magic": copy.deepcopy(repo.magic),
+        "sessions": copy.deepcopy(repo.sessions),
+        "passkeys": copy.deepcopy(repo.passkeys),
+        "challenges": copy.deepcopy(repo.challenges),
+        "push_devices": copy.deepcopy(repo.push_devices),
+        "approvals": copy.deepcopy(repo.approvals),
+        "disputes": copy.deepcopy(repo.disputes),
+        "inquiries": copy.deepcopy(repo.inquiries),
+        "audit": copy.deepcopy(repo.audit),
+    }
+
+
+def _restore_removal_snapshot(repo: Any, snapshot: dict[str, Any]) -> None:
+    repo.agents = snapshot["agents"]
+    repo.by_fingerprint = snapshot["by_fingerprint"]
+    repo.logins = snapshot["logins"]
+    repo.magic = snapshot["magic"]
+    repo.sessions = snapshot["sessions"]
+    repo.passkeys = snapshot["passkeys"]
+    repo.challenges = snapshot["challenges"]
+    repo.push_devices = snapshot["push_devices"]
+    repo.approvals = snapshot["approvals"]
+    repo.disputes = snapshot["disputes"]
+    repo.inquiries = snapshot["inquiries"]
+    repo.audit = snapshot["audit"]
 
 
 class MemoryRepo:
@@ -1188,42 +1241,64 @@ class MemoryRepo:
                     self.disputes[index] = stamped
                     return
 
-    def remove_portal_subject(self, principal_id: str, at: str) -> None:
+    def remove_portal_subject(
+        self,
+        principal_id: str,
+        at: str,
+        revoked_agents: list[dict[str, Any]] | None = None,
+        audit: dict[str, Any] | None = None,
+    ) -> None:
         """Remove this principal's portal rows from the live store in this process.
 
-        Organization logins stay. A backup or a restore can bring the data back.
+        The gab_principals row stays. Organization logins stay. Agent status
+        changes, portal row removal, and the audit row are applied together.
+        If the audit write fails, those changes are put back. A backup or a
+        restore can bring the data back.
         """
 
         with self._lock:
-            digests = [digest for digest, item in self.logins.items() if item["principal_id"] == principal_id]
-            for digest in digests:
-                self.logins.pop(digest, None)
-            self.magic = {
-                key: item
-                for key, item in self.magic.items()
-                if not (item.get("kind") == "portal" and item.get("subject_hash") in digests)
-            }
-            self.sessions = {
-                key: item
-                for key, item in self.sessions.items()
-                if not (item.get("kind") == "portal" and item.get("subject_id") == principal_id)
-            }
-            self.passkeys = {key: item for key, item in self.passkeys.items() if item.get("principal_id") != principal_id}
-            self.challenges = {
-                key: item for key, item in self.challenges.items() if item.get("principal_id") != principal_id
-            }
-            self.push_devices = {
-                key: item for key, item in self.push_devices.items() if item.get("principal_id") != principal_id
-            }
-            self.approvals = {key: item for key, item in self.approvals.items() if item.get("principal_id") != principal_id}
-            for item in self.disputes:
-                if item.get("principal_id") == principal_id:
-                    item["statement"] = ""
-                    item["principal_id"] = None
-                    item["updated_at"] = at
-            for item in self.inquiries:
-                if item.get("principal_id") == principal_id:
-                    item["principal_id"] = None
+            snapshot = _removal_snapshot(self)
+            try:
+                for agent in revoked_agents or []:
+                    _store_agent_unlocked(self, agent)
+                digests = [digest for digest, item in self.logins.items() if item["principal_id"] == principal_id]
+                for digest in digests:
+                    self.logins.pop(digest, None)
+                self.magic = {
+                    key: item
+                    for key, item in self.magic.items()
+                    if not (item.get("kind") == "portal" and item.get("subject_hash") in digests)
+                }
+                self.sessions = {
+                    key: item
+                    for key, item in self.sessions.items()
+                    if not (item.get("kind") == "portal" and item.get("subject_id") == principal_id)
+                }
+                self.passkeys = {
+                    key: item for key, item in self.passkeys.items() if item.get("principal_id") != principal_id
+                }
+                self.challenges = {
+                    key: item for key, item in self.challenges.items() if item.get("principal_id") != principal_id
+                }
+                self.push_devices = {
+                    key: item for key, item in self.push_devices.items() if item.get("principal_id") != principal_id
+                }
+                self.approvals = {
+                    key: item for key, item in self.approvals.items() if item.get("principal_id") != principal_id
+                }
+                for item in self.disputes:
+                    if item.get("principal_id") == principal_id:
+                        item["statement"] = ""
+                        item["principal_id"] = None
+                        item["updated_at"] = at
+                for item in self.inquiries:
+                    if item.get("principal_id") == principal_id:
+                        item["principal_id"] = None
+                if audit is not None:
+                    _append_removal_audit(self.audit, audit)
+            except Exception:
+                _restore_removal_snapshot(self, snapshot)
+                raise
 
     def reporter_types(self) -> dict[str, str]:
         with self._lock:
@@ -2154,12 +2229,16 @@ class BureauService:
     ) -> dict[str, Any]:
         """Remove the signed-in portal principal from the live database in this process.
 
-        Organization logins stay. Agents, agreements, ALLOW ledger rows, reports,
-        scores, and subscriptions stay. This principal's agents become revoked.
-        Dispute rows stay, with the statement and principal_id cleared. Inquiry
-        rows stay, with principal_id cleared. A backup or a restore can bring
-        the data back. An embedded seal string cannot be shredded. Another
-        process may hold the data key for up to 300 seconds.
+        The gab_principals row stays. Organization logins stay. Agents,
+        agreements, ALLOW ledger rows, reports, scores, and subscriptions stay.
+        This principal's agents become revoked. Dispute rows stay, with the
+        statement and principal_id cleared. Inquiry rows stay, with principal_id
+        cleared. The data key shred runs before the session is removed. Agent
+        revocation, the portal row changes, and the audit row commit together.
+        If the audit write fails, that work is rolled back and the response is
+        500. A backup or a restore can bring the data back. An embedded seal
+        string cannot be shredded. Another process may hold the data key for up
+        to 300 seconds. A finished response uses the JSON field `deleted`.
         """
 
         self._portal(auth)
@@ -2167,49 +2246,83 @@ class BureauService:
 
         require_assertion(self, auth, assertion, origin or "")
         principal_id = auth.principal_id or ""
+        self._shred_subject_key(principal_id)
+        at = self.stamp()
+        revoked: list[dict[str, Any]] = []
+        newly: list[dict[str, Any]] = []
         for flag in (False, True):
             token = use_test_mode(flag)
             try:
                 for agent in self.repo.list_agents(principal_id=principal_id):
-                    self._revoke_agent_for_subject_removal(agent)
+                    previous = agent["status"]
+                    updated = dict(agent)
+                    updated["status"] = "revoked"
+                    updated["updated_at"] = at
+                    self._rescore(updated)
+                    updated["is_test"] = bool(agent.get("is_test", flag))
+                    revoked.append(updated)
+                    if previous != "revoked":
+                        newly.append(updated)
             finally:
                 reset_test_mode(token)
-        self.repo.remove_portal_subject(principal_id, self.stamp())
-        self._shred_subject_key(principal_id)
+        try:
+            self.repo.remove_portal_subject(principal_id, at, revoked, self._subject_removal_audit(auth, at))
+        except BureauError:
+            raise
+        except Exception:
+            log.exception("subject removal rolled back")
+            raise BureauError(500, "subject removal did not finish") from None
+        for agent in newly:
+            token = use_test_mode(bool(agent.get("is_test")))
+            try:
+                self._log(
+                    "revocation",
+                    {
+                        "agent_id": agent["agent_id"],
+                        "fingerprint": agent["fingerprint"],
+                        "record_hash": hash_document({"agent_id": agent["agent_id"], "status": "revoked"}),
+                        "status": "revoked",
+                    },
+                )
+                self._alert(agent, "revocation", {"status": "revoked"})
+            finally:
+                reset_test_mode(token)
+        return {"deleted": True, "limits": list(_SUBJECT_REMOVAL_LIMITS)}
+
+    def _subject_removal_audit(self, auth: Auth, at: str) -> dict[str, Any]:
         return {
-            "removed": True,
-            "limits": [
-                "Removed from the live database in this process.",
-                "A backup or a restore can bring the data back.",
-                "An embedded seal string cannot be shredded.",
-                "Another process may hold the data key for up to 300 seconds.",
-            ],
+            "audit_id": "aud_" + secrets.token_hex(8),
+            "at": at,
+            "org_id": auth.org_id,
+            "key_id": auth.key_id,
+            "method": "DELETE",
+            "path": "/v1/portal/subject",
+            "status": 200,
+            "purpose_code": None,
+            "agent_id": None,
+            "environment": "test" if auth.test else "live",
         }
 
-    def _revoke_agent_for_subject_removal(self, agent: dict[str, Any]) -> None:
-        previous = agent["status"]
-        agent["status"] = "revoked"
-        agent["updated_at"] = self.stamp()
-        self._rescore(agent)
-        self.repo.save_agent(agent)
-        if previous != "revoked":
-            self._log(
-                "revocation",
-                {
-                    "agent_id": agent["agent_id"],
-                    "fingerprint": agent["fingerprint"],
-                    "record_hash": hash_document({"agent_id": agent["agent_id"], "status": "revoked"}),
-                    "status": "revoked",
-                },
-            )
-            self._alert(agent, "revocation", {"status": "revoked"})
-
     def _shred_subject_key(self, principal_id: str) -> None:
-        if self.key_provider is None or self.dek_store is None:
+        if self.key_provider is None:
+            log.warning(
+                "The subject data key was not removed from the live store in this process because no key provider is configured."
+            )
+            return
+        if self.dek_store is None:
+            log.warning(
+                "The subject data key was not removed from the live store in this process because no data key store is configured."
+            )
             return
         from kata_service.keys import shred_subject
 
-        shred_subject(self.key_provider, self.dek_store, principal_id)
+        try:
+            shred_subject(self.key_provider, self.dek_store, principal_id)
+        except BureauError:
+            raise
+        except Exception:
+            log.exception("The subject data key was not removed from the live store in this process.")
+            raise BureauError(500, "subject removal did not finish") from None
 
     def file_dispute(
         self,

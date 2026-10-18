@@ -132,35 +132,9 @@ class PostgresRepo:
 
     def add_audit(self, record: dict[str, Any]) -> None:
         self._ensure()
-        stored = audit_stored_fields(record)
         with self._connect() as conn:
             with conn.transaction():
-                conn.execute("SELECT pg_advisory_xact_lock(%s)", (_AUDIT_LOCK,))
-                prev = _backfill_audit(conn, _audit_tail(conn))
-                digest = audit_row_hash(prev, stored)
-                conn.execute(
-                    """
-                    INSERT INTO gab_audit (
-                      audit_id, at, org_id, key_id, method, path, status, purpose_code, agent_id, environment,
-                      prev_hash, hash
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """,
-                    (
-                        stored["audit_id"],
-                        stored["at"],
-                        stored["org_id"],
-                        stored["key_id"],
-                        stored["method"],
-                        stored["path"],
-                        stored["status"],
-                        stored["purpose_code"],
-                        stored["agent_id"],
-                        stored["environment"],
-                        prev,
-                        digest,
-                    ),
-                )
-                _set_audit_tail(conn, digest)
+                _insert_audit_row(conn, record)
 
     def audit_chain(self) -> dict[str, Any]:
         """Check the gab_audit hash chain from the start node.
@@ -936,18 +910,44 @@ class PostgresRepo:
             (record["status"], record.get("outcome"), record["updated_at"], record["dispute_id"], _test_row()),
         )
 
-    def remove_portal_subject(self, principal_id: str, at: str) -> None:
+    def remove_portal_subject(
+        self,
+        principal_id: str,
+        at: str,
+        revoked_agents: list[dict[str, Any]] | None = None,
+        audit: dict[str, Any] | None = None,
+    ) -> None:
         """Remove this principal's portal rows from the live database in this process.
 
-        Organization logins stay. Dispute rows stay with a cleared statement and
-        principal_id. Inquiry rows stay with a cleared principal_id. Both is_test
-        partitions are included. gab_sandbox copies are included when that schema
-        exists. A backup or a restore can bring the data back.
+        The gab_principals row stays. Organization logins stay. Dispute rows stay
+        with a cleared statement and principal_id. Inquiry rows stay with a
+        cleared principal_id. Agent revocation, those changes, and the audit row
+        commit in this transaction. Both is_test partitions are included.
+        gab_sandbox copies are included when that schema exists. A backup or a
+        restore can bring the data back.
         """
 
         self._ensure()
         with self._connect() as conn:
             with conn.transaction():
+                for agent in revoked_agents or []:
+                    conn.execute(
+                        """
+                        UPDATE gab_agents
+                        SET status = %s, updated_at = %s, score = %s, score_reasons = %s, cold_start = %s
+                        WHERE agent_id = %s AND is_test = %s AND principal_id = %s
+                        """,
+                        (
+                            agent["status"],
+                            agent["updated_at"],
+                            int(agent.get("score") or 0),
+                            json.dumps(agent.get("score_reasons") or []),
+                            1 if agent.get("cold_start", True) else 0,
+                            agent["agent_id"],
+                            bool(agent.get("is_test")),
+                            principal_id,
+                        ),
+                    )
                 digests = [
                     row[0]
                     for row in conn.execute(
@@ -1003,6 +1003,8 @@ class PostgresRepo:
                         "UPDATE gab_sandbox.gab_inquiries SET principal_id = NULL WHERE principal_id = %s",
                         (principal_id,),
                     )
+                if audit is not None:
+                    _insert_audit_row(conn, audit)
 
     def reporter_types(self) -> dict[str, str]:
         rows = self._all("SELECT org_id, org_type FROM gab_organizations", ())
@@ -1459,6 +1461,36 @@ def _dispute_row(row) -> dict[str, Any]:
         "created_at": row[6],
         "updated_at": row[7],
     }
+
+
+def _insert_audit_row(conn, record: dict[str, Any]) -> None:
+    stored = audit_stored_fields(record)
+    conn.execute("SELECT pg_advisory_xact_lock(%s)", (_AUDIT_LOCK,))
+    prev = _backfill_audit(conn, _audit_tail(conn))
+    digest = audit_row_hash(prev, stored)
+    conn.execute(
+        """
+        INSERT INTO gab_audit (
+          audit_id, at, org_id, key_id, method, path, status, purpose_code, agent_id, environment,
+          prev_hash, hash
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """,
+        (
+            stored["audit_id"],
+            stored["at"],
+            stored["org_id"],
+            stored["key_id"],
+            stored["method"],
+            stored["path"],
+            stored["status"],
+            stored["purpose_code"],
+            stored["agent_id"],
+            stored["environment"],
+            prev,
+            digest,
+        ),
+    )
+    _set_audit_tail(conn, digest)
 
 
 def _audit_tail(conn) -> str:

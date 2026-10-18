@@ -980,10 +980,18 @@ def shred_subject(provider, store, subject_id: str) -> bool:
 
 
 def database_dek_store(provider, connect):
-    """Build a live-database store for wrapped per-person data keys."""
+    """Build a live-database store for wrapped per-person data keys.
 
+    A missing subject ref key returns None. Reading that key at startup must
+    not turn later requests into failures. The caller leaves the store unset.
+    """
+
+    try:
+        subject_key = provider._subject_key_bytes()
+    except KeyCustodyError:
+        return None
     previous = provider.previous_subject_keys() if hasattr(provider, "previous_subject_keys") else ()
-    return DatabaseDekStore(connect, subject_key=provider._subject_key_bytes(), previous_keys=tuple(previous))
+    return DatabaseDekStore(connect, subject_key=subject_key, previous_keys=tuple(previous))
 
 
 def provider_from_env(env: dict[str, str], *, deployment_env: str) -> EnvKeyProvider | AwsKmsEnvelopeProvider | None:
