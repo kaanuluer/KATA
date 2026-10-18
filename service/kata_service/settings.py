@@ -18,6 +18,7 @@ from kata_service.score_model import ScoreWeights, weights_from_json
 
 DEFAULT_FX_SOURCE_URL = "https://api.frankfurter.dev/v1"
 REVOCATION_MAX_AGE_SECONDS = 300
+NOTIFIER_JWK_UNUSABLE = "KATA_PUSH_NOTIFIER_JWK is not a usable public JWK"
 
 
 @dataclass(frozen=True)
@@ -56,6 +57,7 @@ class Settings:
     vapid_private_key: str | None = None
     vapid_subject: str | None = None
     key_provider: object | None = None
+    push_notifier_unusable: bool = False
 
     def log_key(self) -> PrivateKey | None:
         if self.log_signing_seed is None:
@@ -64,7 +66,11 @@ class Settings:
 
 
 def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
-    """Read deployment settings. A bad public JWK is reported and does not crash import."""
+    """Read deployment settings. A bad notifier JWK does not crash import.
+
+    That key is not a process-wide configuration error. Push reports it as 503.
+    The parser text and the JWK are not stored.
+    """
 
     env = os.environ if environ is None else environ
     database_url = _blank(env.get("DATABASE_URL")) or _blank(env.get("POSTGRES_URL"))
@@ -76,12 +82,22 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
         deployment_env = "production"
     seed = None
     notifier = None
+    notifier_unusable = False
     published: tuple[dict, ...] = ()
     weights = ScoreWeights()
     key_provider = None
     try:
         seed = _seed(env.get("KATA_LOG_SIGNING_SEED"))
+    except ValueError as exc:
+        if error is None:
+            error = str(exc)
+    try:
         notifier = _notifier(env.get("KATA_PUSH_NOTIFIER_JWK"))
+    except (KataError, ValueError, json.JSONDecodeError):
+        notifier = None
+        if _blank(env.get("KATA_PUSH_NOTIFIER_JWK")) is not None:
+            notifier_unusable = True
+    try:
         published = _published(env.get("KATA_PUBLISHED_KEYS"))
         weights = weights_from_json(_blank(env.get("GAB_SCORE_WEIGHTS")))
         if error is None:
@@ -124,6 +140,7 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
         vapid_private_key=_blank(env.get("GAB_VAPID_PRIVATE_KEY")),
         vapid_subject=_blank(env.get("GAB_VAPID_SUBJECT")),
         key_provider=key_provider,
+        push_notifier_unusable=notifier_unusable,
     )
 
 

@@ -254,7 +254,57 @@ def test_settings_accept_the_neon_url_and_reject_a_private_jwk():
     private = dict(seed.public.to_jwk())
     private["d"] = "c2VjcmV0"
     rejected = settings_from_env({"KATA_PUSH_NOTIFIER_JWK": json.dumps(private), "DATABASE_URL": "postgresql://example"})
-    assert rejected.config_error
+    assert rejected.config_error is None
+    assert rejected.push_notifier_jwk is None
+    assert rejected.push_notifier_unusable is True
+    assert "c2VjcmV0" not in str(rejected)
+
+
+def test_a_bad_notifier_jwk_returns_503_and_leaves_other_routes_up():
+    from kata_service.settings import NOTIFIER_JWK_UNUSABLE, Settings
+
+    seed = generate_keypair("EdDSA")
+    private = dict(seed.public.to_jwk())
+    private["d"] = "c2VjcmV0"
+    started = settings_from_env(
+        {
+            "KATA_PUSH_NOTIFIER_JWK": json.dumps(private),
+            "KATA_LOG_SIGNING_SEED": base64.b64encode(seed.seed).decode(),
+            "KATA_APPEND_TOKEN": "append-secret",
+        }
+    )
+    client = TestClient(create_app(started, MemoryStore()))
+    pushed = client.post("/v1/revocations/push", json={"notice": {}})
+    assert pushed.status_code == 503
+    assert pushed.json() == {"error": NOTIFIER_JWK_UNUSABLE}
+    assert "c2VjcmV0" not in pushed.text
+    assert "private" not in pushed.text
+    keys = client.get("/.well-known/kata-keys.json")
+    assert keys.status_code == 200
+    assert keys.json()["keys"]
+    refused = client.post("/v1/log/entries", json={"kind": "note", "body": {}}, headers={"Authorization": "Bearer wrong"})
+    assert refused.status_code == 401
+    malformed = settings_from_env({"KATA_PUSH_NOTIFIER_JWK": "not-json"})
+    assert malformed.config_error is None
+    assert malformed.push_notifier_unusable is True
+    request_branch = TestClient(
+        create_app(
+            Settings(
+                None,
+                None,
+                seed.seed,
+                {"kty": "OKP", "crv": "Ed25519"},
+                "append-secret",
+                (),
+                "https://fx.test",
+            ),
+            MemoryStore(),
+        )
+    )
+    again = request_branch.post("/v1/revocations/push", json={"notice": {}})
+    assert again.status_code == 503
+    assert again.json() == {"error": NOTIFIER_JWK_UNUSABLE}
+    assert "missing" not in again.text
 
 
 def test_frankfurter_parser_reads_the_reference_rate():
