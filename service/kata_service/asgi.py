@@ -195,6 +195,11 @@ def create_app(
             response = _error(429, "rate limit exceeded", {"Retry-After": "60"})
         else:
             response = await call_next(request)
+        # Subject removal writes its one audit row in the removal transaction.
+        # A 400, 401, or 403 on this route is not an audit row. If that audit
+        # write fails, the removal rolls back and the response is 500.
+        if path == "/v1/portal/subject" and request.method == "DELETE":
+            return response
         try:
             bureau.repo.add_audit(
                 {
@@ -520,6 +525,7 @@ def ensure_bureau(app: FastAPI):
             from kata_service.seed import seed_demo
 
             seed_demo(service)
+        _bind_subject_keys(service, settings)
         app.state.bureau = service
         return service
     from kata_service.bureau_pg import PostgresRepo
@@ -552,8 +558,22 @@ def ensure_bureau(app: FastAPI):
         vapid_private_key=settings.vapid_private_key,
         vapid_subject=settings.vapid_subject,
     )
+    _bind_subject_keys(service, settings, repo._connect)
     app.state.bureau = service
     return service
+
+
+def _bind_subject_keys(service, settings, connect=None) -> None:
+    service.master_key_configured = bool(getattr(settings, "master_key_configured", False))
+    provider = getattr(settings, "key_provider", None)
+    if provider is None:
+        return
+    service.key_provider = provider
+    if connect is None:
+        return
+    from kata_service.keys import database_dek_store
+
+    service.dek_store = database_dek_store(provider, connect)
 
 
 def _fx_body(currency: str, reference_currency: str, day: str, rate: str) -> dict[str, str]:

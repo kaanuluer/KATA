@@ -967,11 +967,31 @@ def open_stored(provider, encoded: str, *, subject_id: str, store) -> bytes:
 
 
 def shred_subject(provider, store, subject_id: str) -> bool:
-    """Drop the cached data key and delete the wrapped key from the store."""
+    """Drop the cached data key and remove the wrapped key from the live store in this process.
+
+    A backup or a restore can bring the wrapped key back. An embedded seal
+    string cannot be shredded. Another process may hold the data key for up
+    to 300 seconds.
+    """
 
     removed = bool(store.destroy(subject_id))
     provider.forget_dek(subject_id)
     return removed
+
+
+def database_dek_store(provider, connect):
+    """Build a live-database store for wrapped per-person data keys.
+
+    A missing subject ref key returns None. Reading that key at startup must
+    not turn later requests into failures. The caller leaves the store unset.
+    """
+
+    try:
+        subject_key = provider._subject_key_bytes()
+    except KeyCustodyError:
+        return None
+    previous = provider.previous_subject_keys() if hasattr(provider, "previous_subject_keys") else ()
+    return DatabaseDekStore(connect, subject_key=subject_key, previous_keys=tuple(previous))
 
 
 def provider_from_env(env: dict[str, str], *, deployment_env: str) -> EnvKeyProvider | AwsKmsEnvelopeProvider | None:
