@@ -1523,6 +1523,123 @@ class PostgresRepo:
             "created_at": row[4],
         }
 
+    def append_breach(self, fields: dict[str, Any]) -> dict[str, Any]:
+        from kata_service.breach import seal_breach
+
+        self._ensure()
+        with self._connect() as conn:
+            with conn.transaction():
+                conn.execute("SELECT pg_advisory_xact_lock(%s)", (8412555,))
+                tip = conn.execute("SELECT entry_hash FROM gab_breach_register ORDER BY seq DESC LIMIT 1").fetchone()
+                sealed = seal_breach(None if tip is None else tip[0], fields)
+                conn.execute(
+                    """
+                    INSERT INTO gab_breach_register (
+                      event_id, detected_at, data_types, scope_count, note_hash, prev_hash, entry_hash, retain_until
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        sealed["event_id"],
+                        sealed["detected_at"],
+                        json.dumps(sealed["data_types"]),
+                        sealed["scope_count"],
+                        sealed["note_hash"],
+                        sealed["prev_hash"],
+                        sealed["entry_hash"],
+                        sealed["retain_until"],
+                    ),
+                )
+        return sealed
+
+    def list_breach(self) -> list[dict[str, Any]]:
+        rows = self._all(
+            """
+            SELECT event_id, detected_at, data_types, scope_count, note_hash, prev_hash, entry_hash, retain_until
+            FROM gab_breach_register ORDER BY seq
+            """,
+            (),
+        )
+        return [_breach_row(row) for row in rows]
+
+    def delete_breach(self, event_id: str) -> None:
+        self._reject_mutation("gab_breach_register", "DELETE FROM gab_breach_register WHERE event_id = %s", (event_id,))
+
+    def append_access(self, fields: dict[str, Any]) -> dict[str, Any]:
+        from kata_service.breach import seal_access
+
+        self._ensure()
+        with self._connect() as conn:
+            with conn.transaction():
+                conn.execute("SELECT pg_advisory_xact_lock(%s)", (8412556,))
+                tip = conn.execute("SELECT entry_hash FROM gab_register_access_log ORDER BY seq DESC LIMIT 1").fetchone()
+                sealed = seal_access(None if tip is None else tip[0], fields)
+                conn.execute(
+                    """
+                    INSERT INTO gab_register_access_log (access_id, at, actor, action, prev_hash, entry_hash)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        sealed["access_id"],
+                        sealed["at"],
+                        sealed["actor"],
+                        sealed["action"],
+                        sealed["prev_hash"],
+                        sealed["entry_hash"],
+                    ),
+                )
+        return sealed
+
+    def list_access(self) -> list[dict[str, Any]]:
+        rows = self._all(
+            """
+            SELECT access_id, at, actor, action, prev_hash, entry_hash
+            FROM gab_register_access_log ORDER BY seq
+            """,
+            (),
+        )
+        return [_access_row(row) for row in rows]
+
+    def delete_access(self, access_id: str) -> None:
+        self._reject_mutation(
+            "gab_register_access_log",
+            "DELETE FROM gab_register_access_log WHERE access_id = %s",
+            (access_id,),
+        )
+
+    def revoke_credentials(self, at: str) -> dict[str, int]:
+        from kata_service.breach import expired_session_stamp
+
+        cutoff = expired_session_stamp(at)
+        self._ensure()
+        with self._connect() as conn:
+            with conn.transaction():
+                sessions = conn.execute(
+                    "UPDATE gab_sessions SET expires_at = %s WHERE expires_at > %s",
+                    (cutoff, at),
+                ).rowcount
+                magic = conn.execute(
+                    "UPDATE gab_magic_links SET used_at = %s WHERE used_at IS NULL",
+                    (at,),
+                ).rowcount
+                keys = conn.execute(
+                    "UPDATE gab_api_keys SET revoked_at = %s WHERE revoked_at IS NULL",
+                    (at,),
+                ).rowcount
+                passkeys = conn.execute("DELETE FROM gab_passkeys").rowcount
+        return {"sessions": sessions, "magic_links": magic, "api_keys": keys, "passkeys": passkeys}
+
+    def _reject_mutation(self, table: str, sql: str, params: tuple) -> None:
+        self._ensure()
+        with self._connect() as conn:
+            try:
+                with conn.transaction():
+                    conn.execute(sql, params)
+            except BureauError:
+                raise
+            except Exception as exc:
+                raise BureauError(409, f"{table} is append-only") from exc
+        raise BureauError(409, f"{table} is append-only")
+
     def delete_consent(self, event_id: str) -> None:
         self._ensure()
         with self._connect() as conn:
@@ -1950,4 +2067,28 @@ def _audit_loaded(row) -> dict[str, Any]:
         "environment": row[9],
         "prev_hash": row[10],
         "hash": row[11],
+    }
+
+
+def _breach_row(row) -> dict[str, Any]:
+    return {
+        "event_id": row[0],
+        "detected_at": row[1],
+        "data_types": json.loads(row[2]),
+        "scope_count": row[3],
+        "note_hash": row[4],
+        "prev_hash": row[5],
+        "entry_hash": row[6],
+        "retain_until": row[7],
+    }
+
+
+def _access_row(row) -> dict[str, Any]:
+    return {
+        "access_id": row[0],
+        "at": row[1],
+        "actor": row[2],
+        "action": row[3],
+        "prev_hash": row[4],
+        "entry_hash": row[5],
     }

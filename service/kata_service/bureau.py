@@ -315,10 +315,25 @@ class SmtpMailer:
     def __repr__(self) -> str:
         return f"SmtpMailer(host={self.host!r}, port={self.port}, user={self.user!r})"
 
+    def send_notice(self, email: str, text: str) -> None:
+        """Send a notice that contains types and a timestamp, not the underlying data."""
+
+        from email.message import EmailMessage
+
+        message = EmailMessage()
+        message["Subject"] = "GAB security notice"
+        message["From"] = self.from_addr
+        message["To"] = email
+        message.set_content(text)
+        self._send(message, "the notice could not be sent")
+
     def send_magic_link(self, email: str, url: str) -> None:
+        message = magic_link_message(email, url, self.from_addr, ttl_seconds=self.ttl_seconds)
+        self._send(message, "the sign-in link could not be sent")
+
+    def _send(self, message, failure: str) -> None:
         import smtplib
 
-        message = magic_link_message(email, url, self.from_addr, ttl_seconds=self.ttl_seconds)
         try:
             if self.port == 465:
                 with smtplib.SMTP_SSL(self.host, self.port, timeout=10) as smtp:
@@ -331,8 +346,10 @@ class SmtpMailer:
                 smtp.ehlo()
                 smtp.login(self.user, self._password)
                 smtp.send_message(message)
+        except BureauError:
+            raise
         except Exception as exc:
-            raise BureauError(503, "the sign-in link could not be sent") from exc
+            raise BureauError(503, failure) from exc
 
 
 def mailer_from_settings(settings: object) -> Mailer:
@@ -671,6 +688,8 @@ class MemoryRepo:
         self.deliveries: list[dict[str, Any]] = []
         self.disputes: list[dict[str, Any]] = []
         self.consent_events: list[dict[str, Any]] = []
+        self.breaches: list[dict[str, Any]] = []
+        self.register_access: list[dict[str, Any]] = []
         self.payloads: dict[str, dict[str, Any]] = {}
         self._lock = threading.Lock()
 
@@ -689,6 +708,7 @@ class MemoryRepo:
             "010_step_up.sql",
             "011_keyed_identifiers.sql",
             "012_consent_events.sql",
+            "013_breach_register.sql",
             "015_entity_kind.sql",
             "016_ledger_payloads.sql",
             "017_subject_deks.sql",
@@ -1458,6 +1478,62 @@ class MemoryRepo:
     def delete_consent(self, event_id: str) -> None:
         raise BureauError(409, "gab_consent_events is append-only")
 
+    def append_breach(self, fields: dict[str, Any]) -> dict[str, Any]:
+        from kata_service.breach import seal_breach
+
+        with self._lock:
+            prev = self.breaches[-1]["entry_hash"] if self.breaches else None
+            sealed = seal_breach(prev, fields)
+            self.breaches.append(sealed)
+            return dict(sealed)
+
+    def list_breach(self) -> list[dict[str, Any]]:
+        with self._lock:
+            return [dict(item) for item in self.breaches]
+
+    def delete_breach(self, event_id: str) -> None:
+        raise BureauError(409, "gab_breach_register is append-only")
+
+    def append_access(self, fields: dict[str, Any]) -> dict[str, Any]:
+        from kata_service.breach import seal_access
+
+        with self._lock:
+            prev = self.register_access[-1]["entry_hash"] if self.register_access else None
+            sealed = seal_access(prev, fields)
+            self.register_access.append(sealed)
+            return dict(sealed)
+
+    def list_access(self) -> list[dict[str, Any]]:
+        with self._lock:
+            return [dict(item) for item in self.register_access]
+
+    def delete_access(self, access_id: str) -> None:
+        raise BureauError(409, "gab_register_access_log is append-only")
+
+    def revoke_credentials(self, at: str) -> dict[str, int]:
+        from kata_service.breach import expired_session_stamp
+
+        cutoff = expired_session_stamp(at)
+        with self._lock:
+            sessions = 0
+            for item in self.sessions.values():
+                if item["expires_at"] > at:
+                    item["expires_at"] = cutoff
+                    sessions += 1
+            magic = 0
+            for item in self.magic.values():
+                if not item.get("used_at"):
+                    item["used_at"] = at
+                    magic += 1
+            keys = 0
+            for item in self.keys.values():
+                if not item.get("revoked_at"):
+                    item["revoked_at"] = at
+                    keys += 1
+            passkeys = len(self.passkeys)
+            self.passkeys.clear()
+        return {"sessions": sessions, "magic_links": magic, "api_keys": keys, "passkeys": passkeys}
+
     def put_payload(self, record: dict[str, Any]) -> None:
         with self._lock:
             self.payloads[record["payload_id"]] = dict(record)
@@ -1504,6 +1580,7 @@ class BureauService:
         entity_only: bool = False,
         network_step_up: bool = False,
         ledger_hygiene: bool = False,
+        breach_tools: bool = False,
     ) -> None:
         self.repo = repo
         self.deployment_env = deployment_env if deployment_env in {"production", "sandbox"} else "production"
@@ -1539,6 +1616,7 @@ class BureauService:
         self.entity_only = entity_only
         self.network_step_up = network_step_up
         self.ledger_hygiene = ledger_hygiene
+        self.breach_tools = breach_tools
         self._rate_purged_before: str | None = None
         if keyed_identifiers:
             from kata_service.identifiers import IdentifierMode
@@ -1596,6 +1674,85 @@ class BureauService:
                 test=sandbox,
             )
         raise BureauError(401, "credentials are required")
+
+    def record_breach(self, body: dict[str, Any]) -> dict[str, Any]:
+        self._require_breach_tools()
+        from kata_service.breach import BreachInputError
+
+        try:
+            return self.repo.append_breach(
+                {
+                    "event_id": _id("brc"),
+                    "detected_at": str(body.get("detected_at") or ""),
+                    "data_types": body.get("data_types"),
+                    "scope_count": body.get("scope_count"),
+                    "note_hash": body.get("note_hash"),
+                }
+            )
+        except BreachInputError as exc:
+            raise BureauError(400, str(exc)) from exc
+
+    def list_breaches(self) -> list[dict[str, Any]]:
+        self._require_breach_tools()
+        rows = self.repo.list_breach()
+        self._log_register_access("list")
+        return rows
+
+    def revoke_live_credentials(self) -> dict[str, int]:
+        self._require_breach_tools()
+        counts = self.repo.revoke_credentials(self.stamp())
+        self._log_register_access("revoke")
+        return counts
+
+    def notify_breach(self, body: dict[str, Any]) -> dict[str, Any]:
+        self._require_breach_tools()
+        from kata_service.breach import BreachInputError, notice_text
+
+        event_id = str(body.get("event_id") or "")
+        if event_id:
+            match = next((item for item in self.repo.list_breach() if item["event_id"] == event_id), None)
+            if match is None:
+                raise BureauError(404, "breach record was not found")
+            labels = list(match["data_types"])
+            detected_at = str(match["detected_at"])
+        else:
+            try:
+                from kata_service.breach import normalize_types
+
+                labels = normalize_types(body.get("data_types"))
+                detected_at = str(body.get("detected_at") or "")
+                if not detected_at:
+                    raise BreachInputError("detected_at must be a UTC timestamp")
+            except BreachInputError as exc:
+                raise BureauError(400, str(exc)) from exc
+        text = notice_text(labels, detected_at)
+        send = body.get("send") is True
+        sent = False
+        if send:
+            sender = getattr(self.mailer, "send_notice", None)
+            if sender is None:
+                raise BureauError(409, "mail transport is off")
+            recipient = str(body.get("to") or "").strip()
+            if not recipient:
+                raise BureauError(400, "to is required when send is true")
+            sender(recipient, text)
+            sent = True
+        self._log_register_access("notify")
+        return {"notice": text, "sent": sent}
+
+    def _require_breach_tools(self) -> None:
+        if not self.breach_tools:
+            raise BureauError(404, "breach tools are off")
+
+    def _log_register_access(self, action: str) -> None:
+        self.repo.append_access(
+            {
+                "access_id": _id("acc"),
+                "at": self.stamp(),
+                "actor": "admin",
+                "action": action,
+            }
+        )
 
     def record_consent(self, auth: Auth, body: dict[str, Any]) -> dict[str, Any]:
         if not self.consent_events_enabled:
