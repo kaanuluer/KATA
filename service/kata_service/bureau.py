@@ -1581,6 +1581,7 @@ class BureauService:
         network_step_up: bool = False,
         ledger_hygiene: bool = False,
         breach_tools: bool = False,
+        passkey_enrollment: bool = False,
     ) -> None:
         self.repo = repo
         self.deployment_env = deployment_env if deployment_env in {"production", "sandbox"} else "production"
@@ -1617,6 +1618,7 @@ class BureauService:
         self.network_step_up = network_step_up
         self.ledger_hygiene = ledger_hygiene
         self.breach_tools = breach_tools
+        self.passkey_enrollment = passkey_enrollment
         self._rate_purged_before: str | None = None
         if keyed_identifiers:
             from kata_service.identifiers import IdentifierMode

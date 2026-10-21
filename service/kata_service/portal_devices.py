@@ -89,7 +89,8 @@ def queue_step_up(service, agent: dict[str, Any], action: dict[str, Any] | None)
 def registration_challenge(service, auth, origin: str) -> dict[str, Any]:
     service._portal(auth)
     exclude = [decode_key(item["credential_id"]) for item in service.repo.list_passkeys(auth.principal_id or "")]
-    challenge, options = registration_options(origin, auth.principal_id or "", exclude)
+    enrollment = _passkey_enrollment(service)
+    challenge, options = registration_options(origin, auth.principal_id or "", exclude, enrollment=enrollment)
     _store_challenge(service, auth.principal_id, "register", challenge, origin)
     return options
 
@@ -100,7 +101,12 @@ def register_device(service, auth, body: dict[str, Any], origin: str) -> dict[st
     if not isinstance(credential, dict):
         raise BureauError(400, "credential is required")
     stored = _consume_challenge(service, auth.principal_id, "register", origin, credential)
-    verified = verify_registration(origin, challenge_bytes(stored["challenge"]), credential)
+    verified = verify_registration(
+        origin,
+        challenge_bytes(stored["challenge"]),
+        credential,
+        require_user_verification=not _passkey_enrollment(service),
+    )
     record = {
         "credential_id": encode_key(verified.credential_id),
         "principal_id": auth.principal_id,
@@ -115,7 +121,8 @@ def register_device(service, auth, body: dict[str, Any], origin: str) -> dict[st
 
 
 def authentication_challenge(service, origin: str) -> dict[str, Any]:
-    challenge, options = authentication_options(origin, [])
+    enrollment = _passkey_enrollment(service)
+    challenge, options = authentication_options(origin, [], discoverable=enrollment, strip_hints=enrollment)
     _store_challenge(service, None, "authenticate", challenge, origin)
     return options
 
@@ -133,6 +140,7 @@ def authenticate_device(service, credential: dict[str, Any], origin: str) -> dic
         credential,
         decode_key(record["public_key"]),
         int(record["sign_count"]),
+        require_user_verification=not _passkey_enrollment(service),
     )
     service.repo.update_passkey_use(record["credential_id"], int(verified.new_sign_count), service.stamp())
     session = service._session("portal", record["principal_id"])
@@ -144,7 +152,8 @@ def assertion_challenge(service, auth, origin: str) -> dict[str, Any]:
     allow = [decode_key(item["credential_id"]) for item in service.repo.list_passkeys(auth.principal_id or "")]
     if not allow:
         raise BureauError(401, "a registered device is required")
-    challenge, options = authentication_options(origin, allow)
+    enrollment = _passkey_enrollment(service)
+    challenge, options = authentication_options(origin, allow, strip_hints=enrollment)
     _store_challenge(service, auth.principal_id, "assert", challenge, origin)
     return options
 
@@ -273,6 +282,10 @@ def decide_approval(service, auth, approval_id: str, decision: str, assertion: d
     return {"approval_id": approval_id, "status": decision}
 
 
+def _passkey_enrollment(service) -> bool:
+    return bool(getattr(service, "passkey_enrollment", False))
+
+
 def _require_flag(service) -> None:
     if not service.step_up_approval:
         raise BureauError(404, "step-up approval is off")
@@ -311,8 +324,8 @@ def _consume_challenge(service, principal_id: str | None, kind: str, origin: str
 
         client_data = json.loads(base64url_to_bytes(raw["clientDataJSON"]))
         challenge = str(client_data.get("challenge") or "")
-    except Exception as exc:
-        raise BureauError(401, "passkey challenge is not valid") from exc
+    except Exception:
+        raise BureauError(401, "passkey challenge is not valid") from None
     stored = service.repo.take_challenge(kind, challenge, principal_id, origin, service.stamp())
     if stored is None:
         raise BureauError(401, "passkey challenge is not valid")

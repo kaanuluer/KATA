@@ -5,15 +5,17 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 import pytest
 
 from kata_intent.values import hash_document
 from kata_service.bureau import BureauError
-from kata_service.passkeys import PUSH_TEXT, deliver_web_push
+from kata_service.passkeys import CHALLENGE_TTL_SECONDS, PUSH_TEXT, deliver_web_push
 from kata_service.settings import settings_from_env
 
-from soft_passkey import assertion_for, bind_device, origin_of
+from soft_passkey import SoftPasskey, assertion_for, bind_device, origin_of
 from test_bureau import _action, _agreement, _auth, _client, _key, _org, _register
 
 
@@ -104,6 +106,196 @@ def test_passkey_sign_in_lists_and_removes_a_device_and_keeps_the_email_link():
     link = client.post("/v1/sessions", json={"token": client.app.state.bureau.dev_mailbox[-1]["token"]})
     assert link.status_code == 200
     assert link.json()["principal_id"] == "prn_owner"
+
+
+def test_passkey_enrollment_defaults_off():
+    assert settings_from_env({}).passkey_enrollment is False
+    assert settings_from_env({"GAB_PASSKEY_ENROLLMENT": "0"}).passkey_enrollment is False
+    assert settings_from_env({"GAB_PASSKEY_ENROLLMENT": "1"}).passkey_enrollment is True
+    client = _portal_client()
+    assert client.app.state.bureau.passkey_enrollment is False
+    portal = client.get("/portal")
+    assert 'id="portal-account"' not in portal.text
+    assert "Create a passkey on this device" not in portal.text
+    assert "No passkey was found for this device" not in portal.text
+    assert "Sign in with a passkey" in portal.text
+    assert "Register this device" in portal.text
+    assert 'data-passkey-enrollment="on"' not in portal.text
+    assert 'autocomplete="username"' in portal.text
+    assert "username webauthn" not in portal.text
+    script = client.get("/assets/portal.js").text
+    assert "function enrollmentOn()" in script
+    assert 'data-passkey-enrollment' in script
+    token = _portal_token(client)
+    options = client.post("/v1/portal/passkeys/register/options", headers=_auth(token))
+    assert options.status_code == 200, options.text
+    selection = options.json()["authenticatorSelection"]
+    assert "authenticatorAttachment" not in selection
+    assert selection["userVerification"] == "required"
+    sign_in = client.post("/v1/portal/passkeys/authenticate/options")
+    assert sign_in.json()["userVerification"] == "required"
+    origin = origin_of(client)
+    soft = SoftPasskey()
+    saved = client.post(
+        "/v1/portal/passkeys",
+        headers=_auth(token),
+        json={"label": "Mac", "credential": soft.registration(options.json(), origin, verified=False)},
+    )
+    assert saved.status_code == 401
+    assert saved.json() == {"error": "passkey is not valid"}
+
+
+def test_portal_offers_passkey_enrollment_without_naming_an_account():
+    client = _client(passkey_enrollment=True)
+    portal = client.get("/portal")
+    assert portal.status_code == 200
+    assert 'data-passkey-enrollment="on"' in portal.text
+    assert 'id="portal-account"' in portal.text
+    assert "Create a passkey on this device" in portal.text
+    assert "Email me a sign-in link" in portal.text
+    assert "No passkey was found for this device" in portal.text
+    assert 'autocomplete="username webauthn"' in portal.text
+    assert "Sign in with passkey" in portal.text
+    script = client.get("/assets/portal.js").text
+    assert "passkeyHintsSupported" in script
+    assert "parseRequestOptionsFromJSON" in script
+    assert 'if (passkeyHintsSupported()) next.hints = ["client-device"]' in script
+    assert 'mediation: "conditional"' in script
+    assert "isConditionalMediationAvailable" in script
+    assert "delete next.hints" in script
+    assert '"hybrid"' not in script
+    assert "cross-platform" not in script
+    assert "console.log" not in script
+    assert "owner@example.com" not in script
+    css = client.get("/assets/app.css").text
+    assert "passkey-miss" in css
+
+
+def test_registration_requires_a_session_and_prefers_this_device():
+    client = _portal_client(passkey_enrollment=True)
+    origin = origin_of(client)
+    host = urlparse(origin).hostname
+    anon = client.post("/v1/portal/passkeys/register/options")
+    assert anon.status_code == 401
+    assert anon.json()["error"] == "credentials are required"
+    assert "owner@example.com" not in anon.text
+    refused = client.post("/v1/portal/passkeys/register/options", headers=_auth(client.operator_key))
+    assert refused.status_code == 401
+    assert refused.json()["error"] == "portal session is required"
+    assert list(refused.json()) == ["error"]
+    bare = client.post("/v1/portal/passkeys", json={"label": "Mac", "credential": {"id": "not-a-passkey"}})
+    assert bare.status_code == 401
+    assert "public_key" not in bare.text
+    token = _portal_token(client)
+    options = client.post("/v1/portal/passkeys/register/options", headers=_auth(token))
+    assert options.status_code == 200, options.text
+    body = options.json()
+    assert body["rp"]["id"] == host
+    assert body["rp"]["id"] != "globalagentbureau.com"
+    selection = body["authenticatorSelection"]
+    assert selection["authenticatorAttachment"] == "platform"
+    assert selection["residentKey"] == "required"
+    assert selection["requireResidentKey"] is True
+    assert selection["userVerification"] == "preferred"
+    assert "hints" not in body
+    assert "allowCredentials" not in body
+    assert "@" not in options.text
+    assert "challenge" in body
+    stored = _challenges(client, "register")
+    assert stored
+    remaining = _seconds_until(stored[-1]["expires_at"])
+    assert CHALLENGE_TTL_SECONDS - 30 < remaining <= CHALLENGE_TTL_SECONDS
+    sign_in = client.post("/v1/portal/passkeys/authenticate/options")
+    discovered = sign_in.json()
+    assert discovered["rpId"] == host
+    assert "allowCredentials" not in discovered
+    assert discovered["userVerification"] == "preferred"
+    assert "hints" not in discovered
+    assert "@" not in sign_in.text
+
+
+def test_sign_in_stays_discoverable_and_failures_do_not_identify_an_account():
+    client = _portal_client(passkey_enrollment=True)
+    token = _portal_token(client)
+    soft = bind_device(client, token, "Mac")
+    listed = client.get("/v1/portal/devices", headers=_auth(token))
+    credential_id = listed.json()["devices"][0]["credential_id"]
+    options = client.post("/v1/portal/passkeys/authenticate/options")
+    assert options.status_code == 200
+    assert "allowCredentials" not in options.json()
+    assert credential_id not in options.text
+    assert "owner@example.com" not in options.text
+    assert "public_key" not in options.text
+    proof = soft.authentication(options.json(), origin_of(client))
+    unknown = dict(proof)
+    unknown["id"] = "AAAA"
+    unknown["rawId"] = "AAAA"
+    missing = client.post("/v1/portal/passkeys/authenticate", json={"credential": unknown})
+    assert missing.status_code == 401
+    assert missing.json() == {"error": "passkey is not valid"}
+    assert "AAAA" not in missing.text
+    assert "owner@" not in missing.text
+    assert options.json()["challenge"] not in missing.text
+    signed = client.post("/v1/portal/passkeys/authenticate", json={"credential": proof})
+    assert signed.status_code == 200, signed.text
+    replay = client.post("/v1/portal/passkeys/authenticate", json={"credential": proof})
+    assert replay.status_code == 401
+    assert replay.json() == {"error": "passkey challenge is not valid"}
+    assert "owner@" not in replay.text
+    assert proof["response"]["signature"] not in replay.text
+    fresh = client.post("/v1/portal/passkeys/authenticate/options")
+    challenge = fresh.json()["challenge"]
+    expired_proof = soft.authentication(fresh.json(), origin_of(client))
+    for item in _challenges(client, "authenticate"):
+        if item["challenge"] == challenge and not item.get("used_at"):
+            item["expires_at"] = "2000-01-01T00:00:00Z"
+    expired = client.post("/v1/portal/passkeys/authenticate", json={"credential": expired_proof})
+    assert expired.status_code == 401
+    assert expired.json() == {"error": "passkey challenge is not valid"}
+    assert challenge not in expired.text
+    step = client.post("/v1/portal/passkeys/assert/options", headers=_auth(token))
+    assert step.status_code == 200, step.text
+    assert step.json()["allowCredentials"]
+    assert step.json()["userVerification"] == "required"
+    assert step.json()["rpId"] == urlparse(origin_of(client)).hostname
+    assert "hints" not in step.json()
+
+
+def test_preferred_verification_accepts_enrollment_and_step_up_still_requires_it():
+    client = _portal_client(passkey_enrollment=True)
+    token = _portal_token(client)
+    origin = origin_of(client)
+    options = client.post("/v1/portal/passkeys/register/options", headers=_auth(token))
+    soft = SoftPasskey()
+    saved = client.post(
+        "/v1/portal/passkeys",
+        headers=_auth(token),
+        json={"label": "Mac", "credential": soft.registration(options.json(), origin, verified=False)},
+    )
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["label"] == "Mac"
+    assert "public_key" not in saved.text
+    sign_in = client.post("/v1/portal/passkeys/authenticate/options")
+    opened = client.post(
+        "/v1/portal/passkeys/authenticate",
+        json={"credential": soft.authentication(sign_in.json(), origin, verified=False)},
+    )
+    assert opened.status_code == 200, opened.text
+    weak = client.post("/v1/portal/passkeys/assert/options", headers=_auth(token))
+    refused = client.post(
+        f"/v1/portal/devices/{saved.json()['credential_id']}/remove",
+        headers=_auth(token),
+        json={"assertion": soft.authentication(weak.json(), origin, verified=False)},
+    )
+    assert refused.status_code == 401
+    assert refused.json() == {"error": "passkey is not valid"}
+    assert "owner@" not in refused.text
+    removed = client.post(
+        f"/v1/portal/devices/{saved.json()['credential_id']}/remove",
+        headers=_auth(token),
+        json={"assertion": assertion_for(client, token, soft)},
+    )
+    assert removed.status_code == 200, removed.text
 
 
 def test_push_needs_consent_and_step_up_stays_off_by_default():
@@ -203,6 +395,16 @@ def test_step_up_approval_is_single_use_short_lived_and_generic():
         json={"report_id": "rpt_missing", "statement": "No.", "assertion": assertion_for(client, token, soft)},
     )
     assert dispute.status_code == 404
+
+
+def _challenges(client, kind: str) -> list[dict]:
+    rows = [item for item in client.app.state.bureau.repo.challenges.values() if item["kind"] == kind]
+    return sorted(rows, key=lambda item: item["expires_at"])
+
+
+def _seconds_until(stamp: str) -> float:
+    expiry = datetime.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    return (expiry - datetime.now(timezone.utc)).total_seconds()
 
 
 def _portal_client(**overrides):

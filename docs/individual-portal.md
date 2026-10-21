@@ -21,6 +21,20 @@ These four rules bind this portal and any approval notice built on it.
 
 Passkey registration implements rule 3. The approval note implements rules 1, 2, and 4, and approve and reject use the same passkey check.
 
+## Passkey enrollment
+
+`GAB_PASSKEY_ENROLLMENT` defaults off. With it off, registration still requires user verification and does not set a platform attachment, sign-in still requires user verification, and the portal keeps the existing device copy. The behavior below is used only when the host sets the flag.
+
+A passkey is created only while the individual is signed in. The email link is that sign-in. Account then offers **Create a passkey on this device**, lists the passkeys on the principal, and removes one only when the individual asks. Removal still requires a fresh assertion.
+
+Sign-in does not say whether an email or an account exists. If the browser has no passkey for this device, or the ceremony is cancelled or not allowed, the page says that no passkey was found for this device and offers **Email me a sign-in link**. After that link signs them in, Account offers the passkey again.
+
+The relying party id is the hostname of the origin. It is not rewritten to a fixed domain, so a passkey already registered on this host still matches. A preview host and the production host remain different passkey scopes.
+
+Registration sets `authenticatorAttachment` to `platform`, `residentKey` to `required`, and `userVerification` to `preferred`. `required` keeps the passkey discoverable, which sign-in needs because the allow list is empty. `preferred` still asks for Touch ID when the Mac has it, and it still accepts a Mac that returns the user-verification flag false. Sign-in omits `allowCredentials`. When the browser supports conditional UI, the page starts that ceremony on the email field. The `client-device` hint is added only when the browser keeps the hint on a parsed request. Step-up assertions still name the registered credentials and still require user verification.
+
+The browser chooses the dialog. Platform attachment and a client-device hint cannot force Touch ID, and they cannot remove a phone or QR choice the browser still decides to show.
+
 ## Effort
 
 The change is additive.

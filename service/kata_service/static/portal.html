@@ -2,7 +2,7 @@
 <section class="hero">
   <p class="kicker">Individuals</p>
   <h1>Your agents</h1>
-  <p class="lede">Sign in with a passkey on this device, or with the email bound to your pseudonymous principal id. You can see your agents, their assurance level, their authorizations, who inquired about them, and the incidents filed against them. You can revoke an agent or an intent, and you can dispute an incident. Revoke and dispute ask for the passkey again.</p>
+  <p class="lede">Sign in with a passkey on this device, or with the email bound to your pseudonymous principal id. After the email link signs you in, create a passkey on this device from Account. You can see your agents, their assurance level, their authorizations, who inquired about them, and the incidents filed against them. You can revoke an agent or an intent, and you can dispute an incident. Revoke and dispute ask for the passkey again.</p>
 </section>
 
 <section class="panel" id="portal-stored">
@@ -19,14 +19,15 @@
 
 <form id="portal-login" class="panel">
   <div class="actions">
-    <button type="button" id="portal-passkey">Sign in with a passkey</button>
+    <button type="button" id="portal-passkey">Sign in with passkey</button>
     <button type="button" class="ghost" id="portal-install" hidden>Add to home screen</button>
   </div>
   <p class="meta" id="portal-ios">On iPhone, use Share, then Add to Home Screen.</p>
+  <p id="portal-passkey-miss" class="passkey-miss" hidden>No passkey was found for this device. Email me a sign-in link. After you sign in, create a passkey on this device.</p>
   <label for="portal-email">Email</label>
-  <input id="portal-email" type="email" value="principal@example.com" autocomplete="username" required>
+  <input id="portal-email" type="email" value="principal@example.com" autocomplete="username webauthn" required>
   <div class="actions">
-    <button type="submit">Email a sign-in link</button>
+    <button type="submit" id="portal-email-link">Email me a sign-in link</button>
     <button class="ghost" id="portal-mailbox" type="button">Open the development mailbox</button>
   </div>
   <p id="portal-status" class="meta" role="status"></p>
@@ -37,12 +38,13 @@
     <p id="portal-who" class="meta"></p>
     <button id="portal-out" class="ghost" type="button">Sign out</button>
   </div>
-  <section class="panel">
-    <h2>This device</h2>
+  <section class="panel" id="portal-account">
+    <h2>Account</h2>
+    <p id="portal-passkey-offer">Create a passkey on this device to sign in here next time.</p>
     <form id="device-form">
-      <label for="device-label">Device label</label>
-      <input id="device-label" value="This phone" maxlength="80" required>
-      <button type="submit">Register this device</button>
+      <label for="device-label">Name for this passkey</label>
+      <input id="device-label" value="This device" maxlength="80" required>
+      <button type="submit" id="portal-create-passkey">Create a passkey on this device</button>
     </form>
     <div id="portal-devices"></div>
     <form id="push-form">
