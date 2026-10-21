@@ -5,14 +5,16 @@
 The push sender accepts one sentence. Merchant, amount, and agent name never
 enter that sentence.
 
-Registration prefers the platform authenticator on this device: Touch ID or
-iCloud Keychain on a Mac, Windows Hello, or the phone's own authenticator.
-The resident key is required so the passkey can be used with an empty allow
-list. User verification is preferred, so a Mac without Touch ID can still
-enroll. Sign-in uses that discoverable credential and does not send an allow
-list. The relying party id stays the hostname, so a passkey already registered
-on this host still matches. Browser UI is not guaranteed; the portal script
-adds a client-device hint only when that browser accepts hints.
+``GAB_PASSKEY_ENROLLMENT`` defaults off. When it is on, registration prefers
+the platform authenticator on this device: Touch ID or iCloud Keychain on a
+Mac, Windows Hello, or the phone's own authenticator. The resident key is
+required so the passkey can be used with an empty allow list. User verification
+is preferred, so a Mac without Touch ID can still enroll. Sign-in uses that
+discoverable credential and does not send an allow list. With the flag off,
+registration and sign-in still require user verification. The relying party id
+stays the hostname, so a passkey already registered on this host still matches.
+Browser UI is not guaranteed; the portal script adds a client-device hint only
+when that browser accepts hints and the flag is on.
 """
 
 from __future__ import annotations
@@ -61,40 +63,50 @@ def relying_party(origin: str) -> str:
     return host
 
 
-def registration_options(origin: str, principal_id: str, exclude: list[bytes]) -> tuple[bytes, dict[str, Any]]:
-    """Options for a passkey on this device.
+def registration_options(
+    origin: str, principal_id: str, exclude: list[bytes], *, enrollment: bool = False
+) -> tuple[bytes, dict[str, Any]]:
+    """Options for registering a passkey.
 
-    Hints are left off the payload. The portal adds ``client-device`` only
-    after the browser shows that it keeps that member.
+    Enrollment asks for the platform authenticator and preferred user
+    verification, and leaves hints off the payload. The portal adds
+    ``client-device`` only after the browser shows that it keeps that member.
+    The default keeps required user verification and does not set an attachment.
     """
 
+    selection = AuthenticatorSelectionCriteria(
+        resident_key=ResidentKeyRequirement.REQUIRED,
+        user_verification=(
+            UserVerificationRequirement.PREFERRED if enrollment else UserVerificationRequirement.REQUIRED
+        ),
+    )
+    if enrollment:
+        selection.authenticator_attachment = AuthenticatorAttachment.PLATFORM
     options = generate_registration_options(
         rp_id=relying_party(origin),
         rp_name="Global Agent Bureau",
         user_name=principal_id,
         user_id=principal_id.encode("utf-8"),
         user_display_name="Individual",
-        authenticator_selection=AuthenticatorSelectionCriteria(
-            authenticator_attachment=AuthenticatorAttachment.PLATFORM,
-            resident_key=ResidentKeyRequirement.REQUIRED,
-            user_verification=UserVerificationRequirement.PREFERRED,
-        ),
+        authenticator_selection=selection,
         exclude_credentials=[PublicKeyCredentialDescriptor(id=item) for item in exclude],
     )
     payload = json.loads(options_to_json(options))
-    payload.pop("hints", None)
+    if enrollment:
+        payload.pop("hints", None)
     return options.challenge, payload
 
 
 def authentication_options(
-    origin: str, allow: list[bytes], *, discoverable: bool = False
+    origin: str, allow: list[bytes], *, discoverable: bool = False, strip_hints: bool = False
 ) -> tuple[bytes, dict[str, Any]]:
     """Options for a sign-in or a step-up assertion.
 
     Discoverable sign-in omits ``allowCredentials`` so the browser can offer a
-    passkey stored on this device. A step-up check still names the credentials
-    already registered to the signed-in principal, and it still asks for
-    user verification.
+    passkey stored on this device, and it asks for preferred user verification.
+    A step-up check still names the credentials already registered to the
+    signed-in principal, and it still asks for user verification. Hints are
+    removed only when enrollment asked for that.
     """
 
     if discoverable:
@@ -107,20 +119,23 @@ def authentication_options(
         user_verification=verification,
     )
     payload = json.loads(options_to_json(options))
-    if discoverable or not payload.get("allowCredentials"):
+    if discoverable:
         payload.pop("allowCredentials", None)
-    payload.pop("hints", None)
+    if discoverable or strip_hints:
+        payload.pop("hints", None)
     return options.challenge, payload
 
 
-def verify_registration(origin: str, challenge: bytes, credential: dict[str, Any]):
+def verify_registration(
+    origin: str, challenge: bytes, credential: dict[str, Any], *, require_user_verification: bool = True
+):
     try:
         return verify_registration_response(
             credential=credential,
             expected_challenge=challenge,
             expected_rp_id=relying_party(origin),
             expected_origin=origin,
-            require_user_verification=False,
+            require_user_verification=require_user_verification,
         )
     except (WebAuthnException, ValueError, KeyError):
         raise BureauError(401, "passkey is not valid") from None

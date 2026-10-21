@@ -157,8 +157,62 @@ def dashboard_page() -> str:
     )
 
 
-def portal_page() -> str:
+_ENROLLMENT_MARKUP = (
+    (
+        '<p class="lede">Sign in with a passkey on this device, or with the email bound to your pseudonymous principal id. After the email link signs you in, create a passkey on this device from Account. You can see your agents, their assurance level, their authorizations, who inquired about them, and the incidents filed against them. You can revoke an agent or an intent, and you can dispute an incident. Revoke and dispute ask for the passkey again.</p>',
+        '<p class="lede">Sign in with a passkey on this device, or with the email bound to your pseudonymous principal id. You can see your agents, their assurance level, their authorizations, who inquired about them, and the incidents filed against them. You can revoke an agent or an intent, and you can dispute an incident. Revoke and dispute ask for the passkey again.</p>',
+    ),
+    (
+        '<button type="button" id="portal-passkey">Sign in with passkey</button>',
+        '<button type="button" id="portal-passkey">Sign in with a passkey</button>',
+    ),
+    (
+        '  <p id="portal-passkey-miss" class="passkey-miss" hidden>No passkey was found for this device. Email me a sign-in link. After you sign in, create a passkey on this device.</p>\n',
+        "",
+    ),
+    ('autocomplete="username webauthn"', 'autocomplete="username"'),
+    (
+        '<button type="submit" id="portal-email-link">Email me a sign-in link</button>',
+        '<button type="submit">Email a sign-in link</button>',
+    ),
+    (
+        '  <section class="panel" id="portal-account">\n'
+        "    <h2>Account</h2>\n"
+        '    <p id="portal-passkey-offer">Create a passkey on this device to sign in here next time.</p>\n'
+        '    <form id="device-form">\n'
+        '      <label for="device-label">Name for this passkey</label>\n'
+        '      <input id="device-label" value="This device" maxlength="80" required>\n'
+        '      <button type="submit" id="portal-create-passkey">Create a passkey on this device</button>',
+        '  <section class="panel">\n'
+        "    <h2>This device</h2>\n"
+        '    <form id="device-form">\n'
+        '      <label for="device-label">Device label</label>\n'
+        '      <input id="device-label" value="This phone" maxlength="80" required>\n'
+        '      <button type="submit">Register this device</button>',
+    ),
+)
+
+
+def _portal_without_enrollment(fragment: str) -> str:
+    """Serve the portal copy from before enrollment. The flag defaults off."""
+
+    for current, previous in _ENROLLMENT_MARKUP:
+        if current not in fragment:
+            raise RuntimeError("portal enrollment markup is missing")
+        fragment = fragment.replace(current, previous, 1)
+    return fragment
+
+
+def portal_page(passkey_enrollment: bool = False) -> str:
     fragment = (static_dir() / "portal.html").read_text(encoding="utf-8")
+    if passkey_enrollment:
+        fragment = fragment.replace(
+            '<div class="portal-home">',
+            '<div class="portal-home" data-passkey-enrollment="on">',
+            1,
+        )
+    else:
+        fragment = _portal_without_enrollment(fragment)
     return shell(
         "Portal — Global Agent Bureau",
         "Individual portal for the Global Agent Bureau.",
@@ -985,7 +1039,7 @@ _ENDPOINTS: tuple[dict[str, str], ...] = (
     {
         "method": "POST",
         "path": "/v1/portal/passkeys/authenticate",
-        "summary": "Exchanges a passkey assertion for a portal session. The ceremony is discoverable: the options name no credential. The email link remains available at POST /v1/portal/magic-link. A failure uses the same message whether or not an account exists. Registration stays on the signed-in session.",
+        "summary": "Exchanges a passkey assertion for a portal session. The email link remains available at POST /v1/portal/magic-link. GAB_PASSKEY_ENROLLMENT defaults off. When it is set, the ceremony is discoverable: the options name no credential, user verification is preferred, and registration asks for a platform authenticator. A failure uses the same message whether or not an account exists. Registration stays on the signed-in session.",
         "request": '{\n  "credential": {"id": "…", "type": "public-key", "response": {}}\n}',
         "response": '{\n  "token": "gab_sess_…",\n  "kind": "portal",\n  "principal_id": "prn_…"\n}',
         "errors": "401 when the passkey or the challenge is not valid.",

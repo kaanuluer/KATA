@@ -93,8 +93,9 @@ def create_app(
         return HTMLResponse(dashboard_page())
 
     @app.get("/portal")
-    def portal():
-        return HTMLResponse(portal_page())
+    def portal(request: Request):
+        enabled = bool(getattr(request.app.state.settings, "passkey_enrollment", False))
+        return HTMLResponse(portal_page(passkey_enrollment=enabled))
 
     @app.get("/health")
     def health():
@@ -625,6 +626,7 @@ def ensure_bureau(app: FastAPI):
             network_step_up=settings.network_step_up,
             ledger_hygiene=settings.ledger_hygiene,
             breach_tools=settings.breach_tools,
+            passkey_enrollment=settings.passkey_enrollment,
         )
         if settings.demo:
             from kata_service.seed import seed_demo
@@ -675,6 +677,7 @@ def ensure_bureau(app: FastAPI):
         network_step_up=settings.network_step_up,
         ledger_hygiene=settings.ledger_hygiene,
         breach_tools=settings.breach_tools,
+        passkey_enrollment=settings.passkey_enrollment,
     )
     _bind_subject_keys(service, settings, repo._connect)
     _ensure_ledger_store(service, settings)

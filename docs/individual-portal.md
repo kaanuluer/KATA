@@ -23,6 +23,8 @@ Passkey registration implements rule 3. The approval note implements rules 1, 2,
 
 ## Passkey enrollment
 
+`GAB_PASSKEY_ENROLLMENT` defaults off. With it off, registration still requires user verification and does not set a platform attachment, sign-in still requires user verification, and the portal keeps the existing device copy. The behavior below is used only when the host sets the flag.
+
 A passkey is created only while the individual is signed in. The email link is that sign-in. Account then offers **Create a passkey on this device**, lists the passkeys on the principal, and removes one only when the individual asks. Removal still requires a fresh assertion.
 
 Sign-in does not say whether an email or an account exists. If the browser has no passkey for this device, or the ceremony is cancelled or not allowed, the page says that no passkey was found for this device and offers **Email me a sign-in link**. After that link signs them in, Account offers the passkey again.

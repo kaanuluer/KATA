@@ -3,6 +3,11 @@
   const $ = (id) => document.getElementById(id);
   let installEvent = null;
 
+  function enrollmentOn() {
+    const root = document.querySelector(".portal-home");
+    return !!(root && root.getAttribute("data-passkey-enrollment") === "on");
+  }
+
   function setStatus(text) {
     $("portal-status").textContent = text;
   }
@@ -61,6 +66,14 @@
     next.challenge = base64urlToBytes(options.challenge);
     if (options.user) {
       next.user = Object.assign({}, options.user, { id: base64urlToBytes(options.user.id) });
+    }
+    if (!enrollmentOn()) {
+      const list = options.excludeCredentials || options.allowCredentials;
+      const key = options.excludeCredentials ? "excludeCredentials" : "allowCredentials";
+      if (list) {
+        next[key] = list.map((item) => Object.assign({}, item, { id: base64urlToBytes(item.id) }));
+      }
+      return next;
     }
     ["excludeCredentials", "allowCredentials"].forEach((key) => {
       const list = options[key];
@@ -180,6 +193,7 @@
   }
 
   async function startConditional() {
+    if (!enrollmentOn()) return;
     if (sessionStorage.getItem(tokenKey)) return;
     stopConditional();
     conditionalAbort = new AbortController();
@@ -219,21 +233,25 @@
     const deviceBox = $("portal-devices");
     deviceBox.innerHTML = "";
     const offer = $("portal-passkey-offer");
-    if (!devices.devices.length) {
-      deviceBox.append(line("No passkey is registered yet."));
-      if (offer) offer.textContent = "No passkey is registered yet. Create a passkey on this device.";
-    } else if (offer) {
-      offer.textContent = "Passkeys on this account. Create another on this device, or remove one.";
+    if (enrollmentOn()) {
+      if (!devices.devices.length) {
+        deviceBox.append(line("No passkey is registered yet."));
+        if (offer) offer.textContent = "No passkey is registered yet. Create a passkey on this device.";
+      } else if (offer) {
+        offer.textContent = "Passkeys on this account. Create another on this device, or remove one.";
+      }
+    } else if (!devices.devices.length) {
+      deviceBox.append(line("No device is registered yet."));
     }
     devices.devices.forEach((item) => {
       const row = document.createElement("div");
       row.className = "device";
       const used = item.last_used_at ? " · last used " + item.last_used_at : "";
-      row.append(line(item.label + " · added " + item.created_at + used));
+      row.append(line(enrollmentOn() ? item.label + " · added " + item.created_at + used : item.label + " · " + item.created_at));
       const button = document.createElement("button");
       button.type = "button";
       button.className = "ghost";
-      button.textContent = "Remove passkey";
+      button.textContent = enrollmentOn() ? "Remove passkey" : "Remove device";
       button.addEventListener("click", async () => {
         const proof = await assertion();
         await api("/v1/portal/devices/" + encodeURIComponent(item.credential_id) + "/remove", {
@@ -363,7 +381,7 @@
       });
       agentBox.append(card);
     }
-    if (!devices.devices.length) {
+    if (enrollmentOn() && !devices.devices.length) {
       const create = $("portal-create-passkey");
       const account = $("portal-account");
       if (account && account.scrollIntoView) account.scrollIntoView();
@@ -401,6 +419,26 @@
   });
 
   $("portal-passkey").addEventListener("click", async () => {
+    if (!enrollmentOn()) {
+      try {
+        const options = await api("/v1/portal/passkeys/authenticate/options", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+        const credential = await navigator.credentials.get({ publicKey: publicKeyOptions(options) });
+        const session = await api("/v1/portal/passkeys/authenticate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ credential: credentialJSON(credential) }),
+        });
+        sessionStorage.setItem(tokenKey, session.token);
+        await load();
+        setStatus("");
+      } catch (error) {
+        setStatus(error.message);
+      }
+      return;
+    }
     stopConditional();
     try {
       if (!window.PublicKeyCredential || !navigator.credentials) {
@@ -450,8 +488,9 @@
     event.preventDefault();
     try {
       const options = await api("/v1/portal/passkeys/register/options", { method: "POST", headers: headers() });
-      const credential = await navigator.credentials.create({ publicKey: ceremonyOptions(options) });
-      if (!credential) {
+      const prepared = enrollmentOn() ? ceremonyOptions(options) : publicKeyOptions(options);
+      const credential = await navigator.credentials.create({ publicKey: prepared });
+      if (enrollmentOn() && !credential) {
         setStatus("The passkey was not created.");
         return;
       }
@@ -461,8 +500,12 @@
         body: JSON.stringify({ label: $("device-label").value.trim(), credential: credentialJSON(credential) }),
       });
       await load();
-      setStatus("Passkey saved on this account.");
+      if (enrollmentOn()) setStatus("Passkey saved on this account.");
     } catch (error) {
+      if (!enrollmentOn()) {
+        setStatus(error.message);
+        return;
+      }
       const name = error && error.name;
       if (name === "NotAllowedError" || name === "AbortError") {
         setStatus("Passkey creation was cancelled. You can create a passkey on this device when you are ready.");

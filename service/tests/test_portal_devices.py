@@ -108,10 +108,48 @@ def test_passkey_sign_in_lists_and_removes_a_device_and_keeps_the_email_link():
     assert link.json()["principal_id"] == "prn_owner"
 
 
+def test_passkey_enrollment_defaults_off():
+    assert settings_from_env({}).passkey_enrollment is False
+    assert settings_from_env({"GAB_PASSKEY_ENROLLMENT": "0"}).passkey_enrollment is False
+    assert settings_from_env({"GAB_PASSKEY_ENROLLMENT": "1"}).passkey_enrollment is True
+    client = _portal_client()
+    assert client.app.state.bureau.passkey_enrollment is False
+    portal = client.get("/portal")
+    assert 'id="portal-account"' not in portal.text
+    assert "Create a passkey on this device" not in portal.text
+    assert "No passkey was found for this device" not in portal.text
+    assert "Sign in with a passkey" in portal.text
+    assert "Register this device" in portal.text
+    assert 'data-passkey-enrollment="on"' not in portal.text
+    assert 'autocomplete="username"' in portal.text
+    assert "username webauthn" not in portal.text
+    script = client.get("/assets/portal.js").text
+    assert "function enrollmentOn()" in script
+    assert 'data-passkey-enrollment' in script
+    token = _portal_token(client)
+    options = client.post("/v1/portal/passkeys/register/options", headers=_auth(token))
+    assert options.status_code == 200, options.text
+    selection = options.json()["authenticatorSelection"]
+    assert "authenticatorAttachment" not in selection
+    assert selection["userVerification"] == "required"
+    sign_in = client.post("/v1/portal/passkeys/authenticate/options")
+    assert sign_in.json()["userVerification"] == "required"
+    origin = origin_of(client)
+    soft = SoftPasskey()
+    saved = client.post(
+        "/v1/portal/passkeys",
+        headers=_auth(token),
+        json={"label": "Mac", "credential": soft.registration(options.json(), origin, verified=False)},
+    )
+    assert saved.status_code == 401
+    assert saved.json() == {"error": "passkey is not valid"}
+
+
 def test_portal_offers_passkey_enrollment_without_naming_an_account():
-    client = _client()
+    client = _client(passkey_enrollment=True)
     portal = client.get("/portal")
     assert portal.status_code == 200
+    assert 'data-passkey-enrollment="on"' in portal.text
     assert 'id="portal-account"' in portal.text
     assert "Create a passkey on this device" in portal.text
     assert "Email me a sign-in link" in portal.text
@@ -134,7 +172,7 @@ def test_portal_offers_passkey_enrollment_without_naming_an_account():
 
 
 def test_registration_requires_a_session_and_prefers_this_device():
-    client = _portal_client()
+    client = _portal_client(passkey_enrollment=True)
     origin = origin_of(client)
     host = urlparse(origin).hostname
     anon = client.post("/v1/portal/passkeys/register/options")
@@ -177,7 +215,7 @@ def test_registration_requires_a_session_and_prefers_this_device():
 
 
 def test_sign_in_stays_discoverable_and_failures_do_not_identify_an_account():
-    client = _portal_client()
+    client = _portal_client(passkey_enrollment=True)
     token = _portal_token(client)
     soft = bind_device(client, token, "Mac")
     listed = client.get("/v1/portal/devices", headers=_auth(token))
@@ -224,7 +262,7 @@ def test_sign_in_stays_discoverable_and_failures_do_not_identify_an_account():
 
 
 def test_preferred_verification_accepts_enrollment_and_step_up_still_requires_it():
-    client = _portal_client()
+    client = _portal_client(passkey_enrollment=True)
     token = _portal_token(client)
     origin = origin_of(client)
     options = client.post("/v1/portal/passkeys/register/options", headers=_auth(token))
