@@ -323,6 +323,8 @@ def _backward(transform: Any, value: Any, binding: dict[str, Any]) -> Any:
         return rendered
     if transform == "integer":
         if isinstance(value, int) and not isinstance(value, bool):
+            if binding.get("wire") == "string":
+                return str(value)
             return value
         return value
     if transform == "suffix":

@@ -111,7 +111,7 @@ DOCUMENTS: tuple[tuple[str, str, str, str], ...] = (
         "amex-intent-mapping",
         "amex-intent-mapping.md",
         "AmEx intent mapping",
-        "Assumed mapping from the public AmEx Intent Intelligence framework into the KATA agreement.",
+        "Field mapping from the public AmEx Agentic Commerce OpenAPI document into the KATA agreement.",
     ),
 )
 
