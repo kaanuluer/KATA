@@ -88,6 +88,8 @@ Set these in the host environment. The current proof-of-concept host is a Vercel
 | `GAB_CONSENT_EVENTS` | no | no | Default off. On: `POST /v1/portal/consent` appends a hash-chained consent event. |
 | `GAB_CONSENT_PUSH` | no | no | Default off. Requires consent events. On: push registration appends a push consent event. |
 | `GAB_CONSENT_NETWORK` | no | no | Default off. Requires consent events. On: a network signal needs a granted network consent event. |
+| `GAB_ENTITY_ONLY` | no | no | Default off. On: verify, report, and dispute reject unknown fields and email or phone patterns in free text, and registration requires `entity_kind` of `business` or `personal`. The plan's suggested default of on is not applied here. |
+| `GAB_NETWORK_STEP_UP` | no | no | Default off. On: a DENY whose reasons are only network-signal reasons becomes STEP_UP. Velocity and mandate DENY stay DENY. |
 
 `public_key_from_jwk` is the shared parser. Agent registration, mandate and agreement keys, institution keys, `KATA_PUBLISHED_KEYS`, the SDK, and `KATA_PUSH_NOTIFIER_JWK` all go through it. The object may contain only `kty`, `crv`, `x`, `y`, `kid`, `alg`, `use`, and `key_ops`, and it must be Ed25519 or P-256. A private `d` is rejected. Any other member is rejected, including a WebCrypto `ext` field. If `use` is present it must be `sig`. If `key_ops` is present it must be an array whose values are only `verify`. If `alg` is present it must be `EdDSA` for Ed25519 and `ES256` for P-256.
 
