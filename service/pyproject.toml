@@ -23,7 +23,7 @@ aws = ["boto3>=1.35"]
 include = ["kata_service*"]
 
 [tool.setuptools.package-data]
-kata_service = ["static/*", "migrations/*.sql"]
+kata_service = ["static/*", "migrations/*.sql", "consent_text/*", "consent_text/*/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

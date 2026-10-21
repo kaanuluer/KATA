@@ -41,13 +41,80 @@ def _recorded_versions(conn) -> set[str]:
 
 
 def migration_statements() -> list[str]:
-    statements = []
-    for chunk in migration_sql().split(";"):
-        lines = [line for line in chunk.splitlines() if not line.strip().startswith("--")]
-        text = "\n".join(lines).strip()
-        if text:
-            statements.append(text)
+    """Split migration SQL on semicolons that are outside quotes.
+
+    Dollar-quoted function bodies may contain semicolons. A naive split would
+    cut a trigger function into pieces that Postgres cannot execute.
+    """
+
+    return _split_sql(migration_sql())
+
+
+def _split_sql(sql: str) -> list[str]:
+    statements: list[str] = []
+    buf: list[str] = []
+    i = 0
+    n = len(sql)
+    dollar: str | None = None
+    while i < n:
+        if dollar is not None:
+            if sql.startswith(dollar, i):
+                buf.append(dollar)
+                i += len(dollar)
+                dollar = None
+                continue
+            buf.append(sql[i])
+            i += 1
+            continue
+        if sql.startswith("--", i):
+            end = sql.find("\n", i)
+            i = n if end < 0 else end
+            continue
+        if sql[i] == "'":
+            buf.append(sql[i])
+            i += 1
+            while i < n:
+                buf.append(sql[i])
+                if sql[i] == "'":
+                    if i + 1 < n and sql[i + 1] == "'":
+                        buf.append(sql[i + 1])
+                        i += 2
+                        continue
+                    i += 1
+                    break
+                i += 1
+            continue
+        if sql[i] == "$":
+            tag = _dollar_tag(sql, i)
+            if tag is not None:
+                dollar = tag
+                buf.append(tag)
+                i += len(tag)
+                continue
+        if sql[i] == ";":
+            text = "".join(buf).strip()
+            if text:
+                statements.append(text)
+            buf = []
+            i += 1
+            continue
+        buf.append(sql[i])
+        i += 1
+    text = "".join(buf).strip()
+    if text:
+        statements.append(text)
     return statements
+
+
+def _dollar_tag(sql: str, start: int) -> str | None:
+    if sql[start] != "$":
+        return None
+    end = start + 1
+    while end < len(sql) and (sql[end].isalnum() or sql[end] == "_"):
+        end += 1
+    if end < len(sql) and sql[end] == "$":
+        return sql[start : end + 1]
+    return None
 
 
 class PostgresRepo:
@@ -1358,6 +1425,78 @@ class PostgresRepo:
         )
         return None if row is None else _approval_row(row)
 
+    def append_consent(self, fields: dict[str, Any]) -> dict[str, Any]:
+        from kata_service.consent import seal_event
+
+        self._ensure()
+        with self._connect() as conn:
+            with conn.transaction():
+                conn.execute("SELECT pg_advisory_xact_lock(%s)", (8412554,))
+                source_ref = str(fields.get("source_ref") or "") or None
+                if source_ref:
+                    existing = conn.execute(
+                        """
+                        SELECT event_id, principal_id, purpose, granted, text_version, text_sha256, at, source_ref, prev_hash, entry_hash
+                        FROM gab_consent_events WHERE source_ref = %s
+                        """,
+                        (source_ref,),
+                    ).fetchone()
+                    if existing is not None:
+                        return _consent_row(existing)
+                tip = conn.execute("SELECT entry_hash FROM gab_consent_events ORDER BY seq DESC LIMIT 1").fetchone()
+                sealed = seal_event(None if tip is None else tip[0], fields)
+                conn.execute(
+                    """
+                    INSERT INTO gab_consent_events (
+                      event_id, principal_id, purpose, granted, text_version, text_sha256, at, source_ref, prev_hash, entry_hash
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        sealed["event_id"],
+                        sealed["principal_id"],
+                        sealed["purpose"],
+                        sealed["granted"],
+                        sealed["text_version"],
+                        sealed["text_sha256"],
+                        sealed["at"],
+                        sealed["source_ref"] or None,
+                        sealed["prev_hash"],
+                        sealed["entry_hash"],
+                    ),
+                )
+        return sealed
+
+    def list_consent(self, principal_id: str | None = None, purpose: str | None = None) -> list[dict[str, Any]]:
+        clauses = []
+        params: list[Any] = []
+        if principal_id:
+            clauses.append("principal_id = %s")
+            params.append(principal_id)
+        if purpose:
+            clauses.append("purpose = %s")
+            params.append(purpose)
+        where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+        rows = self._all(
+            f"""
+            SELECT event_id, principal_id, purpose, granted, text_version, text_sha256, at, source_ref, prev_hash, entry_hash
+            FROM gab_consent_events{where} ORDER BY seq
+            """,
+            tuple(params),
+        )
+        return [_consent_row(row) for row in rows]
+
+    def delete_consent(self, event_id: str) -> None:
+        self._ensure()
+        with self._connect() as conn:
+            try:
+                with conn.transaction():
+                    conn.execute("DELETE FROM gab_consent_events WHERE event_id = %s", (event_id,))
+            except BureauError:
+                raise
+            except Exception as exc:
+                raise BureauError(409, "gab_consent_events is append-only") from exc
+        raise BureauError(409, "gab_consent_events is append-only")
+
     def save_approval(self, record: dict[str, Any]) -> None:
         self._execute(
             """
@@ -1477,6 +1616,21 @@ def _push_row(row) -> dict[str, Any]:
         "auth_secret": row[4],
         "consent_at": row[5],
         "created_at": row[6],
+    }
+
+
+def _consent_row(row) -> dict[str, Any]:
+    return {
+        "event_id": row[0],
+        "principal_id": row[1],
+        "purpose": row[2],
+        "granted": bool(row[3]),
+        "text_version": row[4],
+        "text_sha256": row[5],
+        "at": row[6],
+        "source_ref": row[7] or "",
+        "prev_hash": row[8],
+        "entry_hash": row[9],
     }
 
 
