@@ -82,6 +82,9 @@ Set these in the host environment. The current proof-of-concept host is a Vercel
 | `GAB_KMS_WRAPPED_HMAC_KEYS` | no | yes | JSON of HMAC keys already wrapped by the master key. Ciphertext only. |
 | `GAB_SUBJECT_REF_KEY` | for subject refs | yes | 32-byte key, base64. Keys `subject_ref` on both `env` and `aws-kms`. It is not the wrapping key. Rotating the wrapping key does not change `subject_ref`. |
 | `GAB_SUBJECT_REF_KID` | no | no | Id of `GAB_SUBJECT_REF_KEY`. Unset means `subject-ref`. |
+| `GAB_KEYED_IDENTIFIERS` | no | no | Default off. On: HMAC email lookups, dual-read the legacy hash, envelope-encrypt the address. |
+| `GAB_HMAC_RATE_SUBJECT` | no | no | Default off. On: HMAC the client host used for rate limits and delete rate rows older than 24 hours. |
+| `GAB_STOP_PLAINTEXT_EMAIL` | no | no | Default off. Requires keyed identifiers. Stops writing plaintext email and the unsalted hash. Use only after the offline backfill. |
 
 `public_key_from_jwk` is the shared parser. Agent registration, mandate and agreement keys, institution keys, `KATA_PUBLISHED_KEYS`, the SDK, and `KATA_PUSH_NOTIFIER_JWK` all go through it. The object may contain only `kty`, `crv`, `x`, `y`, `kid`, `alg`, `use`, and `key_ops`, and it must be Ed25519 or P-256. A private `d` is rejected. Any other member is rejected, including a WebCrypto `ext` field. If `use` is present it must be `sig`. If `key_ops` is present it must be an array whose values are only `verify`. If `alg` is present it must be `EdDSA` for Ed25519 and `ES256` for P-256.
 
