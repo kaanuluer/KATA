@@ -71,6 +71,7 @@ class Settings:
     consent_network: bool = False
     entity_only: bool = False
     network_step_up: bool = False
+    ledger_hygiene: bool = False
 
     def log_key(self) -> PrivateKey | None:
         if self.log_signing_seed is None:
@@ -141,6 +142,11 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
         error = "consent purposes need GAB_CONSENT_EVENTS=1"
     entity_only = _flag(env.get("GAB_ENTITY_ONLY"))
     network_step_up = _flag(env.get("GAB_NETWORK_STEP_UP"))
+    ledger_hygiene = _flag(env.get("GAB_LEDGER_HYGIENE"))
+    if error is None and ledger_hygiene and key_provider is None:
+        error = "GAB_LEDGER_HYGIENE needs GAB_KEY_PROVIDER"
+    if error is None and ledger_hygiene and deployment_env == "production" and not database_url:
+        error = "GAB_LEDGER_HYGIENE stores wrapped data keys in gab_subject_deks and needs DATABASE_URL"
     return Settings(
         database_url=database_url,
         schema_url=schema_url,
@@ -187,6 +193,7 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
         consent_network=consent_network,
         entity_only=entity_only,
         network_step_up=network_step_up,
+        ledger_hygiene=ledger_hygiene,
     )
 
 
