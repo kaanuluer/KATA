@@ -1493,6 +1493,36 @@ class PostgresRepo:
         )
         return [_consent_row(row) for row in rows]
 
+    def put_payload(self, record: dict[str, Any]) -> None:
+        self._execute(
+            """
+            INSERT INTO gab_payloads (payload_id, subject_ref, payload_hash, ciphertext, created_at)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (
+                record["payload_id"],
+                record["subject_ref"],
+                record["payload_hash"],
+                record["ciphertext"],
+                record["created_at"],
+            ),
+        )
+
+    def get_payload(self, payload_id: str) -> dict[str, Any] | None:
+        row = self._one(
+            "SELECT payload_id, subject_ref, payload_hash, ciphertext, created_at FROM gab_payloads WHERE payload_id = %s",
+            (payload_id,),
+        )
+        if row is None:
+            return None
+        return {
+            "payload_id": row[0],
+            "subject_ref": row[1],
+            "payload_hash": row[2],
+            "ciphertext": row[3],
+            "created_at": row[4],
+        }
+
     def delete_consent(self, event_id: str) -> None:
         self._ensure()
         with self._connect() as conn:

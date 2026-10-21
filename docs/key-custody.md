@@ -130,6 +130,8 @@ Keep the same kind of copy of `GAB_HMAC_KEYS`. Those secrets are what recompute 
 
 Wrapped per-person data keys live in `gab_subject_deks` and travel with the Neon backup. Restoring the database restores those keys. Deleting a row shreds the live database. A backup taken before the delete still contains the wrapped key, and restoring that backup brings the key back.
 
+Ledger payload ciphertext is a separate table, `gab_payloads`. Its wrapped data key is the `gab_subject_deks` row, not a file beside the database.
+
 `seal` still embeds the wrapped data key in one string for callers that need a single value. That form cannot be shredded: deleting the ciphertext deletes the wrapped key with it, and a backup restores both. The shred path is `seal_detached` plus `gab_subject_deks`. A later change can move embedded callers onto that path. This note does not block that change. The detached format and the table are already in place.
 
 ### Wrapped HMAC blobs

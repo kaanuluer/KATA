@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 
 from kata_service.bureau import BureauError, BureauService, HttpWebhookSender, MemoryRepo, RecordingSender, mailer_from_settings
 from kata_service.identifiers import rate_limit_subject
-from kata_service.keys import KeyCustodyError
+from kata_service.keys import KeyCustodyError, shred_subject
 from kata_service.bureau_http import build_router
 from kata_service.demo import run_demo
 from kata_service.pages import (
@@ -69,6 +69,7 @@ def create_app(
     app = FastAPI(title="Global Agent Bureau", docs_url="/docs/openapi", redoc_url=None)
     app.state.settings = resolved
     app.state.store = store
+    app.state.dek_store = None
     app.state.fx = fx_fetcher if fx_fetcher is not None else FrankfurterFx(resolved.fx_source_url)
 
     pages = _static_dir()
@@ -362,12 +363,72 @@ def create_app(
         if not isinstance(payload, dict) or not isinstance(payload.get("body"), dict):
             return _error(400, "log append needs kind and a body object")
         try:
-            record, head = held.append_and_sign(
-                str(payload.get("kind")), payload["body"], settings_now.log_key(), utcnow()
-            )
+            body = _ledger_body(app, payload["body"])
+            record, head = held.append_and_sign(str(payload.get("kind")), body, settings_now.log_key(), utcnow())
         except KataError as exc:
             return _error(400, str(exc))
         return {"entry": record, "tree_head": head}
+
+    @app.post("/v1/log/corrections")
+    async def append_correction(request: Request):
+        blocked = _configured(app)
+        if blocked is not None:
+            return blocked
+        settings_now = app.state.settings
+        if not settings_now.ledger_hygiene:
+            return _error(404, "ledger hygiene is off")
+        if not settings_now.append_token:
+            return _error(503, "KATA_APPEND_TOKEN is not set")
+        if not _bearer_matches(request, settings_now.append_token):
+            return _error(401, "append token does not match")
+        if settings_now.log_key() is None:
+            return _error(503, "KATA_LOG_SIGNING_SEED is not set")
+        held = _require_store(app)
+        if isinstance(held, JSONResponse):
+            return held
+        try:
+            payload = await request.json()
+        except Exception:  # noqa: BLE001
+            return _error(400, "log body must be JSON")
+        if not isinstance(payload, dict):
+            return _error(400, "log body must be JSON")
+        body = {
+            "corrects_sequence": payload.get("corrects_sequence"),
+            "record_hash": str(payload.get("record_hash") or ""),
+        }
+        try:
+            body = _ledger_body(app, body)
+            record, head = held.append_and_sign("correction", body, settings_now.log_key(), utcnow())
+        except KataError as exc:
+            return _error(400, str(exc))
+        return {"entry": record, "tree_head": head}
+
+    @app.post("/internal/erasure")
+    async def erasure(request: Request):
+        blocked = _configured(app)
+        if blocked is not None:
+            return blocked
+        settings_now = app.state.settings
+        if not settings_now.ledger_hygiene:
+            return _error(404, "ledger hygiene is off")
+        if not settings_now.admin_token or not _bearer_matches(request, settings_now.admin_token):
+            return _error(401, "admin credentials are required")
+        try:
+            payload = await request.json()
+        except Exception:  # noqa: BLE001
+            return _error(400, "erasure body must be JSON")
+        if not isinstance(payload, dict) or not str(payload.get("subject_id") or "").strip():
+            return _error(400, "subject_id is required")
+        bureau = ensure_bureau(app)
+        store = bureau.dek_store
+        if store is None:
+            return _error(500, "ledger hygiene needs a data-key store")
+        subject_id = str(payload["subject_id"]).strip()
+        if settings_now.key_provider is None:
+            destroyed = bool(store.destroy(subject_id))
+        else:
+            destroyed = shred_subject(settings_now.key_provider, store, subject_id)
+        return {"destroyed": destroyed}
 
     @app.get("/v1/log/entries/{sequence}")
     def get_entry(sequence: int):
@@ -546,12 +607,15 @@ def ensure_bureau(app: FastAPI):
             consent_network=settings.consent_network,
             entity_only=settings.entity_only,
             network_step_up=settings.network_step_up,
+            ledger_hygiene=settings.ledger_hygiene,
         )
         if settings.demo:
             from kata_service.seed import seed_demo
 
             seed_demo(service)
         _bind_subject_keys(service, settings)
+        _ensure_ledger_store(service, settings)
+        app.state.dek_store = service.dek_store
         app.state.bureau = service
         return service
     from kata_service.bureau_pg import PostgresRepo
@@ -592,8 +656,11 @@ def ensure_bureau(app: FastAPI):
         consent_network=settings.consent_network,
         entity_only=settings.entity_only,
         network_step_up=settings.network_step_up,
+        ledger_hygiene=settings.ledger_hygiene,
     )
     _bind_subject_keys(service, settings, repo._connect)
+    _ensure_ledger_store(service, settings)
+    app.state.dek_store = service.dek_store
     app.state.bureau = service
     return service
 
@@ -609,6 +676,55 @@ def _bind_subject_keys(service, settings, connect=None) -> None:
     from kata_service.keys import database_dek_store
 
     service.dek_store = database_dek_store(provider, connect)
+
+
+def _ensure_ledger_store(service, settings) -> None:
+    """Use an in-memory data-key store when ledger hygiene is on and no database store exists.
+
+    The database path already set ``service.dek_store`` from the subject-reference
+    key. A process with no database, including tests, keeps wrapped keys in
+    memory. That store disappears on restart. A directory of key files is not
+    the proof-of-concept store.
+    """
+
+    if service.dek_store is not None or not getattr(settings, "ledger_hygiene", False):
+        return
+    provider = getattr(settings, "key_provider", None)
+    if provider is None:
+        return
+    from kata_service.keys import InProcessDekStore, KeyCustodyError
+
+    try:
+        subject_key = provider._subject_key_bytes()
+    except KeyCustodyError:
+        return
+    previous = provider.previous_subject_keys() if hasattr(provider, "previous_subject_keys") else ()
+    service.dek_store = InProcessDekStore(subject_key, previous_keys=tuple(previous))
+
+
+def _ledger_body(app: FastAPI, body: dict[str, Any]) -> dict[str, Any]:
+    settings_now = app.state.settings
+    if not settings_now.ledger_hygiene:
+        return body
+    from kata_service.ledger import LedgerBodyError, prepare_body
+
+    bureau = ensure_bureau(app)
+    if settings_now.key_provider is None or bureau.dek_store is None:
+        raise KataError("ledger hygiene needs a key provider and a data-key store")
+
+    def _put(record: dict[str, Any]) -> None:
+        bureau.repo.put_payload(record)
+
+    try:
+        return prepare_body(
+            body,
+            provider=settings_now.key_provider,
+            dek_store=bureau.dek_store,
+            put_payload=_put,
+            at=utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+        )
+    except LedgerBodyError as exc:
+        raise KataError(str(exc)) from exc
 
 
 def _fx_body(currency: str, reference_currency: str, day: str, rate: str) -> dict[str, str]:
