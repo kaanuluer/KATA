@@ -448,7 +448,6 @@ def shell(
     <div class="wrap bar">
       <a class="brand" href="/">
         <span class="plate"><img class="logo" src="/assets/gab-logo.svg" alt="GAB_" width="142" height="76"></span>
-        <span class="brand-note">Powered by KATA · Know And Trust Agents</span>
       </a>
       <div class="header-tools">
         {_nav(current)}

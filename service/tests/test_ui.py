@@ -312,6 +312,8 @@ def test_pages_share_the_chapters_shell():
         assert 'id="theme-toggle"' in body
         assert "Light mode" in body
         assert 'alt="GAB_"' in body
+        assert "Powered by KATA · Know And Trust Agents" not in body
+        assert 'class="brand-note"' not in body
         assert "book a call" not in body.lower()
         assert "credit bureau" not in body.lower()
         assert "open source" not in body.lower()
