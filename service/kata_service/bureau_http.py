@@ -9,12 +9,57 @@ from typing import Any
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
+from fastapi.routing import APIRoute
 
 from kata_service.bureau import Auth, BureauError, reject_deep_json, reset_test_mode, use_test_mode
 
+# These routes answer without a bearer. Every other route on this router checks
+# credentials before FastAPI validates parameters, so a missing key cannot
+# produce a 422 that names a field such as fingerprint.
+_OPEN_ROUTES = {
+    ("GET", "/v1/score-model"),
+    ("GET", "/v1/dev/mailbox"),
+    ("POST", "/v1/portal/magic-link"),
+    ("POST", "/v1/dashboard/magic-link"),
+    ("POST", "/v1/sessions"),
+    ("POST", "/v1/portal/passkeys/authenticate/options"),
+    ("POST", "/v1/portal/passkeys/authenticate"),
+}
+
+
+class _CredentialRoute(APIRoute):
+    def get_route_handler(self):
+        original = super().get_route_handler()
+
+        async def guarded(request: Request):
+            if (request.method, request.url.path) not in _OPEN_ROUTES:
+                denied = _credential_gate(request)
+                if denied is not None:
+                    return denied
+            return await original(request)
+
+        return guarded
+
+
+def _credential_gate(request: Request) -> JSONResponse | None:
+    from kata_service.asgi import ensure_bureau
+
+    try:
+        bureau = ensure_bureau(request.app)
+    except BureauError as exc:
+        return _error_body(exc)
+    token = _bearer(request)
+    if not token:
+        return _error_body(BureauError(401, "credentials are required"))
+    try:
+        bureau.authenticate(token, admin_token=request.app.state.settings.admin_token)
+    except BureauError as exc:
+        return _error_body(exc)
+    return None
+
 
 def build_router() -> APIRouter:
-    router = APIRouter()
+    router = APIRouter(route_class=_CredentialRoute)
 
     @router.get("/v1/score-model", summary="Published agent score weights")
     async def score_model(request: Request):
