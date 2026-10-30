@@ -73,6 +73,26 @@ def test_home_page_explains_kata_in_english():
         assert banned not in body.lower()
 
 
+def test_home_renders_the_desk_without_banned_phrases():
+    page = _client().get("/")
+    assert page.status_code == 200
+    assert "text/html" in page.headers["content-type"]
+    body = page.text
+    assert 'class="desk"' in body
+    assert "desk-verdict" in body
+    assert 'id="demo-form"' in body
+    assert 'id="explainer"' in body
+    start = body.index('<header class="site">')
+    header = body[start : body.index("</header>", start)]
+    assert "Powered by KATA" not in header
+    assert "brand-note" not in header
+    for banned in ("open source", "open-source", "credit bureau", "book a call"):
+        assert banned not in body.lower()
+    for path in ("/design/a", "/design/b", "/design/c"):
+        assert path not in body
+        assert _client().get(path).status_code == 404
+
+
 def test_home_links_github_history_and_docs():
     body = _client().get("/").text
     assert body.count('href="https://github.com/kaanuluer/KATA"') >= 2

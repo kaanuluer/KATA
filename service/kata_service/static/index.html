@@ -1,287 +1,254 @@
-<section class="hero stage" aria-labelledby="promise">
-  <div>
-    <p class="kicker">Global Agent Bureau</p>
-    <h1 id="promise">Know the agent before the payment goes through.</h1>
-    <p class="lede">Global Agent Bureau is an independent agent bureau and a technology company. Participants register agents, check signed intents, inquire with a purpose code, and report incidents. The checks are powered by KATA — Know And Trust Agents — the framework underneath this service, under the PolyForm Noncommercial License. A valid identity is not the same thing as a valid action.</p>
-    <p class="actions"><a class="button" href="#demo">Try a signed intent</a> <a class="button ghost" href="/docs">Explore the site</a> <a class="button ghost" href="/dashboard">Organization dashboard</a> <a class="button ghost" href="/portal">Individual portal</a></p>
-  </div>
-  <article class="slip" aria-label="Sample decision">
-    <header>
-      <p class="mono">Sample check</p>
-      <p class="badge allow">ALLOW</p>
-    </header>
-    <p class="amount">CAD 1,300 <span>of 1,500</span></p>
-    <div class="meter" aria-hidden="true"><i></i></div>
-    <dl class="facts">
-      <div><dt>Agent</dt><dd>shopper-01</dd></div>
-      <div><dt>Principal</dt><dd>K. Uluer</dd></div>
-      <div><dt>Merchant</dt><dd>techstore.example</dd></div>
-      <div><dt>Purpose</dt><dd>purchase</dd></div>
-    </dl>
-    <footer>Identity, authorization, intent, and this payment agree. It does not spend money.</footer>
-  </article>
-</section>
+<div class="desk-home">
+  <p class="kicker">Global Agent Bureau</p>
+  <h1 id="promise">Know the agent before the payment goes through.</h1>
+  <p class="lede">One desk for the check. Identity, the signed intent, and the decision sit together. Global Agent Bureau is an agent bureau and a technology company. Participants register agents, check signed intents, inquire with a purpose code, and report incidents. The checks are powered by KATA — Know And Trust Agents — the framework underneath this service, under the PolyForm Noncommercial License. A valid identity is not the same thing as a valid action.</p>
 
-<section class="film" aria-labelledby="film-title">
-  <figure class="explainer">
-    <video id="explainer" controls playsinline preload="metadata" poster="/assets/gab-explainer-poster.jpg" width="1920" height="1080" aria-describedby="explainer-note">
-      <source src="/assets/gab-explainer-720.mp4" type="video/mp4" media="(max-width: 900px)">
-      <source src="/assets/gab-explainer-1080.mp4" type="video/mp4">
-      <track kind="captions" src="/assets/gab-explainer.vtt" srclang="en" label="English">
-    </video>
-  </figure>
-  <div>
-    <p class="kicker">Explainer</p>
-    <h2 id="film-title">How the check works</h2>
-    <p id="explainer-note" class="lede">How the check works. 73.5 seconds, silent, with captions on the picture and an English text track in the player. It stays paused until you press play.</p>
-  </div>
-</section>
-
-<ol class="questions" id="questions">
-  <li>
-    <em>01</em>
-    <strong>Who is the agent?</strong>
-    <p>Identity and provenance of the agent that wants to act.</p>
-  </li>
-  <li>
-    <em>02</em>
-    <strong>Who authorized it?</strong>
-    <p>The principal who signed the delegation and the intent.</p>
-  </li>
-  <li>
-    <em>03</em>
-    <strong>What was it authorized to do?</strong>
-    <p>Purpose, ceiling, currency, merchants, and expiry.</p>
-  </li>
-  <li>
-    <em>04</em>
-    <strong>Does this behavior match?</strong>
-    <p>The payment is checked against that signed record.</p>
-  </li>
-</ol>
-
-<section class="chapter" id="identity">
-  <div class="split">
-    <div>
-      <p class="kicker">Agent identity</p>
-      <h2>The actor has a name before it has a payment.</h2>
-      <p class="lede">An agent is registered with a provenance. The public sample is shopper-01, authorized by K. Uluer. Assurance can be key-bound, operator-verified, or unverified. When a trust score is kept, it belongs to the agent. Individuals are not scored.</p>
-    </div>
-    <article class="credential">
-      <p class="mono">Agent record</p>
-      <p class="who">shopper-01</p>
-      <dl class="rows">
-        <div><dt>Principal</dt><dd>K. Uluer</dd></div>
-        <div><dt>Assurance</dt><dd>Operator verified</dd></div>
-        <div><dt>Subject of a score</dt><dd>The agent, not a person</dd></div>
-        <div><dt>What it is not</dt><dd>Permission to spend</dd></div>
+  <div class="desk" id="questions">
+    <section class="desk-mod" id="identity" aria-labelledby="id-title">
+      <p class="kicker">01 · Agent identity</p>
+      <h2 id="id-title">Who is the agent?</h2>
+      <dl>
+        <div class="desk-line"><dt>Agent</dt><dd>shopper-01</dd></div>
+        <div class="desk-line"><dt>Principal</dt><dd>K. Uluer</dd></div>
+        <div class="desk-line"><dt>Assurance</dt><dd>Operator verified</dd></div>
+        <div class="desk-line"><dt>Scored</dt><dd>The agent, not a person</dd></div>
       </dl>
-    </article>
-  </div>
-</section>
+      <p class="desk-note">Identity and provenance of the agent that wants to act. Registration is not permission to spend.</p>
+    </section>
 
-<section class="chapter" id="intent">
-  <div class="split">
-    <div>
-      <p class="kicker">Authorization</p>
-      <h2>The principal signs the intent. The payment has to match it.</h2>
-      <p class="lede">The signed record names the purpose, the ceiling, the currency, the merchants, and the expiry. KATA checks the proposed payment against that record. A registered agent can still be outside what was signed.</p>
-    </div>
-    <article class="document">
-      <p class="mono">Signed intent</p>
-      <h3>Laptop, within CAD 1,500</h3>
-      <dl class="rows">
-        <div><dt>Purpose</dt><dd>purchase</dd></div>
-        <div><dt>Ceiling</dt><dd>CAD 1,500</dd></div>
-        <div><dt>Category</dt><dd>electronics</dd></div>
-        <div><dt>Merchant</dt><dd>Any, unless one is named</dd></div>
-        <div><dt>Expiry</dt><dd>A date, or the check asks for approval</dd></div>
+    <section class="desk-mod" id="intent" aria-labelledby="intent-title">
+      <p class="kicker">02 · Authorization</p>
+      <h2 id="intent-title">Who authorized it?</h2>
+      <h3>What was it authorized to do?</h3>
+      <dl>
+        <div class="desk-line"><dt>Who signed</dt><dd>K. Uluer</dd></div>
+        <div class="desk-line"><dt>Purpose</dt><dd>purchase</dd></div>
+        <div class="desk-line"><dt>Ceiling</dt><dd>CAD 1,500</dd></div>
+        <div class="desk-line"><dt>Category</dt><dd>electronics</dd></div>
+        <div class="desk-line"><dt>Merchant</dt><dd>Any, unless named</dd></div>
+        <div class="desk-line"><dt>Expiry</dt><dd>Required, or step-up</dd></div>
       </dl>
-      <p class="quote">Find and buy a laptop for me, maximum CAD 1,500.</p>
-    </article>
-  </div>
-</section>
+      <p class="desk-note">The principal who signed the delegation and the intent. Purpose, ceiling, currency, merchants, and expiry.</p>
+      <p class="desk-quote">Find and buy a laptop for me, maximum CAD 1,500.</p>
+    </section>
 
-<section class="chapter" id="evidence">
-  <div class="split">
-    <div>
-      <p class="kicker">Dispute evidence</p>
-      <h2>A dispute keeps the signed record with the agent.</h2>
-      <p class="lede">Evidence is the intent, the payment, and the outcome, linked to the agent. A report that is not linked to an agent is rejected. Participants can inquire for dispute resolution with a purpose code.</p>
-    </div>
-    <div class="stack">
-      <article>
-        <p class="badge allow">Linked</p>
-        <h3>Chargeback on shopper-01</h3>
-        <p>The signed ceiling, the payment, and the outcome stay on the same agent.</p>
-      </article>
-      <article>
-        <p class="badge deny">Rejected</p>
-        <h3>Report with no agent</h3>
-        <p>An unlinked report is not evidence. It does not enter the record.</p>
-      </article>
-      <article>
-        <p class="badge step">Inquiry</p>
-        <h3>Purpose code required</h3>
-        <p>Dispute resolution is one purpose. The inquiry does not change the score.</p>
-      </article>
-    </div>
+    <section class="desk-mod desk-verdict" id="verdict" aria-labelledby="decision-title">
+      <p class="kicker">03 · This payment</p>
+      <h2 id="decision-title">ALLOW</h2>
+      <p>Does this behavior match? CAD 1,300 at techstore.example is inside the signed ceiling. Identity, authorization, intent, and this payment agree. The payment is checked against that signed record.</p>
+      <p>It does not spend money.</p>
+    </section>
   </div>
-</section>
 
-<section class="chapter" id="score">
-  <p class="kicker">Trust score</p>
-  <h2>Three decisions. The score stays on the agent.</h2>
-  <div class="verdicts">
+  <section class="desk-band" id="score" aria-label="Trust score decisions">
     <article>
-      <p class="badge allow">ALLOW</p>
-      <h3>Inside the intent</h3>
-      <p>Identity, authorization, intent, and this payment agree.</p>
+      <p class="kicker">Trust score</p>
+      <strong>On the agent</strong>
+      <p>Individuals are not scored. The check returns allow, step-up, or deny. Deny blocks the action and does not revoke the grant.</p>
     </article>
     <article>
-      <p class="badge step">STEP-UP</p>
-      <h3>Ask for approval</h3>
-      <p>The check does not have what it needs. An intent with no expiry is one case.</p>
+      <span class="badge allow">ALLOW</span>
+      <strong>CAD 1,300</strong>
+      <p>Under the CAD 1,500 ceiling.</p>
     </article>
     <article>
-      <p class="badge deny">DENY</p>
-      <h3>Block the action</h3>
-      <p>Deny blocks the action. It does not revoke the grant.</p>
+      <span class="badge step">STEP-UP</span>
+      <strong>No expiry</strong>
+      <p>The check asks for approval.</p>
     </article>
-  </div>
-  <div class="synthetic" id="stress-test">
+    <article>
+      <span class="badge deny">DENY</span>
+      <strong>CAD 4,200</strong>
+      <p>Above the ceiling. The grant stays.</p>
+    </article>
+  </section>
+
+  <section class="desk-mod desk-synthetic" id="stress-test">
     <p class="sim-banner">SYNTHETIC TEST DATA – not real customers</p>
-    <p class="lede">This synthetic stress test of the trust score uses 10,000 synthetic agents and 100,000 synthetic transactions over 90 days. Against adaptive attackers, 73% of attempted fraud dollars are stopped and $0.71M is executed. When attackers do not know the rules, 78% is stopped and $0.68M is executed. Legitimate agents denied at day 90 are 0.15% and 0.16%. Tables and charts are on the <a href="/simulation">Simulation</a> page. Global Agent Bureau is an agent bureau and a technology company. Learn more at <a href="https://globalagentbureau.com">globalagentbureau.com</a>.</p>
-    <div class="stats">
-      <p><strong>73%</strong><span>Adaptive fraud dollars stopped. $0.71M executed.</span></p>
-      <p><strong>78%</strong><span>Stopped when attackers do not know the rules. $0.68M executed.</span></p>
-      <p><strong>0.15%</strong><span>Legitimate agents denied at day 90, adaptive case.</span></p>
-      <p><strong>0.16%</strong><span>Legitimate agents denied at day 90, unaware case.</span></p>
+    <p>This synthetic stress test of the trust score uses 10,000 synthetic agents and 100,000 synthetic transactions over 90 days. Against adaptive attackers, 73% of attempted fraud dollars are stopped and $0.71M is executed. When attackers do not know the rules, 78% is stopped and $0.68M is executed. Legitimate agents denied at day 90 are 0.15% and 0.16%. Tables and charts are on the <a href="/simulation">Simulation</a> page. Global Agent Bureau is an agent bureau and a technology company. Learn more at <a href="https://globalagentbureau.com">globalagentbureau.com</a>.</p>
+  </section>
+
+  <div class="desk-pair">
+    <section class="desk-window" id="explainer-section" aria-labelledby="film-title">
+      <div class="desk-chrome"><span id="film-title">Explainer</span><span>73.5 seconds · silent · captions</span></div>
+      <video id="explainer" controls playsinline preload="metadata" poster="/assets/gab-explainer-poster.jpg" width="1920" height="1080" aria-describedby="explainer-note">
+        <source src="/assets/gab-explainer-720.mp4" type="video/mp4" media="(max-width: 900px)">
+        <source src="/assets/gab-explainer-1080.mp4" type="video/mp4">
+        <track kind="captions" src="/assets/gab-explainer.vtt" srclang="en" label="English">
+      </video>
+      <figcaption id="explainer-note">How the check works. 73.5 seconds, silent, with captions on the picture and an English text track in the player. It stays paused until you press play.</figcaption>
+    </section>
+    <section id="evidence" aria-labelledby="evidence-title">
+      <div class="desk-evidence">
+        <article>
+          <p class="kicker">Dispute evidence</p>
+          <h2 id="evidence-title">Kept with the agent</h2>
+          <p>A dispute keeps the signed record with the agent. Evidence is the intent, the payment, and the outcome, linked to the agent. A report that is not linked to an agent is rejected. Participants can inquire for dispute resolution with a purpose code. An inquiry does not change the score.</p>
+        </article>
+        <article>
+          <span class="badge allow">Linked</span>
+          <h3>Chargeback on shopper-01</h3>
+          <p>The signed ceiling, the payment, and the outcome stay on the same agent. Chargeback for the laptop payment at techstore.example.</p>
+        </article>
+        <article>
+          <span class="badge deny">Rejected</span>
+          <h3>Report with no agent</h3>
+          <p>An unlinked report is not evidence. It does not enter the record.</p>
+        </article>
+        <article>
+          <span class="badge step">Inquiry</span>
+          <h3>Purpose code required</h3>
+          <p>Dispute resolution is one purpose. The inquiry does not change the score.</p>
+        </article>
+      </div>
+    </section>
+  </div>
+
+  <section class="desk-block" id="surface">
+    <p class="kicker">The service</p>
+    <h2>Explore the site for what is published now.</h2>
+    <p class="lede">Documentation, status, and the simulation are on this site. KATA is the framework underneath the checks, licensed under PolyForm Noncommercial.</p>
+    <div class="desk-grid">
+      <article class="desk-mod">
+        <p class="kicker">MCP</p>
+        <h3>5 tools, remote</h3>
+        <p>POST /mcp is a remote MCP server over streamable HTTP. The 5 tools are verify agent, inquire, report, check revocation, and fetch a signed receipt. The tools require a bearer API key.</p>
+      </article>
+      <article class="desk-mod">
+        <p class="kicker">Sandbox</p>
+        <h3>gab_test_ keys</h3>
+        <p>Test keys use the gab_test_ prefix. Live keys use the gab_ prefix. Live and test rows stay isolated. A test report does not change a live score. When GAB_ENV is sandbox, only a gab_test_ key is accepted.</p>
+      </article>
+      <article class="desk-mod">
+        <p class="kicker">Health</p>
+        <h3>/health and /status</h3>
+        <p>GET /health and GET /v1/health need no API key. The same reading is on <a href="/status">/status</a>.</p>
+      </article>
+      <article class="desk-mod">
+        <p class="kicker">Limits</p>
+        <h3>Retry-After on 429</h3>
+        <p>Defaults are 60 verifies, 30 inquiries, and 10 reports each minute, and 120 requests overall. A limit answers 429 with Retry-After: 60.</p>
+      </article>
+      <article class="desk-mod">
+        <p class="kicker">UCP</p>
+        <h3>Sandbox checkout check</h3>
+        <p>In the sandbox, the bureau verifies a Universal Commerce Protocol checkout as an action. It does not host checkout. The path accepts a gab_test_ key only.</p>
+      </article>
+      <article class="desk-mod">
+        <p class="kicker">AmEx</p>
+        <h3>Assumed mapping</h3>
+        <p>The AmEx Intent Intelligence note is an assumed mapping into the KATA agreement. Read it in the <a href="/docs/amex-intent-mapping">mapping note</a>.</p>
+      </article>
     </div>
-  </div>
-</section>
+  </section>
 
-<section class="chapter" id="surface">
-  <p class="kicker">The service</p>
-  <h2>Explore the site for what is published now.</h2>
-  <p class="lede">Documentation, status, and the simulation are on this site. KATA is the framework underneath the checks, licensed under PolyForm Noncommercial.</p>
-  <div class="ops">
-    <article>
-      <p class="mono">MCP</p>
-      <h3>5 tools, remote</h3>
-      <p>POST /mcp is a remote MCP server over streamable HTTP. The 5 tools are verify agent, inquire, report, check revocation, and fetch a signed receipt. The tools require a bearer API key.</p>
-    </article>
-    <article>
-      <p class="mono">Sandbox</p>
-      <h3>gab_test_ keys</h3>
-      <p>Test keys use the gab_test_ prefix. Live keys use the gab_ prefix. Live and test rows stay isolated. A test report does not change a live score. When GAB_ENV is sandbox, only a gab_test_ key is accepted.</p>
-    </article>
-    <article>
-      <p class="mono">Health</p>
-      <h3>/health and /status</h3>
-      <p>GET /health and GET /v1/health need no API key. The same reading is on <a href="/status">/status</a>.</p>
-    </article>
-    <article>
-      <p class="mono">Limits</p>
-      <h3>Retry-After on 429</h3>
-      <p>Defaults are 60 verifies, 30 inquiries, and 10 reports each minute, and 120 requests overall. A limit answers 429 with Retry-After: 60.</p>
-    </article>
-    <article>
-      <p class="mono">UCP</p>
-      <h3>Sandbox checkout check</h3>
-      <p>In the sandbox, the bureau verifies a Universal Commerce Protocol checkout as an action. It does not host checkout. The path accepts a gab_test_ key only.</p>
-    </article>
-    <article>
-      <p class="mono">AmEx</p>
-      <h3>Assumed mapping</h3>
-      <p>The AmEx Intent Intelligence note is an assumed mapping into the KATA agreement. Read it in the <a href="/docs/amex-intent-mapping">mapping note</a>.</p>
-    </article>
-  </div>
-</section>
-
-<section class="chapter" id="demo">
-  <div class="panel">
+  <section class="desk-mod desk-block" id="demo">
     <p class="kicker">Live demo</p>
     <h2>Try a signed intent</h2>
     <p class="lede">This sample uses public demo keys for K. Uluer and the agent shopper-01. The page asks the reference library to render the confirmation, sign it, and return allow, deny, or step-up. It does not spend money.</p>
-    <form id="demo-form">
-      <div class="demo-grid">
-        <fieldset>
-          <legend>Intent the principal signs</legend>
-          <label for="maximum_amount">Maximum amount</label>
-          <input id="maximum_amount" name="maximum_amount" type="number" min="0" step="0.01" value="1500" required>
-          <label for="intent_currency">Currency</label>
-          <input id="intent_currency" name="intent_currency" value="CAD" maxlength="3" required>
-          <label for="purpose">Purpose</label>
-          <select id="purpose" name="purpose">
-            <option value="purchase" selected>purchase</option>
-            <option value="payment">payment</option>
-            <option value="transfer">transfer</option>
-          </select>
-          <label for="category">Category</label>
-          <input id="category" name="category" value="electronics">
-          <label for="allowed_merchant">Allowed merchant, if any</label>
-          <input id="allowed_merchant" name="allowed_merchant" placeholder="Leave empty for any merchant">
-          <label for="natural_language">Instruction</label>
-          <textarea id="natural_language" name="natural_language">Find and buy a laptop for me, maximum CAD 1,500.</textarea>
+    <form id="demo-form" class="desk-form">
+      <fieldset>
+        <legend>Intent the principal signs</legend>
+        <div class="desk-fields">
+          <div>
+            <label for="maximum_amount">Maximum amount</label>
+            <input id="maximum_amount" name="maximum_amount" type="number" min="0" step="0.01" value="1500" required>
+          </div>
+          <div>
+            <label for="intent_currency">Currency</label>
+            <input id="intent_currency" name="intent_currency" value="CAD" maxlength="3" required>
+          </div>
+          <div>
+            <label for="purpose">Purpose</label>
+            <select id="purpose" name="purpose">
+              <option value="purchase" selected>purchase</option>
+              <option value="payment">payment</option>
+              <option value="transfer">transfer</option>
+            </select>
+          </div>
+          <div>
+            <label for="category">Category</label>
+            <input id="category" name="category" value="electronics">
+          </div>
+          <div class="wide">
+            <label for="allowed_merchant">Allowed merchant, if any</label>
+            <input id="allowed_merchant" name="allowed_merchant" placeholder="Leave empty for any merchant">
+          </div>
+          <div class="wide">
+            <label for="natural_language">Instruction</label>
+            <textarea id="natural_language" name="natural_language">Find and buy a laptop for me, maximum CAD 1,500.</textarea>
+          </div>
           <label class="check" for="include_expiry">
             <input id="include_expiry" name="include_expiry" type="checkbox" checked>
             Include an expiry. Without one, the check asks for approval.
           </label>
-          <label for="time_limit">Expiry date</label>
-          <input id="time_limit" name="time_limit" type="date">
-        </fieldset>
-        <fieldset>
-          <legend>Payment the agent proposes</legend>
-          <label for="item">Item</label>
-          <input id="item" name="item" value="Laptop" required>
-          <label for="payment_amount">Amount</label>
-          <input id="payment_amount" name="payment_amount" type="number" min="0" step="0.01" value="1300" required>
-          <label for="payment_currency">Currency</label>
-          <input id="payment_currency" name="payment_currency" value="CAD" maxlength="3" required>
-          <label for="payment_merchant">Merchant</label>
-          <input id="payment_merchant" name="payment_merchant" value="techstore.example" required>
-          <div class="actions">
+          <div>
+            <label for="time_limit">Expiry date</label>
+            <input id="time_limit" name="time_limit" type="date">
+          </div>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Payment the agent proposes</legend>
+        <div class="desk-fields">
+          <div>
+            <label for="item">Item</label>
+            <input id="item" name="item" value="Laptop" required>
+          </div>
+          <div>
+            <label for="payment_amount">Amount</label>
+            <input id="payment_amount" name="payment_amount" type="number" min="0" step="0.01" value="1300" required>
+          </div>
+          <div>
+            <label for="payment_currency">Currency</label>
+            <input id="payment_currency" name="payment_currency" value="CAD" maxlength="3" required>
+          </div>
+          <div>
+            <label for="payment_merchant">Merchant</label>
+            <input id="payment_merchant" name="payment_merchant" value="techstore.example" required>
+          </div>
+          <div class="wide actions">
             <button type="submit">Sign and check</button>
-            <button class="ghost" type="button" data-preset="allow">CAD 1,300 laptop</button>
-            <button class="ghost" type="button" data-preset="deny">CAD 4,200 laptop</button>
+            <button class="ghost" type="button" data-preset="allow">CAD 1,300</button>
+            <button class="ghost" type="button" data-preset="deny">CAD 4,200</button>
             <button class="ghost" type="button" data-preset="step">No expiry</button>
           </div>
-        </fieldset>
-      </div>
+        </div>
+      </fieldset>
       <div id="demo-result" class="result" hidden aria-live="polite"></div>
     </form>
-  </div>
-</section>
+  </section>
 
-<section class="chapter" id="operations">
-  <div class="ops-head">
-    <div>
-      <p class="kicker">Transparency log</p>
-      <h2>What this deployment is publishing</h2>
+  <section class="desk-block" id="operations">
+    <div class="desk-ops-head">
+      <div>
+        <p class="kicker">Transparency log</p>
+        <h2>What this deployment is publishing</h2>
+      </div>
+      <button id="refresh-ops" class="ghost" type="button">Refresh</button>
     </div>
-    <button id="refresh-ops" class="ghost" type="button">Refresh</button>
-  </div>
-  <div class="ops">
-    <article>
-      <p class="mono">List</p>
-      <h3>Revocation list</h3>
-      <p>Pulled from <span class="meta">GET /v1/revocations</span>. Cached for five minutes. A deny is not a revocation.</p>
-      <div id="revocation-body"><p>Loading the revocation list…</p></div>
-    </article>
-    <article>
-      <p class="mono">Keys</p>
-      <h3>Published keys</h3>
-      <p>The log public key and any extra records at <span class="meta">/.well-known/kata-keys.json</span>.</p>
-      <div id="keys-body"><p>Loading published keys…</p></div>
-    </article>
-    <article>
-      <p class="mono">Log</p>
-      <h3>Transparency log</h3>
-      <p>The signed tree head from <span class="meta">GET /v1/log/head</span>.</p>
-      <div id="log-body"><p>Loading the tree head…</p></div>
-    </article>
-  </div>
-</section>
+    <p class="lede">Three public records. None of them is a customer list.</p>
+    <div class="desk-grid">
+      <article class="desk-mod">
+        <p class="kicker">List</p>
+        <h3>Revocation list</h3>
+        <p>Pulled from <span class="meta">GET /v1/revocations</span>. Cached for five minutes. A deny is not a revocation.</p>
+        <div id="revocation-body"><p>Loading the revocation list…</p></div>
+      </article>
+      <article class="desk-mod">
+        <p class="kicker">Keys</p>
+        <h3>Published keys</h3>
+        <p>The log public key and any extra records at <span class="meta">/.well-known/kata-keys.json</span>.</p>
+        <div id="keys-body"><p>Loading published keys…</p></div>
+      </article>
+      <article class="desk-mod">
+        <p class="kicker">Log</p>
+        <h3>Transparency log</h3>
+        <p>The signed tree head from <span class="meta">GET /v1/log/head</span>.</p>
+        <div id="log-body"><p>Loading the tree head…</p></div>
+      </article>
+    </div>
+  </section>
 
-<!--HISTORY-->
+  <!--HISTORY-->
+</div>
