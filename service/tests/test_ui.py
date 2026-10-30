@@ -86,8 +86,19 @@ def test_home_renders_the_desk_without_banned_phrases():
     header = body[start : body.index("</header>", start)]
     assert "Powered by KATA" not in header
     assert "brand-note" not in header
-    for banned in ("open source", "open-source", "credit bureau", "book a call"):
+    css = _client().get("/assets/app.css")
+    assert css.status_code == 200
+    sheet = css.text
+    for banned in (
+        "open source",
+        "open-source",
+        "credit bureau",
+        "book a call",
+        "source sans",
+        "source serif",
+    ):
         assert banned not in body.lower()
+        assert banned not in sheet.lower()
     for path in ("/design/a", "/design/b", "/design/c"):
         assert path not in body
         assert _client().get(path).status_code == 404
