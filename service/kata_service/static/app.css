@@ -455,6 +455,25 @@ footer.site p { margin: 0 0 8px; }
 .desk-home .desk-band p { margin: 4px 0 0; color: var(--body); font-size: 13px; }
 .desk-home .desk-synthetic { margin-top: 10px; }
 .desk-home .desk-synthetic p + p { margin-top: 8px; }
+.desk-home .desk-mod .sim-banner {
+  color: var(--step);
+  background: var(--step-bg);
+}
+.desk-home #log-body,
+.desk-home #keys-body,
+.desk-home #revocation-body,
+.desk-home #log-body ul,
+.desk-home #keys-body ul,
+.desk-home #revocation-body ul,
+.desk-home #log-body li,
+.desk-home #keys-body li,
+.desk-home #revocation-body li,
+.desk-home .desk-line dd,
+.desk-home .result .meta {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
 .desk-home .desk-pair {
   display: grid;
   grid-template-columns: 1.35fr 0.85fr;
