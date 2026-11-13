@@ -147,7 +147,13 @@ def build_router() -> APIRouter:
     async def verify(request: Request):
         def action(auth, body):
             request.state.agent_id = body.get("agent_id")
-            return _bureau(request).verify(auth, body)
+            bureau = _bureau(request)
+            result = bureau.verify(auth, body)
+            if bureau.evidence_verifier:
+                from kata_service.evidence.attach import take_evidence_id
+
+                request.state.evidence_id = take_evidence_id()
+            return result
 
         return await _run(request, action)
 
