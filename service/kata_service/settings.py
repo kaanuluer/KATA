@@ -74,6 +74,7 @@ class Settings:
     ledger_hygiene: bool = False
     breach_tools: bool = False
     passkey_enrollment: bool = False
+    evidence_verifier: bool = False
 
     def log_key(self) -> PrivateKey | None:
         if self.log_signing_seed is None:
@@ -151,6 +152,7 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
         error = "GAB_LEDGER_HYGIENE stores wrapped data keys in gab_subject_deks and needs DATABASE_URL"
     breach_tools = _flag(env.get("GAB_BREACH_TOOLS"))
     passkey_enrollment = _flag(env.get("GAB_PASSKEY_ENROLLMENT"))
+    evidence_verifier = _flag(env.get("GAB_EVIDENCE_VERIFIER"))
     return Settings(
         database_url=database_url,
         schema_url=schema_url,
@@ -200,6 +202,7 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
         ledger_hygiene=ledger_hygiene,
         breach_tools=breach_tools,
         passkey_enrollment=passkey_enrollment,
+        evidence_verifier=evidence_verifier,
     )
 
 
