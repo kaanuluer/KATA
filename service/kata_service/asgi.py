@@ -220,20 +220,24 @@ def create_app(
         if path == "/v1/portal/subject" and request.method == "DELETE":
             return response
         try:
-            bureau.repo.add_audit(
-                {
-                    "audit_id": "aud_" + secrets.token_hex(8),
-                    "at": bureau.stamp(),
-                    "org_id": getattr(request.state, "org_id", None),
-                    "key_id": getattr(request.state, "key_id", None),
-                    "method": request.method,
-                    "path": path,
-                    "status": response.status_code,
-                    "purpose_code": getattr(request.state, "purpose_code", None),
-                    "agent_id": getattr(request.state, "agent_id", None),
-                    "environment": "test" if getattr(request.state, "environment", None) == "test" else "live",
-                }
-            )
+            audit = {
+                "audit_id": "aud_" + secrets.token_hex(8),
+                "at": bureau.stamp(),
+                "org_id": getattr(request.state, "org_id", None),
+                "key_id": getattr(request.state, "key_id", None),
+                "method": request.method,
+                "path": path,
+                "status": response.status_code,
+                "purpose_code": getattr(request.state, "purpose_code", None),
+                "agent_id": getattr(request.state, "agent_id", None),
+                "environment": "test" if getattr(request.state, "environment", None) == "test" else "live",
+            }
+            bureau.repo.add_audit(audit)
+            evidence_id = getattr(request.state, "evidence_id", None)
+            if evidence_id:
+                from kata_service.evidence.attach import link_audit
+
+                link_audit(bureau, evidence_id, audit["audit_id"])
         except Exception:
             pass
         return response
@@ -627,6 +631,7 @@ def ensure_bureau(app: FastAPI):
             ledger_hygiene=settings.ledger_hygiene,
             breach_tools=settings.breach_tools,
             passkey_enrollment=settings.passkey_enrollment,
+            evidence_verifier=settings.evidence_verifier,
         )
         if settings.demo:
             from kata_service.seed import seed_demo
@@ -678,6 +683,7 @@ def ensure_bureau(app: FastAPI):
         ledger_hygiene=settings.ledger_hygiene,
         breach_tools=settings.breach_tools,
         passkey_enrollment=settings.passkey_enrollment,
+        evidence_verifier=settings.evidence_verifier,
     )
     _bind_subject_keys(service, settings, repo._connect)
     _ensure_ledger_store(service, settings)

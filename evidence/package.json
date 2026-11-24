@@ -1,0 +1,15 @@
+{
+  "name": "@gab/evidence",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Shared external-evidence verifier. A verified mandate is evidence recorded for KATA. It is not a KATA decision.",
+  "scripts": {
+    "test": "node --experimental-strip-types --test --test-reporter spec test/*.test.ts"
+  },
+  "dependencies": {
+    "jose": "^6.1.0",
+    "pg": "^8.16.3",
+    "zod": "^3.25.76"
+  }
+}

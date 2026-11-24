@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "vectors": [
+    {
+      "name": "synthetic-accept",
+      "source": "synthetic",
+      "now": "2026-11-13T12:00:00Z",
+      "material": {
+        "issuer": "https://issuer.example",
+        "subject": "agent-synthetic",
+        "key_id": "kid-synthetic",
+        "nonce": "nonce-synthetic-1",
+        "claims": {"purpose": "purchase"},
+        "accept": true
+      },
+      "expect": {
+        "result": "valid",
+        "reason": "ok",
+        "source": "synthetic",
+        "issuer": "https://issuer.example",
+        "subject": "agent-synthetic",
+        "key_id": "kid-synthetic"
+      }
+    },
+    {
+      "name": "synthetic-bad-signature",
+      "source": "synthetic",
+      "now": "2026-11-13T12:00:00Z",
+      "material": {
+        "issuer": "https://issuer.example",
+        "subject": "agent-synthetic",
+        "key_id": "kid-synthetic",
+        "nonce": "nonce-synthetic-2",
+        "claims": {"purpose": "purchase"},
+        "accept": false
+      },
+      "expect": {"result": "invalid", "reason": "signature", "source": "synthetic"}
+    },
+    {
+      "name": "synthetic-replay",
+      "source": "synthetic",
+      "now": "2026-11-13T12:00:00Z",
+      "repeat": 2,
+      "material": {
+        "issuer": "https://issuer.example",
+        "subject": "agent-synthetic",
+        "key_id": "kid-synthetic",
+        "nonce": "nonce-synthetic-replay",
+        "claims": {"purpose": "purchase"},
+        "accept": true
+      },
+      "expect": {"result": "invalid", "reason": "replay"}
+    }
+  ]
+}

@@ -1582,6 +1582,7 @@ class BureauService:
         ledger_hygiene: bool = False,
         breach_tools: bool = False,
         passkey_enrollment: bool = False,
+        evidence_verifier: bool = False,
     ) -> None:
         self.repo = repo
         self.deployment_env = deployment_env if deployment_env in {"production", "sandbox"} else "production"
@@ -1619,6 +1620,7 @@ class BureauService:
         self.ledger_hygiene = ledger_hygiene
         self.breach_tools = breach_tools
         self.passkey_enrollment = passkey_enrollment
+        self.evidence_verifier = evidence_verifier
         self._rate_purged_before: str | None = None
         if keyed_identifiers:
             from kata_service.identifiers import IdentifierMode
@@ -2169,6 +2171,21 @@ class BureauService:
         return [_agreement_summary(item) for item in self.repo.list_agreements(agent_id)]
 
     def verify(self, auth: Auth, body: dict[str, Any]) -> dict[str, Any]:
+        if self.evidence_verifier:
+            from kata_service.evidence.attach import clear_evidence_id
+
+            clear_evidence_id()
+        payload = self._verify_decision(auth, body)
+        if self.evidence_verifier:
+            try:
+                from kata_service.evidence.attach import record_external_evidence
+
+                record_external_evidence(self, body, payload)
+            except Exception:
+                log.exception("external evidence was not recorded")
+        return payload
+
+    def _verify_decision(self, auth: Auth, body: dict[str, Any]) -> dict[str, Any]:
         self._scope(auth, "verify")
         reject_deep_json(body)
         self._screen("verify", body)

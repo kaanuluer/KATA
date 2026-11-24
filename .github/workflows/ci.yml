@@ -55,6 +55,36 @@ jobs:
         working-directory: service
         run: python -m pytest -q -m "not long"
 
+  evidence-node:
+    name: evidence node
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gab
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d gab"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      GAB_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/gab
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: evidence/package-lock.json
+      - name: Test the evidence verifier
+        working-directory: evidence
+        run: npm ci && npm test
+
   lint:
     name: lint
     runs-on: ubuntu-latest
