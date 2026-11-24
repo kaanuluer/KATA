@@ -3,8 +3,8 @@
 """Pluggable evidence verifiers.
 
 ``jwt`` checks a compact JWT against a JWKS directory. ``synthetic`` is the
-test verifier. Protocol adapters register another source later. None of them
-returns a KATA decision.
+test verifier. ``web-bot-auth`` checks an Ed25519 HTTP message signature.
+None of them returns a KATA decision.
 """
 
 from __future__ import annotations
@@ -356,5 +356,12 @@ def _jwt_builder(store: EvidenceStore, **deps: Any) -> JwtEvidenceVerifier:
     return JwtEvidenceVerifier(store, **deps)
 
 
+def _web_bot_auth_builder(store: EvidenceStore, **deps: Any):
+    from kata_service.evidence.web_bot_auth import WebBotAuthVerifier
+
+    return WebBotAuthVerifier(store, **deps)
+
+
 register_verifier("synthetic", _synthetic_builder)
 register_verifier("jwt", _jwt_builder)
+register_verifier("web-bot-auth", _web_bot_auth_builder)
