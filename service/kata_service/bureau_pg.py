@@ -1703,6 +1703,182 @@ class PostgresRepo:
             ),
         )
 
+    def holds_supported(self) -> bool:
+        cached = getattr(self, "_holds_supported", None)
+        if cached is not None:
+            return bool(cached)
+        from kata_service.hold_queue import HoldStoreError
+
+        try:
+            row = self._one(
+                """
+                SELECT COUNT(*) FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'gab_holds'
+                """,
+                (),
+            )
+        except Exception as exc:
+            raise HoldStoreError("hold queue is unavailable") from exc
+        ready = row is not None and int(row[0]) >= 1
+        self._holds_supported = ready
+        return ready
+
+    def insert_hold(self, record: dict[str, Any]) -> None:
+        action = record.get("action") if isinstance(record.get("action"), dict) else {}
+
+        def run() -> None:
+            self._execute(
+                """
+                INSERT INTO gab_holds (
+                  hold_id, agent_id, agreement_id, decision_ref, payload_hash, amount, currency, payee,
+                  action_document, intent_id, kata_decision, status, reviewer_id, decision_reason,
+                  expires_at, created_at, decided_at, used_at, is_test
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    record["hold_id"],
+                    record.get("agent_id") or "",
+                    record.get("agreement_id") or "",
+                    record.get("decision_ref") or "",
+                    record.get("payload_hash") or "",
+                    record.get("amount") or "",
+                    record.get("currency") or "",
+                    record.get("payee") or "",
+                    dump_doc(action),
+                    record.get("intent_id") or "",
+                    record.get("kata_decision") or "STEP_UP",
+                    record.get("status") or "pending",
+                    record.get("reviewer_id"),
+                    record.get("decision_reason"),
+                    record.get("expires_at") or "",
+                    record.get("created_at") or "",
+                    record.get("decided_at"),
+                    record.get("used_at"),
+                    _test_row(),
+                ),
+            )
+
+        self._hold_call(run)
+
+    def get_hold(self, hold_id: str) -> dict[str, Any] | None:
+        def run():
+            row = self._one(
+                f"SELECT {_HOLD_COLUMNS} FROM gab_holds WHERE hold_id = %s AND is_test = %s",
+                (hold_id, _test_row()),
+            )
+            return None if row is None else _hold_row(row)
+
+        return self._hold_call(run)
+
+    def find_hold(self, decision_ref: str, payload_hash: str) -> dict[str, Any] | None:
+        def run():
+            row = self._one(
+                f"""
+                SELECT {_HOLD_COLUMNS} FROM gab_holds
+                WHERE is_test = %s AND decision_ref = %s AND payload_hash = %s
+                ORDER BY created_at DESC, hold_id DESC
+                LIMIT 1
+                """,
+                (_test_row(), decision_ref, payload_hash),
+            )
+            return None if row is None else _hold_row(row)
+
+        return self._hold_call(run)
+
+    def list_pending_holds(self, now: str) -> list[dict[str, Any]]:
+        def run():
+            rows = self._all(
+                f"""
+                SELECT {_HOLD_COLUMNS} FROM gab_holds
+                WHERE is_test = %s AND status = 'pending' AND expires_at > %s
+                ORDER BY created_at, hold_id
+                """,
+                (_test_row(), now),
+            )
+            return [_hold_row(row) for row in rows]
+
+        return self._hold_call(run)
+
+    def expire_due_holds(self, now: str) -> list[dict[str, Any]]:
+        def run():
+            self._ensure()
+            with self._connect() as conn:
+                with conn.transaction():
+                    rows = conn.execute(
+                        f"""
+                        UPDATE gab_holds
+                        SET status = 'expired', decided_at = COALESCE(decided_at, %s)
+                        WHERE is_test = %s AND status IN ('pending', 'approved') AND expires_at <= %s
+                        RETURNING {_HOLD_COLUMNS}
+                        """,
+                        (now, _test_row(), now),
+                    ).fetchall()
+            return [_hold_row(row) for row in rows]
+
+        return self._hold_call(run)
+
+    def transition_hold(
+        self,
+        hold_id: str,
+        *,
+        expect: str,
+        status: str,
+        reviewer_id: str | None,
+        reason: str | None,
+        at: str,
+        used_at: str | None = None,
+    ) -> dict[str, Any] | None:
+        def run():
+            self._ensure()
+            flag = _test_row()
+            with self._connect() as conn:
+                with conn.transaction():
+                    row = conn.execute(
+                        f"SELECT {_HOLD_COLUMNS} FROM gab_holds WHERE hold_id = %s AND is_test = %s FOR UPDATE",
+                        (hold_id, flag),
+                    ).fetchone()
+                    if row is None:
+                        return None
+                    current = _hold_row(row)
+                    if current["status"] != expect:
+                        current["conflict"] = current["status"]
+                        return current
+                    reviewer = reviewer_id if reviewer_id is not None else current.get("reviewer_id")
+                    decision_reason = reason if reason is not None else current.get("decision_reason")
+                    decided = at if status in {"approved", "rejected", "expired"} else current.get("decided_at")
+                    used = used_at if used_at is not None else current.get("used_at")
+                    conn.execute(
+                        """
+                        UPDATE gab_holds
+                        SET status = %s, reviewer_id = %s, decision_reason = %s, decided_at = %s, used_at = %s
+                        WHERE hold_id = %s AND is_test = %s
+                        """,
+                        (status, reviewer, decision_reason, decided, used, hold_id, flag),
+                    )
+                    current["status"] = status
+                    current["reviewer_id"] = reviewer
+                    current["decision_reason"] = decision_reason
+                    current["decided_at"] = decided
+                    current["used_at"] = used
+                    return current
+
+        return self._hold_call(run)
+
+    def _hold_call(self, fn):
+        from kata_service.hold_queue import HoldStoreError, HoldTableMissing
+
+        try:
+            if not self.holds_supported():
+                raise HoldTableMissing()
+            return fn()
+        except (HoldStoreError, HoldTableMissing):
+            raise
+        except Exception as exc:
+            if _hold_relation_missing(exc):
+                self._holds_supported = False
+                raise HoldTableMissing() from exc
+            raise HoldStoreError("hold queue is unavailable") from exc
+
     def _ensure(self) -> None:
         if self._ready:
             return
@@ -1759,6 +1935,50 @@ class PostgresRepo:
         self._ensure()
         with self._connect() as conn:
             return conn.execute(sql, params).fetchall()
+
+
+_HOLD_COLUMNS = """
+hold_id, agent_id, agreement_id, decision_ref, payload_hash, amount, currency, payee,
+action_document, intent_id, kata_decision, status, reviewer_id, decision_reason,
+expires_at, created_at, decided_at, used_at, is_test
+"""
+
+
+def _hold_relation_missing(exc: Exception) -> bool:
+    if type(exc).__name__ in {"UndefinedTable", "UndefinedColumn"}:
+        return True
+    text = str(exc).lower()
+    return "gab_holds" in text and "does not exist" in text
+
+
+def _hold_row(row) -> dict[str, Any]:
+    document = row[8]
+    action: dict[str, Any] = {}
+    if isinstance(document, str) and document:
+        action = load_doc(document)
+    elif isinstance(document, dict):
+        action = document
+    return {
+        "hold_id": row[0],
+        "agent_id": row[1],
+        "agreement_id": row[2] or "",
+        "decision_ref": row[3],
+        "payload_hash": row[4],
+        "amount": row[5] or "",
+        "currency": row[6] or "",
+        "payee": row[7] or "",
+        "action": action,
+        "intent_id": row[9] or "",
+        "kata_decision": row[10],
+        "status": row[11],
+        "reviewer_id": row[12],
+        "decision_reason": row[13],
+        "expires_at": row[14],
+        "created_at": row[15],
+        "decided_at": row[16],
+        "used_at": row[17],
+        "is_test": bool(row[18]),
+    }
 
 
 def _login_tuple(row) -> dict[str, Any]:

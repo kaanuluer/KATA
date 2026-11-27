@@ -80,6 +80,8 @@ class Settings:
     decision_rationale: bool = False
     rule_sandbox: bool = False
     agent_authority: bool = False
+    hold_queue: bool = False
+    hold_ttl_seconds: int = 900
 
     def log_key(self) -> PrivateKey | None:
         if self.log_signing_seed is None:
@@ -161,6 +163,8 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
     decision_rationale = _flag(env.get("GAB_DECISION_RATIONALE"))
     rule_sandbox = _flag(env.get("GAB_RULE_SANDBOX"))
     agent_authority = _flag(env.get("GAB_AGENT_AUTHORITY"))
+    hold_queue = _flag(env.get("GAB_HOLD_QUEUE"))
+    hold_ttl_seconds = _positive_int(env.get("GAB_HOLD_TTL_SECONDS"), 900)
     http_message_signatures = _flag(env.get("GAB_HTTP_MESSAGE_SIGNATURES"))
     http_message_signatures_jwk = None
     if http_message_signatures:
@@ -225,6 +229,8 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
         decision_rationale=decision_rationale,
         rule_sandbox=rule_sandbox,
         agent_authority=agent_authority,
+        hold_queue=hold_queue,
+        hold_ttl_seconds=hold_ttl_seconds,
     )
 
 

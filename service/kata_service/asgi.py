@@ -658,6 +658,51 @@ def create_app(
         async def resume_agent_authority(agent_id: str, request: Request):
             return await _agent_authority(request, agent_id, "resume")
 
+    if resolved.hold_queue:
+
+        async def _hold_admin(request: Request, action: str, hold_id: str | None = None):
+            blocked = _configured(app)
+            if blocked is not None:
+                return blocked
+            settings_now = app.state.settings
+            if not settings_now.admin_token or not _bearer_matches(request, settings_now.admin_token):
+                return _error(401, "admin credentials are required")
+            payload: dict[str, Any] = {}
+            if action != "list":
+                try:
+                    loaded = await request.json()
+                except Exception:  # noqa: BLE001 — a bad body is a 400, not a stack trace
+                    return _error(400, "hold body must be JSON")
+                if not isinstance(loaded, dict):
+                    return _error(400, "hold body must be a JSON object")
+                payload = loaded
+            try:
+                bureau = ensure_bureau(app)
+                header = request.headers.get("authorization", "")
+                token = header[7:].strip() if header.startswith("Bearer ") else ""
+                auth = bureau.authenticate(token, admin_token=settings_now.admin_token)
+                if action == "list":
+                    return bureau.list_holds(auth)
+                if hold_id is None:
+                    return _error(404, "hold was not found")
+                if action == "approve":
+                    return bureau.approve_hold(auth, hold_id, payload)
+                return bureau.reject_hold(auth, hold_id, payload)
+            except BureauError as exc:
+                return _error(exc.status, exc.message)
+
+        @app.get("/internal/holds")
+        async def list_holds(request: Request):
+            return await _hold_admin(request, "list")
+
+        @app.post("/internal/holds/{hold_id}/approve")
+        async def approve_hold(hold_id: str, request: Request):
+            return await _hold_admin(request, "approve", hold_id)
+
+        @app.post("/internal/holds/{hold_id}/reject")
+        async def reject_hold(hold_id: str, request: Request):
+            return await _hold_admin(request, "reject", hold_id)
+
     if resolved.http_message_signatures:
 
         @app.get("/.well-known/http-message-signatures-directory")
@@ -725,6 +770,8 @@ def ensure_bureau(app: FastAPI):
             evidence_verifier=settings.evidence_verifier,
             decision_rationale=settings.decision_rationale,
             agent_authority=settings.agent_authority,
+            hold_queue=settings.hold_queue,
+            hold_ttl_seconds=settings.hold_ttl_seconds,
         )
         if settings.demo:
             from kata_service.seed import seed_demo
@@ -779,6 +826,8 @@ def ensure_bureau(app: FastAPI):
         evidence_verifier=settings.evidence_verifier,
         decision_rationale=settings.decision_rationale,
         agent_authority=settings.agent_authority,
+        hold_queue=settings.hold_queue,
+        hold_ttl_seconds=settings.hold_ttl_seconds,
     )
     _bind_subject_keys(service, settings, repo._connect)
     _ensure_ledger_store(service, settings)
