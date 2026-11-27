@@ -757,8 +757,31 @@ class MemoryRepo:
             self.keys[key_id]["revoked_at"] = at
 
     def add_audit(self, record: dict[str, Any]) -> None:
+        from kata_service.audit_chain import AUDIT_CHAIN_START, audit_row_hash
+
         with self._lock:
-            self.audit.append(dict(record))
+            stored = dict(record)
+            prev = AUDIT_CHAIN_START
+            for item in reversed(self.audit):
+                digest = item.get("hash")
+                if isinstance(digest, str) and digest:
+                    prev = digest
+                    break
+            stored["prev_hash"] = prev
+            stored["hash"] = audit_row_hash(prev, stored)
+            self.audit.append(stored)
+
+    def audit_chain(self) -> dict[str, Any]:
+        from kata_service.audit_chain import AUDIT_CHAIN_START, verify_audit_chain
+
+        with self._lock:
+            rows = [dict(item) for item in self.audit]
+        tail = AUDIT_CHAIN_START
+        for item in rows:
+            digest = item.get("hash")
+            if isinstance(digest, str) and digest:
+                tail = digest
+        return verify_audit_chain(rows, tail_hash=tail if rows else AUDIT_CHAIN_START)
 
     def list_audit(self, org_id: str | None, environment: str | None = None) -> list[dict[str, Any]]:
         with self._lock:
@@ -1584,6 +1607,7 @@ class BureauService:
         passkey_enrollment: bool = False,
         evidence_verifier: bool = False,
         decision_rationale: bool = False,
+        agent_authority: bool = False,
     ) -> None:
         self.repo = repo
         self.deployment_env = deployment_env if deployment_env in {"production", "sandbox"} else "production"
@@ -1623,6 +1647,7 @@ class BureauService:
         self.passkey_enrollment = passkey_enrollment
         self.evidence_verifier = evidence_verifier
         self.decision_rationale = decision_rationale
+        self.agent_authority = agent_authority
         self._rate_purged_before: str | None = None
         if keyed_identifiers:
             from kata_service.identifiers import IdentifierMode
@@ -2196,6 +2221,18 @@ class BureauService:
         action = body.get("action")
         if not isinstance(action, dict):
             raise BureauError(400, "action must be an object")
+        if self.agent_authority and agent.get("authority_stopped"):
+            return self._present_verify(
+                agent,
+                action,
+                {
+                    "verdict": "DENY",
+                    "kata_decision": "BLOCK",
+                    "reasons": ["AGENT_STOPPED"],
+                    "messages": ["This agent is stopped."],
+                    "agent_id": agent_id,
+                },
+            )
         if agent["status"] != "active":
             return self._present_verify(agent, action, {"verdict": "DENY", "kata_decision": "BLOCK", "reasons": ["AGENT_NOT_ACTIVE"], "messages": ["Agent is not active."], "agent_id": agent_id})
         active = [item for item in self.repo.list_agreements(agent_id) if item["status"] == "active"]
@@ -2276,23 +2313,29 @@ class BureauService:
             frequency = self._frequency_denial(record["agreement_id"], agreement, action, body.get("intent_id"), at)
             if frequency is not None:
                 return _bounded_deny(agent_id, record["agreement_id"], frequency[0], frequency[1])
-            try:
-                entry = append_allow(
-                    record["document"],
-                    agreement,
-                    action,
-                    at=at,
-                    intent_id=body.get("intent_id"),
-                )
-            except KataError as exc:
-                raise BureauError(400, str(exc)) from exc
-            record["updated_at"] = at
-            self.repo.append_agreement_allow(record, entry)
-            self._record_interaction(agent, auth, body, action, record["agreement_id"], at)
+            payload = result.to_dict()
+            payload["agent_id"] = agent_id
+            payload["agreement_id"] = record["agreement_id"]
+            payload = self._apply_authority(agent, action, payload, record)
+            if payload.get("verdict") == "ALLOW":
+                try:
+                    entry = append_allow(
+                        record["document"],
+                        agreement,
+                        action,
+                        at=at,
+                        intent_id=body.get("intent_id"),
+                    )
+                except KataError as exc:
+                    raise BureauError(400, str(exc)) from exc
+                record["updated_at"] = at
+                self.repo.append_agreement_allow(record, entry)
+                self._record_interaction(agent, auth, body, action, record["agreement_id"], at)
+            return self._decorate_verify(agent, action, payload)
         payload = result.to_dict()
         payload["agent_id"] = agent_id
         payload["agreement_id"] = record["agreement_id"]
-        return self._present_verify(agent, action, payload)
+        return self._present_verify(agent, action, payload, record)
 
     def _pushed_revocations(self) -> list[dict[str, Any]]:
         """Signed revocations stored by /v1/revocations/push. No log means an empty list."""
@@ -3451,6 +3494,97 @@ class BureauService:
 
         screen_request(kind, body)
 
+    def set_authority_level(self, auth: Auth, agent_id: str, level: Any) -> dict[str, Any]:
+        self._admin(auth)
+        self._require_agent_authority()
+        if isinstance(level, bool) or not isinstance(level, int) or level not in (0, 1, 2, 3):
+            raise BureauError(400, "level is 0, 1, 2, or 3")
+        agent = self._agent(agent_id)
+        agent["authority_level"] = level
+        agent["updated_at"] = self.stamp()
+        self._write_authority(agent)
+        self._authority_audit(agent_id, f"/internal/agent-authority/{agent_id}/level")
+        return {"agent_id": agent_id, "level": level, "stopped": bool(agent.get("authority_stopped"))}
+
+    def stop_agent(self, auth: Auth, agent_id: str) -> dict[str, Any]:
+        self._admin(auth)
+        self._require_agent_authority()
+        agent = self._agent(agent_id)
+        agent["authority_stopped"] = True
+        agent["updated_at"] = self.stamp()
+        self._write_authority(agent)
+        self._authority_audit(agent_id, f"/internal/agent-authority/{agent_id}/stop")
+        return {"agent_id": agent_id, "stopped": True, "level": agent.get("authority_level")}
+
+    def resume_agent(self, auth: Auth, agent_id: str) -> dict[str, Any]:
+        self._admin(auth)
+        self._require_agent_authority()
+        agent = self._agent(agent_id)
+        agent["authority_stopped"] = False
+        agent["updated_at"] = self.stamp()
+        self._write_authority(agent)
+        self._authority_audit(agent_id, f"/internal/agent-authority/{agent_id}/resume")
+        return {"agent_id": agent_id, "stopped": False, "level": agent.get("authority_level")}
+
+    def _require_agent_authority(self) -> None:
+        if not self.agent_authority:
+            raise BureauError(404, "agent authority is off")
+
+    def _write_authority(self, agent: dict[str, Any]) -> None:
+        writer = getattr(self.repo, "save_agent_authority", None)
+        if writer is None:
+            self.repo.save_agent(agent)
+            return
+        writer(agent)
+
+    def _authority_audit(self, agent_id: str, path: str) -> None:
+        self.repo.add_audit(
+            {
+                "audit_id": "aud_" + secrets.token_hex(8),
+                "at": self.stamp(),
+                "org_id": None,
+                "key_id": "admin",
+                "method": "POST",
+                "path": path,
+                "status": 200,
+                "purpose_code": None,
+                "agent_id": agent_id,
+                "environment": "test" if in_test_mode() else "live",
+            }
+        )
+
+    def _apply_authority(
+        self,
+        agent: dict[str, Any],
+        action: Any,
+        payload: dict[str, Any],
+        agreement: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        if not self.agent_authority:
+            return payload
+        try:
+            from kata_service.agent_authority import agreement_bounds, apply_authority
+
+            document = agreement.get("document") if isinstance(agreement, dict) else None
+            currency = action.get("currency") if isinstance(action, dict) else None
+            intent_maximum, agreement_cumulative, spent = agreement_bounds(document, currency if isinstance(currency, str) else None)
+            amount = action.get("amount") if isinstance(action, dict) else None
+            level = agent.get("authority_level")
+            if isinstance(level, bool) or not isinstance(level, int):
+                level = None
+            return apply_authority(
+                payload,
+                stopped=bool(agent.get("authority_stopped")),
+                level=level,
+                amount=amount,
+                spent=spent,
+                intent_maximum=intent_maximum,
+                agreement_cumulative=agreement_cumulative,
+            )
+        except Exception:
+            log.exception("agent authority was not applied")
+            return payload
+
     def _attach_rationale(self, body: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
         if not self.decision_rationale:
             return payload
@@ -3458,7 +3592,17 @@ class BureauService:
 
         return attach_rationale(self, body, payload)
 
-    def _present_verify(self, agent: dict[str, Any], action: Any, payload: dict[str, Any]) -> dict[str, Any]:
+    def _present_verify(
+        self,
+        agent: dict[str, Any],
+        action: Any,
+        payload: dict[str, Any],
+        agreement: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload = self._apply_authority(agent, action, payload, agreement)
+        return self._decorate_verify(agent, action, payload)
+
+    def _decorate_verify(self, agent: dict[str, Any], action: Any, payload: dict[str, Any]) -> dict[str, Any]:
         if self.entity_only:
             from kata_service.entity_mode import strip_person
 

@@ -79,6 +79,7 @@ class Settings:
     http_message_signatures_jwk: dict | None = None
     decision_rationale: bool = False
     rule_sandbox: bool = False
+    agent_authority: bool = False
 
     def log_key(self) -> PrivateKey | None:
         if self.log_signing_seed is None:
@@ -159,6 +160,7 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
     evidence_verifier = _flag(env.get("GAB_EVIDENCE_VERIFIER"))
     decision_rationale = _flag(env.get("GAB_DECISION_RATIONALE"))
     rule_sandbox = _flag(env.get("GAB_RULE_SANDBOX"))
+    agent_authority = _flag(env.get("GAB_AGENT_AUTHORITY"))
     http_message_signatures = _flag(env.get("GAB_HTTP_MESSAGE_SIGNATURES"))
     http_message_signatures_jwk = None
     if http_message_signatures:
@@ -222,6 +224,7 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
         http_message_signatures_jwk=http_message_signatures_jwk,
         decision_rationale=decision_rationale,
         rule_sandbox=rule_sandbox,
+        agent_authority=agent_authority,
     )
 
 

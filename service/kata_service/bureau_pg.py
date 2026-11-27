@@ -571,6 +571,42 @@ class PostgresRepo:
             ),
         )
 
+    def authority_supported(self) -> bool:
+        cached = getattr(self, "_authority_supported", None)
+        if cached is not None:
+            return bool(cached)
+        try:
+            row = self._one(
+                """
+                SELECT COUNT(*) FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'gab_agents'
+                  AND column_name IN ('authority_level', 'authority_stopped')
+                """,
+                (),
+            )
+        except Exception:
+            return False
+        ready = row is not None and int(row[0]) >= 2
+        self._authority_supported = ready
+        return ready
+
+    def save_agent_authority(self, record: dict[str, Any]) -> None:
+        if not self.authority_supported():
+            raise BureauError(503, "agent authority is not available")
+        level = record.get("authority_level")
+        if isinstance(level, bool) or not isinstance(level, int):
+            level = None
+        stopped = 1 if record.get("authority_stopped") else 0
+        self._execute(
+            """
+            UPDATE gab_agents
+            SET authority_level = %s, authority_stopped = %s, updated_at = %s
+            WHERE agent_id = %s AND is_test = %s
+            """,
+            (level, stopped, record.get("updated_at"), record["agent_id"], _test_row()),
+        )
+
     def get_agent(self, agent_id: str) -> dict[str, Any] | None:
         row = self._one("SELECT * FROM gab_agents WHERE agent_id = %s AND is_test = %s", (agent_id, _test_row()))
         return None if row is None else _agent_row(row)
@@ -1821,7 +1857,7 @@ def _key_row(row) -> dict[str, Any]:
 
 
 def _agent_row(row) -> dict[str, Any]:
-    return {
+    record = {
         "agent_id": row[0],
         "operator_org_id": row[1],
         "principal_id": row[2],
@@ -1839,6 +1875,16 @@ def _agent_row(row) -> dict[str, Any]:
         "is_test": bool(row[14]) if len(row) > 14 else False,
         "entity_kind": row[15] if len(row) > 15 and row[15] else None,
     }
+    if len(row) > 17:
+        raw_level = row[16]
+        if raw_level is not None and not isinstance(raw_level, bool):
+            try:
+                record["authority_level"] = int(raw_level)
+            except (TypeError, ValueError):
+                pass
+        if row[17] in (1, True):
+            record["authority_stopped"] = True
+    return record
 
 
 _AGREEMENT_UPSERT = """
