@@ -582,6 +582,39 @@ def create_app(
         held.put_fx(currency, target, chosen_day, rate)
         return _fx_body(currency, target, chosen_day, rate)
 
+    if resolved.rule_sandbox:
+        from kata_service.rule_sandbox import LIVE_RULES, ROUTE, SandboxError, run_sandbox
+
+        app.state.live_rules = LIVE_RULES
+
+        @app.post(ROUTE)
+        async def rule_sandbox_replay(request: Request):
+            blocked = _configured(app)
+            if blocked is not None:
+                return blocked
+            settings_now = app.state.settings
+            if not settings_now.admin_token or not _bearer_matches(request, settings_now.admin_token):
+                return _error(401, "admin credentials are required")
+            live = app.state.live_rules
+            try:
+                payload = await request.json()
+            except Exception:  # noqa: BLE001 — a bad body is a 400, not a stack trace
+                return _error(400, "sandbox body must be JSON")
+            if not isinstance(payload, dict):
+                return _error(400, "sandbox body must be a JSON object")
+            try:
+                report = run_sandbox(payload)
+            except SandboxError as exc:
+                report = None
+                failure = exc.message
+            else:
+                failure = None
+            if app.state.live_rules is not live:
+                app.state.live_rules = live
+            if failure is not None:
+                return _error(400, failure)
+            return report
+
     if resolved.http_message_signatures:
 
         @app.get("/.well-known/http-message-signatures-directory")
