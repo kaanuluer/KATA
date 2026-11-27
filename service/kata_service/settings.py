@@ -77,6 +77,7 @@ class Settings:
     evidence_verifier: bool = False
     http_message_signatures: bool = False
     http_message_signatures_jwk: dict | None = None
+    decision_rationale: bool = False
 
     def log_key(self) -> PrivateKey | None:
         if self.log_signing_seed is None:
@@ -155,6 +156,7 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
     breach_tools = _flag(env.get("GAB_BREACH_TOOLS"))
     passkey_enrollment = _flag(env.get("GAB_PASSKEY_ENROLLMENT"))
     evidence_verifier = _flag(env.get("GAB_EVIDENCE_VERIFIER"))
+    decision_rationale = _flag(env.get("GAB_DECISION_RATIONALE"))
     http_message_signatures = _flag(env.get("GAB_HTTP_MESSAGE_SIGNATURES"))
     http_message_signatures_jwk = None
     if http_message_signatures:
@@ -216,6 +218,7 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
         evidence_verifier=evidence_verifier,
         http_message_signatures=http_message_signatures,
         http_message_signatures_jwk=http_message_signatures_jwk,
+        decision_rationale=decision_rationale,
     )
 
 

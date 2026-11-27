@@ -1,0 +1,1 @@
+{"kata_decision":"BLOCK","mandate_hash":"sha256:73f7c952154891f09d65c4cb0ea8295037de82a59c896dea2a5247f516e515c3","messages":["The action currency does not match the intent currency."],"reasons":["CURRENCY_MISMATCH"],"required_action":"NONE","verdict":"DENY","agent_id":"shopper-01","agreement_id":"agr_rationale"}

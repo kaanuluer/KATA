@@ -1583,6 +1583,7 @@ class BureauService:
         breach_tools: bool = False,
         passkey_enrollment: bool = False,
         evidence_verifier: bool = False,
+        decision_rationale: bool = False,
     ) -> None:
         self.repo = repo
         self.deployment_env = deployment_env if deployment_env in {"production", "sandbox"} else "production"
@@ -1621,6 +1622,7 @@ class BureauService:
         self.breach_tools = breach_tools
         self.passkey_enrollment = passkey_enrollment
         self.evidence_verifier = evidence_verifier
+        self.decision_rationale = decision_rationale
         self._rate_purged_before: str | None = None
         if keyed_identifiers:
             from kata_service.identifiers import IdentifierMode
@@ -2183,7 +2185,7 @@ class BureauService:
                 record_external_evidence(self, body, payload)
             except Exception:
                 log.exception("external evidence was not recorded")
-        return payload
+        return self._attach_rationale(body, payload)
 
     def _verify_decision(self, auth: Auth, body: dict[str, Any]) -> dict[str, Any]:
         self._scope(auth, "verify")
@@ -2335,14 +2337,17 @@ class BureauService:
             "ucp": translated.report,
         }
         if translated.deny_code:
-            return {
-                "verdict": "DENY",
-                "kata_decision": "BLOCK",
-                "reasons": [translated.deny_code],
-                "messages": [translated.deny_message],
-                "agent_id": agent_id,
-                **extra,
-            }
+            return self._attach_rationale(
+                body,
+                {
+                    "verdict": "DENY",
+                    "kata_decision": "BLOCK",
+                    "reasons": [translated.deny_code],
+                    "messages": [translated.deny_message],
+                    "agent_id": agent_id,
+                    **extra,
+                },
+            )
         forwarded: dict[str, Any] = {"agent_id": agent_id, "action": translated.action}
         if body.get("agreement_id"):
             forwarded["agreement_id"] = body.get("agreement_id")
@@ -3445,6 +3450,13 @@ class BureauService:
         from kata_service.entity_mode import screen_request
 
         screen_request(kind, body)
+
+    def _attach_rationale(self, body: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+        if not self.decision_rationale:
+            return payload
+        from kata_service.decision_rationale import attach_rationale
+
+        return attach_rationale(self, body, payload)
 
     def _present_verify(self, agent: dict[str, Any], action: Any, payload: dict[str, Any]) -> dict[str, Any]:
         if self.entity_only:
