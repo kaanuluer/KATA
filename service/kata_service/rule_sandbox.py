@@ -20,6 +20,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Iterator, Mapping
 
+from kata_service.agent_authority import apply_authority, authority_unavailable
 from kata_service.decision_rationale import confidence_for
 from kata_service.defenses import ScorePolicy
 
@@ -62,6 +63,13 @@ _REQUEST_FIELDS = frozenset(
         "prior_daily_count",
         "prior_daily_amount",
         "evidence_result",
+        "authority_level",
+        "authority_stopped",
+        "authority_apply_failed",
+        "authority_read_failed",
+        "intent_maximum",
+        "agreement_cumulative",
+        "spent",
     }
 )
 _AMOUNT_CHOICES = (0, 10, 50, 100, 250, 800, 1500, 1501, 5000)
@@ -107,6 +115,13 @@ class SyntheticRequest:
     prior_daily_count: int
     prior_daily_amount: int
     evidence_result: str | None
+    authority_level: int | None = None
+    authority_stopped: bool = False
+    intent_maximum: int | None = None
+    agreement_cumulative: int | None = None
+    spent: int = 0
+    authority_apply_failed: bool = False
+    authority_read_failed: bool = False
 
 
 def _baseline() -> DecisionRules:
@@ -359,6 +374,30 @@ def _parse_request(raw: Any, index: int) -> SyntheticRequest:
         evidence = raw.get("evidence_result")
         if not isinstance(evidence, str) or evidence not in _EVIDENCE:
             raise SandboxError(label + " evidence_result is invalid")
+    authority_level = None
+    if "authority_level" in raw and raw.get("authority_level") is not None:
+        authority_level = _strict_int(raw.get("authority_level"), label + " authority_level", 0, 3)
+    authority_stopped = False
+    if "authority_stopped" in raw:
+        if not isinstance(raw.get("authority_stopped"), bool):
+            raise SandboxError(label + " authority_stopped must be true or false")
+        authority_stopped = raw["authority_stopped"]
+    authority_apply_failed = _optional_flag(raw, "authority_apply_failed", label)
+    authority_read_failed = _optional_flag(raw, "authority_read_failed", label)
+    intent_maximum = None
+    if "intent_maximum" in raw and raw.get("intent_maximum") is not None:
+        intent_maximum = _strict_int(raw.get("intent_maximum"), label + " intent_maximum", 0, 1_000_000_000_000)
+    agreement_cumulative = None
+    if "agreement_cumulative" in raw and raw.get("agreement_cumulative") is not None:
+        agreement_cumulative = _strict_int(
+            raw.get("agreement_cumulative"),
+            label + " agreement_cumulative",
+            0,
+            1_000_000_000_000,
+        )
+    spent = 0
+    if "spent" in raw:
+        spent = _strict_int(raw.get("spent"), label + " spent", 0, 1_000_000_000_000)
     return SyntheticRequest(
         request_id=request_id,
         agent_status=status,
@@ -371,10 +410,53 @@ def _parse_request(raw: Any, index: int) -> SyntheticRequest:
         prior_daily_count=prior_count,
         prior_daily_amount=prior_amount,
         evidence_result=evidence,
+        authority_level=authority_level,
+        authority_stopped=authority_stopped,
+        intent_maximum=intent_maximum,
+        agreement_cumulative=agreement_cumulative,
+        spent=spent,
+        authority_apply_failed=authority_apply_failed,
+        authority_read_failed=authority_read_failed,
     )
 
 
+def _optional_flag(raw: Mapping[str, Any], name: str, label: str) -> bool:
+    if name not in raw:
+        return False
+    if not isinstance(raw.get(name), bool):
+        raise SandboxError(label + " " + name + " must be true or false")
+    return bool(raw[name])
+
+
 def _decide(rules: DecisionRules, request: SyntheticRequest) -> dict[str, Any]:
+    decided = _decide_current(rules, request)
+    if request.authority_read_failed:
+        return authority_unavailable(decided, level=None, read_failed=True)
+    ceiling = rules.maximum_amount if request.intent_maximum is None else min(rules.maximum_amount, request.intent_maximum)
+    cumulative = (
+        rules.cumulative_maximum
+        if request.agreement_cumulative is None
+        else min(rules.cumulative_maximum, request.agreement_cumulative)
+    )
+    try:
+        if request.authority_apply_failed:
+            raise RuntimeError("agent authority was not applied")
+        return apply_authority(
+            decided,
+            stopped=request.authority_stopped,
+            level=request.authority_level,
+            amount=request.amount,
+            spent=request.spent,
+            intent_maximum=ceiling,
+            agreement_cumulative=cumulative,
+        )
+    except Exception:
+        if request.authority_level is None or request.authority_level == 3:
+            return decided
+        return authority_unavailable(decided, level=request.authority_level)
+
+
+def _decide_current(rules: DecisionRules, request: SyntheticRequest) -> dict[str, Any]:
     if request.agent_status != "active":
         return _outcome("DENY", "BLOCK", ["AGENT_NOT_ACTIVE"])
     if request.agreement_count <= 0:
@@ -382,16 +464,22 @@ def _decide(rules: DecisionRules, request: SyntheticRequest) -> dict[str, Any]:
     if request.agreement_count > 1:
         return _outcome("STEP_UP", "STEP_UP", ["AGREEMENT_NOT_SELECTED"])
     reasons: list[str] = []
+    ceiling = rules.maximum_amount
+    if request.intent_maximum is not None:
+        ceiling = min(ceiling, request.intent_maximum)
+    cumulative = rules.cumulative_maximum
+    if request.agreement_cumulative is not None:
+        cumulative = min(cumulative, request.agreement_cumulative)
     if request.action_type not in rules.allowed_actions:
         reasons.append("ACTION_NOT_ALLOWED")
         reasons.append("ACTION_EXCEEDS_INTENT")
-    if request.amount > rules.maximum_amount:
+    if request.amount > ceiling:
         reasons.append("AMOUNT_ABOVE_INTENT_CEILING")
         if "ACTION_EXCEEDS_INTENT" not in reasons:
             reasons.append("ACTION_EXCEEDS_INTENT")
     if request.currency != rules.currency:
         reasons.append("CURRENCY_MISMATCH")
-    elif request.amount > rules.cumulative_maximum:
+    elif request.spent + request.amount > cumulative:
         reasons.append("CUMULATIVE_LIMIT_EXCEEDED")
     if reasons:
         return _outcome("DENY", "BLOCK", reasons)

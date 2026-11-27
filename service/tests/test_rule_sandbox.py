@@ -13,10 +13,20 @@ import hashlib
 import io
 import json
 from contextlib import redirect_stderr, redirect_stdout
-from dataclasses import asdict
+from dataclasses import asdict, replace
 
 from fastapi.testclient import TestClient
 
+from kata_service.agent_authority import (
+    REASON_APPROVAL,
+    REASON_CUMULATIVE,
+    REASON_OBSERVE,
+    REASON_STEP_UP,
+    REASON_STOPPED,
+    REASON_TX,
+    REASON_UNAVAILABLE,
+    tighter_or_equal,
+)
 from kata_service.asgi import create_app
 from kata_service.decision_rationale import confidence_for
 from kata_service.defenses import ScorePolicy
@@ -588,3 +598,102 @@ def test_cli_replays_synthetic_input_without_a_database(monkeypatch):
     assert str(MAX_BATCH) in limited.getvalue()
     assert live_rules() is LIVE_RULES
     assert live_rules().maximum_amount == 1500
+
+
+def test_authority_reason_codes_tighten_and_keep_the_baseline():
+    """New reason codes are visible. An unassigned level still matches the live baseline."""
+
+    rules = _baseline()
+    for name, ready, body in CASES:
+        decided = _decide(rules, _sandbox_case(name, ready, body))
+        _held, response = _case(name, ready, body)
+        live = response.json()
+        assert decided["verdict"] == live["verdict"]
+        assert decided["reasons"] == live["reasons"]
+        assert decided["kata_decision"] == live["kata_decision"]
+    purchase = {
+        "request_id": "auth",
+        "agent_status": "active",
+        "agreement_count": 1,
+        "amount": 10,
+        "currency": "CAD",
+        "action_type": "purchase",
+        "score": 620,
+        "cold_start": True,
+    }
+    stopped = run_sandbox({"requests": [{**purchase, "authority_stopped": True}]})
+    assert stopped["samples"][0]["current"]["reasons"] == [REASON_STOPPED]
+    assert stopped["samples"][0]["current"]["verdict"] == "DENY"
+    assert stopped["flips"] == []
+    stepped = run_sandbox({"requests": [{**purchase, "authority_level": 1}]})
+    assert stepped["samples"][0]["current"]["reasons"] == [REASON_STEP_UP]
+    assert stepped["samples"][0]["current"]["kata_decision"] == "STEP_UP"
+    assert stepped["samples"][0]["rationale"]["current"]["reasons"] == [REASON_STEP_UP]
+    assert stepped["samples"][0]["rationale"]["current"]["confidence"] == confidence_for(
+        "STEP_UP",
+        "STEP_UP",
+        [REASON_STEP_UP],
+        620,
+        True,
+        [],
+    )
+    def _plain(amount: int, **overrides) -> SyntheticRequest:
+        fields = dict(
+            request_id="auth",
+            agent_status="active",
+            agreement_count=1,
+            amount=amount,
+            currency="CAD",
+            action_type="purchase",
+            score=None,
+            cold_start=True,
+            prior_daily_count=0,
+            prior_daily_amount=0,
+            evidence_result=None,
+        )
+        fields.update(overrides)
+        return SyntheticRequest(**fields)
+
+    observed = _decide(rules, _plain(10, authority_level=0))
+    assert observed["reasons"] == [REASON_OBSERVE]
+    approved = _decide(rules, _plain(40, authority_level=2))
+    assert approved["verdict"] == "STEP_UP"
+    assert approved["reasons"] == [REASON_APPROVAL]
+    ceiling = _decide(rules, _plain(150, authority_level=2))
+    assert ceiling["verdict"] == "DENY"
+    assert ceiling["reasons"] == [REASON_TX]
+    cumulative = _decide(rules, _plain(25, authority_level=2, spent=100))
+    assert cumulative["reasons"] == [REASON_CUMULATIVE]
+    failed = _decide(rules, _plain(10, authority_level=0, authority_apply_failed=True))
+    assert failed["verdict"] == "DENY"
+    assert failed["reasons"] == [REASON_UNAVAILABLE]
+    stepped_fail = _decide(rules, _plain(10, authority_level=1, authority_apply_failed=True))
+    assert stepped_fail["verdict"] == "STEP_UP"
+    assert stepped_fail["reasons"] == [REASON_UNAVAILABLE]
+    limited_fail = _decide(rules, _plain(10, authority_level=2, authority_apply_failed=True))
+    assert limited_fail["verdict"] != "ALLOW"
+    assert limited_fail["reasons"] == [REASON_UNAVAILABLE]
+    unread = _decide(rules, _plain(10, authority_read_failed=True))
+    assert unread["verdict"] == "STEP_UP"
+    assert unread["reasons"] == [REASON_UNAVAILABLE]
+    untouched = _decide(rules, _plain(10, authority_apply_failed=True))
+    assert untouched == _decide(rules, _plain(10))
+    assert _decide(rules, _plain(10, authority_level=3, authority_apply_failed=True))["verdict"] == "ALLOW"
+    reported = run_sandbox({"requests": [{**purchase, "authority_level": 0, "authority_apply_failed": True}]})
+    sample = reported["samples"][0]["current"]
+    assert sample["reasons"] == [REASON_UNAVAILABLE]
+    assert sample["verdict"] == "DENY"
+    assert reported["samples"][0]["rationale"]["current"]["reasons"] == [REASON_UNAVAILABLE]
+    assert reported["samples"][0]["rationale"]["current"]["confidence"] == confidence_for(
+        "DENY",
+        "BLOCK",
+        [REASON_UNAVAILABLE],
+        620,
+        True,
+        [],
+    )
+    for request in generate_requests(DEFAULT_SEED, 24):
+        baseline = _decide(rules, request)
+        for level in (0, 1, 2, 3):
+            got = _decide(rules, replace(request, authority_level=level))
+            assert tighter_or_equal(got["verdict"], baseline["verdict"])

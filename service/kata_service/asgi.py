@@ -615,6 +615,49 @@ def create_app(
                 return _error(400, failure)
             return report
 
+    if resolved.agent_authority:
+
+        async def _agent_authority(request: Request, agent_id: str, action: str):
+            blocked = _configured(app)
+            if blocked is not None:
+                return blocked
+            settings_now = app.state.settings
+            if not settings_now.admin_token or not _bearer_matches(request, settings_now.admin_token):
+                return _error(401, "admin credentials are required")
+            payload: dict[str, Any] | None = None
+            if action == "level":
+                try:
+                    loaded = await request.json()
+                except Exception:  # noqa: BLE001 — a bad body is a 400, not a stack trace
+                    return _error(400, "authority body must be JSON")
+                if not isinstance(loaded, dict):
+                    return _error(400, "authority body must be a JSON object")
+                payload = loaded
+            try:
+                bureau = ensure_bureau(app)
+                header = request.headers.get("authorization", "")
+                token = header[7:].strip() if header.startswith("Bearer ") else ""
+                auth = bureau.authenticate(token, admin_token=settings_now.admin_token)
+                if action == "level":
+                    return bureau.set_authority_level(auth, agent_id, None if payload is None else payload.get("level"))
+                if action == "stop":
+                    return bureau.stop_agent(auth, agent_id)
+                return bureau.resume_agent(auth, agent_id)
+            except BureauError as exc:
+                return _error(exc.status, exc.message)
+
+        @app.post("/internal/agent-authority/{agent_id}/level")
+        async def set_agent_authority_level(agent_id: str, request: Request):
+            return await _agent_authority(request, agent_id, "level")
+
+        @app.post("/internal/agent-authority/{agent_id}/stop")
+        async def stop_agent_authority(agent_id: str, request: Request):
+            return await _agent_authority(request, agent_id, "stop")
+
+        @app.post("/internal/agent-authority/{agent_id}/resume")
+        async def resume_agent_authority(agent_id: str, request: Request):
+            return await _agent_authority(request, agent_id, "resume")
+
     if resolved.http_message_signatures:
 
         @app.get("/.well-known/http-message-signatures-directory")
@@ -681,6 +724,7 @@ def ensure_bureau(app: FastAPI):
             passkey_enrollment=settings.passkey_enrollment,
             evidence_verifier=settings.evidence_verifier,
             decision_rationale=settings.decision_rationale,
+            agent_authority=settings.agent_authority,
         )
         if settings.demo:
             from kata_service.seed import seed_demo
@@ -734,6 +778,7 @@ def ensure_bureau(app: FastAPI):
         passkey_enrollment=settings.passkey_enrollment,
         evidence_verifier=settings.evidence_verifier,
         decision_rationale=settings.decision_rationale,
+        agent_authority=settings.agent_authority,
     )
     _bind_subject_keys(service, settings, repo._connect)
     _ensure_ledger_store(service, settings)
