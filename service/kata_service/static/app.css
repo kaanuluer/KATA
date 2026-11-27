@@ -532,6 +532,10 @@ footer.site p { margin: 0 0 8px; }
   gap: 10px;
   margin-top: 10px;
 }
+.desk-home .desk-grid.cols-2 {
+  grid-template-columns: 1fr 1fr;
+}
+.desk-home .desk-mod p + p { margin-top: 8px; }
 .desk-home .desk-ops-head {
   display: flex;
   justify-content: space-between;
@@ -582,7 +586,8 @@ footer.site p { margin: 0 0 8px; }
   .desk-home .desk-band,
   .desk-home .desk-form,
   .desk-home .desk-fields,
-  .desk-home .desk-grid { grid-template-columns: 1fr; }
+  .desk-home .desk-grid,
+  .desk-home .desk-grid.cols-2 { grid-template-columns: 1fr; }
   .desk-home .desk-band article { border-left: 0; border-top: 1px solid var(--line); }
   .desk-home .desk-band article:first-child { border-top: 0; }
   .desk-home .desk-verdict { min-height: 0; }

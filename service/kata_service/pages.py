@@ -495,6 +495,7 @@ def shell(
 def _nav(current: str) -> str:
     items = [
         ("/#questions", "Questions", ""),
+        ("/#capabilities", "Capabilities", ""),
         ("/#demo", "Demo", ""),
         ("/dashboard", "Dashboard", "/dashboard"),
         ("/portal", "Portal", "/portal"),
