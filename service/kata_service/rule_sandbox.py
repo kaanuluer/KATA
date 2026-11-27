@@ -22,6 +22,7 @@ from typing import Any, Iterator, Mapping
 
 from kata_service.agent_authority import apply_authority, authority_unavailable
 from kata_service.decision_rationale import confidence_for
+from kata_service.hold_queue import hold_expired_decision, hold_unavailable_decision
 from kata_service.defenses import ScorePolicy
 
 ROUTE = "/internal/rule-sandbox"
@@ -70,6 +71,8 @@ _REQUEST_FIELDS = frozenset(
         "intent_maximum",
         "agreement_cumulative",
         "spent",
+        "hold_unavailable",
+        "hold_expired",
     }
 )
 _AMOUNT_CHOICES = (0, 10, 50, 100, 250, 800, 1500, 1501, 5000)
@@ -122,6 +125,8 @@ class SyntheticRequest:
     spent: int = 0
     authority_apply_failed: bool = False
     authority_read_failed: bool = False
+    hold_unavailable: bool = False
+    hold_expired: bool = False
 
 
 def _baseline() -> DecisionRules:
@@ -384,6 +389,8 @@ def _parse_request(raw: Any, index: int) -> SyntheticRequest:
         authority_stopped = raw["authority_stopped"]
     authority_apply_failed = _optional_flag(raw, "authority_apply_failed", label)
     authority_read_failed = _optional_flag(raw, "authority_read_failed", label)
+    hold_unavailable = _optional_flag(raw, "hold_unavailable", label)
+    hold_expired = _optional_flag(raw, "hold_expired", label)
     intent_maximum = None
     if "intent_maximum" in raw and raw.get("intent_maximum") is not None:
         intent_maximum = _strict_int(raw.get("intent_maximum"), label + " intent_maximum", 0, 1_000_000_000_000)
@@ -417,6 +424,8 @@ def _parse_request(raw: Any, index: int) -> SyntheticRequest:
         spent=spent,
         authority_apply_failed=authority_apply_failed,
         authority_read_failed=authority_read_failed,
+        hold_unavailable=hold_unavailable,
+        hold_expired=hold_expired,
     )
 
 
@@ -429,6 +438,15 @@ def _optional_flag(raw: Mapping[str, Any], name: str, label: str) -> bool:
 
 
 def _decide(rules: DecisionRules, request: SyntheticRequest) -> dict[str, Any]:
+    decided = _decide_with_authority(rules, request)
+    if request.hold_unavailable:
+        return hold_unavailable_decision(decided)
+    if request.hold_expired:
+        return hold_expired_decision(decided)
+    return decided
+
+
+def _decide_with_authority(rules: DecisionRules, request: SyntheticRequest) -> dict[str, Any]:
     decided = _decide_current(rules, request)
     if request.authority_read_failed:
         return authority_unavailable(decided, level=None, read_failed=True)

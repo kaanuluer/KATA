@@ -28,7 +28,8 @@ from kata_service.agent_authority import (
     tighter_or_equal,
 )
 from kata_service.asgi import create_app
-from kata_service.decision_rationale import confidence_for
+from kata_service.decision_rationale import _DENY_MILLI, _STEP_MILLI, confidence_for
+from kata_service.hold_queue import REASON_EXPIRED, REASON_UNAVAILABLE as HOLD_UNAVAILABLE
 from kata_service.defenses import ScorePolicy
 from kata_service.rule_sandbox import (
     DEFAULT_SEED,
@@ -697,3 +698,66 @@ def test_authority_reason_codes_tighten_and_keep_the_baseline():
         for level in (0, 1, 2, 3):
             got = _decide(rules, replace(request, authority_level=level))
             assert tighter_or_equal(got["verdict"], baseline["verdict"])
+
+
+def test_hold_reason_codes_match_live_confidence_and_never_allow():
+    """Sandbox parity covers HOLD_EXPIRED and HOLD_UNAVAILABLE. Defaults stay put."""
+
+    assert "HOLD_EXPIRED" in _DENY_MILLI
+    assert "HOLD_UNAVAILABLE" in _STEP_MILLI
+    rules = _baseline()
+    for name, ready, body in CASES:
+        decided = _decide(rules, _sandbox_case(name, ready, body))
+        _held, response = _case(name, ready, body)
+        live = response.json()
+        assert decided["verdict"] == live["verdict"]
+        assert decided["reasons"] == live["reasons"]
+        assert decided["kata_decision"] == live["kata_decision"]
+    plain = {
+        "request_id": "hold",
+        "agent_status": "active",
+        "agreement_count": 1,
+        "amount": 10,
+        "currency": "CAD",
+        "action_type": "purchase",
+        "score": 620,
+        "cold_start": True,
+    }
+    unavailable = run_sandbox({"requests": [{**plain, "hold_unavailable": True}]})
+    sample = unavailable["samples"][0]["current"]
+    assert sample["verdict"] == "STEP_UP"
+    assert sample["verdict"] != "ALLOW"
+    assert sample["kata_decision"] == "STEP_UP"
+    assert sample["reasons"] == [HOLD_UNAVAILABLE]
+    assert unavailable["samples"][0]["rationale"]["current"]["confidence"] == confidence_for(
+        "STEP_UP",
+        "STEP_UP",
+        [HOLD_UNAVAILABLE],
+        620,
+        True,
+        [],
+    )
+    expired = run_sandbox({"requests": [{**plain, "hold_expired": True}]})
+    denied = expired["samples"][0]["current"]
+    assert denied["verdict"] == "DENY"
+    assert denied["verdict"] != "ALLOW"
+    assert denied["kata_decision"] == "BLOCK"
+    assert denied["reasons"] == [REASON_EXPIRED]
+    assert expired["samples"][0]["rationale"]["current"]["confidence"] == confidence_for(
+        "DENY",
+        "BLOCK",
+        [REASON_EXPIRED],
+        620,
+        True,
+        [],
+    )
+    base = _sandbox_case(*CASES[0])
+    assert _decide(rules, base)["verdict"] == "ALLOW"
+    forced = _decide(rules, replace(base, hold_unavailable=True))
+    assert forced["verdict"] == "STEP_UP"
+    assert forced["verdict"] != "ALLOW"
+    assert HOLD_UNAVAILABLE in forced["reasons"]
+    closed = _decide(rules, replace(base, hold_expired=True))
+    assert closed["verdict"] == "DENY"
+    assert closed["verdict"] != "ALLOW"
+    assert closed["reasons"] == [REASON_EXPIRED]

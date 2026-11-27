@@ -669,6 +669,7 @@ class MemoryRepo:
         self.challenges: dict[str, dict[str, Any]] = {}
         self.push_devices: dict[str, dict[str, Any]] = {}
         self.approvals: dict[str, dict[str, Any]] = {}
+        self.holds: dict[str, dict[str, Any]] = {}
         self.org_logins: dict[str, dict[str, Any]] = {}
         self.agents: dict[str, dict[str, Any]] = {}
         self.by_fingerprint: dict[str, str] = {}
@@ -1566,6 +1567,97 @@ class MemoryRepo:
             item = self.payloads.get(payload_id)
             return dict(item) if item else None
 
+    def holds_supported(self) -> bool:
+        return True
+
+    def insert_hold(self, record: dict[str, Any]) -> None:
+        with self._lock:
+            self.holds[record["hold_id"]] = copy.deepcopy(record)
+
+    def get_hold(self, hold_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            item = self.holds.get(hold_id)
+            if item is None or bool(item.get("is_test")) != in_test_mode():
+                return None
+            return copy.deepcopy(item)
+
+    def find_hold(self, decision_ref: str, payload_hash: str) -> dict[str, Any] | None:
+        with self._lock:
+            matches = [
+                item
+                for item in self.holds.values()
+                if item.get("decision_ref") == decision_ref
+                and item.get("payload_hash") == payload_hash
+                and bool(item.get("is_test")) == in_test_mode()
+            ]
+            if not matches:
+                return None
+            chosen = max(matches, key=lambda item: (item.get("created_at") or "", item["hold_id"]))
+            return copy.deepcopy(chosen)
+
+    def list_pending_holds(self, now: str) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = [
+                item
+                for item in self.holds.values()
+                if bool(item.get("is_test")) == in_test_mode()
+                and item.get("status") == "pending"
+                and str(item.get("expires_at") or "") > now
+            ]
+            rows.sort(key=lambda item: (item.get("created_at") or "", item["hold_id"]))
+            return [copy.deepcopy(item) for item in rows]
+
+    def expire_due_holds(self, now: str) -> list[dict[str, Any]]:
+        with self._lock:
+            expired: list[dict[str, Any]] = []
+            for item in self.holds.values():
+                if bool(item.get("is_test")) != in_test_mode():
+                    continue
+                if item.get("status") not in {"pending", "approved"}:
+                    continue
+                if str(item.get("expires_at") or "") > now:
+                    continue
+                item["status"] = "expired"
+                item["decided_at"] = item.get("decided_at") or now
+                expired.append(copy.deepcopy(item))
+            return expired
+
+    def transition_hold(
+        self,
+        hold_id: str,
+        *,
+        expect: str,
+        status: str,
+        reviewer_id: str | None,
+        reason: str | None,
+        at: str,
+        used_at: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Move a hold from ``expect`` to ``status``. None when the hold is absent.
+
+        A hold that is not in ``expect`` is returned with ``conflict`` set to
+        the current status. The row is not changed.
+        """
+
+        with self._lock:
+            item = self.holds.get(hold_id)
+            if item is None or bool(item.get("is_test")) != in_test_mode():
+                return None
+            if item.get("status") != expect:
+                conflicted = copy.deepcopy(item)
+                conflicted["conflict"] = item.get("status")
+                return conflicted
+            item["status"] = status
+            if reviewer_id is not None:
+                item["reviewer_id"] = reviewer_id
+            if reason is not None:
+                item["decision_reason"] = reason
+            if status in {"approved", "rejected", "expired"}:
+                item["decided_at"] = at
+            if used_at is not None:
+                item["used_at"] = used_at
+            return copy.deepcopy(item)
+
 
 class BureauService:
     def __init__(
@@ -1608,6 +1700,8 @@ class BureauService:
         evidence_verifier: bool = False,
         decision_rationale: bool = False,
         agent_authority: bool = False,
+        hold_queue: bool = False,
+        hold_ttl_seconds: int = 900,
     ) -> None:
         self.repo = repo
         self.deployment_env = deployment_env if deployment_env in {"production", "sandbox"} else "production"
@@ -1648,6 +1742,8 @@ class BureauService:
         self.evidence_verifier = evidence_verifier
         self.decision_rationale = decision_rationale
         self.agent_authority = agent_authority
+        self.hold_queue = hold_queue
+        self.hold_ttl_seconds = hold_ttl_seconds
         self._rate_purged_before: str | None = None
         if keyed_identifiers:
             from kata_service.identifiers import IdentifierMode
@@ -2202,17 +2298,26 @@ class BureauService:
             from kata_service.evidence.attach import clear_evidence_id
 
             clear_evidence_id()
-        payload = self._verify_decision(auth, body)
+        request = body
+        hold_id = None
+        if self.hold_queue and isinstance(body, dict) and "hold_id" in body:
+            hold_id = body.get("hold_id")
+            request = {key: value for key, value in body.items() if key != "hold_id"}
+        if hold_id is not None:
+            payload = self._use_hold(auth, request, hold_id)
+        else:
+            payload = self._verify_decision(auth, request)
+            payload = self._maybe_hold(request, payload)
         if self.evidence_verifier:
             try:
                 from kata_service.evidence.attach import record_external_evidence
 
-                record_external_evidence(self, body, payload)
+                record_external_evidence(self, request, payload)
             except Exception:
                 log.exception("external evidence was not recorded")
-        return self._attach_rationale(body, payload)
+        return self._attach_rationale(request, payload)
 
-    def _verify_decision(self, auth: Auth, body: dict[str, Any]) -> dict[str, Any]:
+    def _verify_decision(self, auth: Auth, body: dict[str, Any], *, releasing: bool = False) -> dict[str, Any]:
         self._scope(auth, "verify")
         reject_deep_json(body)
         self._screen("verify", body)
@@ -2317,6 +2422,12 @@ class BureauService:
             payload["agent_id"] = agent_id
             payload["agreement_id"] = record["agreement_id"]
             payload = self._apply_authority(agent, action, payload, record)
+            if releasing:
+                from kata_service.hold_queue import waived_release
+
+                waived = waived_release(payload)
+                if waived is not None:
+                    payload = waived
             if payload.get("verdict") == "ALLOW":
                 try:
                     entry = append_allow(
@@ -3632,6 +3743,331 @@ class BureauService:
 
             queue_step_up(self, agent, action if isinstance(action, dict) else None)
         return payload
+
+    def list_holds(self, auth: Auth) -> dict[str, Any]:
+        self._admin(auth)
+        self._require_holds()
+        from kata_service.hold_queue import public_hold
+
+        for hold in self.repo.expire_due_holds(self.stamp()):
+            self._audit_hold("expired", hold, None)
+        return {"holds": [public_hold(item) for item in self.repo.list_pending_holds(self.stamp())]}
+
+    def approve_hold(self, auth: Auth, hold_id: str, body: dict[str, Any]) -> dict[str, Any]:
+        return self._decide_hold(auth, hold_id, body, "approved")
+
+    def reject_hold(self, auth: Auth, hold_id: str, body: dict[str, Any]) -> dict[str, Any]:
+        return self._decide_hold(auth, hold_id, body, "rejected")
+
+    def _decide_hold(self, auth: Auth, hold_id: str, body: dict[str, Any], status: str) -> dict[str, Any]:
+        self._admin(auth)
+        self._require_holds()
+        from kata_service.hold_queue import hold_expired_decision, public_hold, reason_text, reviewer_text
+
+        reviewer = reviewer_text(body.get("reviewer_id") if isinstance(body, dict) else None)
+        reason = reason_text(body.get("reason") if isinstance(body, dict) else None)
+        if reviewer is None:
+            raise BureauError(400, "reviewer_id is required")
+        if reason is None:
+            raise BureauError(400, "reason is required")
+        hold = self._hold_or_404(hold_id)
+        if hold.get("status") in {"pending", "approved"} and self._hold_past(hold):
+            expired = self._expire_hold(hold)
+            denied = hold_expired_decision(self._decision_seed(expired))
+            denied["hold_id"] = expired["hold_id"]
+            return denied
+        if hold.get("status") != "pending":
+            raise BureauError(409, "hold is already decided")
+        updated = self.repo.transition_hold(
+            hold["hold_id"],
+            expect="pending",
+            status=status,
+            reviewer_id=reviewer,
+            reason=reason,
+            at=self.stamp(),
+        )
+        if updated is None:
+            raise BureauError(404, "hold was not found")
+        if updated.get("conflict"):
+            raise BureauError(409, "hold is already decided")
+        self._audit_hold("approved" if status == "approved" else "rejected", updated, reviewer)
+        return public_hold(updated)
+
+    def _use_hold(self, auth: Auth, body: dict[str, Any], hold_id: Any) -> dict[str, Any]:
+        from kata_service.hold_queue import (
+            HoldStoreError,
+            HoldTableMissing,
+            binding_failure,
+            closed_step_up,
+            hold_expired_decision,
+            hold_id_text,
+            hold_unavailable_decision,
+        )
+
+        ident = hold_id_text(hold_id)
+        if ident is None:
+            raise BureauError(400, "hold_id is not valid")
+        try:
+            ready = self._holds_ready()
+        except HoldStoreError:
+            log.exception("hold queue was not read")
+            return hold_unavailable_decision(self._decision_seed({"agent_id": body.get("agent_id")}))
+        if not ready:
+            return self._step_up_without_queue(auth, body)
+        try:
+            hold = self.repo.get_hold(ident)
+        except HoldTableMissing:
+            return self._step_up_without_queue(auth, body)
+        except Exception:
+            log.exception("hold queue was not read")
+            return hold_unavailable_decision(self._decision_seed({"agent_id": body.get("agent_id")}))
+        if hold is None:
+            raise BureauError(404, "hold was not found")
+        if hold.get("status") in {"pending", "approved"} and self._hold_past(hold):
+            expired = self._expire_hold(hold)
+            denied = hold_expired_decision(self._decision_seed(expired))
+            denied["hold_id"] = ident
+            return denied
+        if hold.get("status") == "expired":
+            denied = hold_expired_decision(self._decision_seed(hold))
+            denied["hold_id"] = ident
+            return denied
+        if hold.get("status") == "used":
+            raise BureauError(409, "approval was already used")
+        if hold.get("status") != "approved":
+            raise BureauError(409, "hold is not approved")
+        if binding_failure(hold, body) is not None:
+            raise BureauError(409, "hold binding does not match")
+        try:
+            decision = self._verify_decision(auth, self._release_body(hold), releasing=True)
+        except BureauError:
+            raise
+        except Exception:
+            log.exception("hold release was not checked")
+            failed = hold_unavailable_decision(self._decision_seed(hold))
+            failed["hold_id"] = ident
+            return failed
+        if decision.get("verdict") == "STEP_UP":
+            decision = closed_step_up(decision)
+        if decision.get("verdict") not in {"ALLOW", "DENY"}:
+            failed = hold_unavailable_decision(decision)
+            failed["verdict"] = "STEP_UP"
+            failed["hold_id"] = ident
+            return failed
+        try:
+            updated = self.repo.transition_hold(
+                ident,
+                expect="approved",
+                status="used",
+                reviewer_id=None,
+                reason=None,
+                at=self.stamp(),
+                used_at=self.stamp(),
+            )
+        except Exception:
+            log.exception("hold release was not stored")
+            failed = hold_unavailable_decision(decision)
+            failed["hold_id"] = ident
+            return failed
+        if updated is None or updated.get("conflict"):
+            raise BureauError(409, "approval was already used")
+        decided = dict(decision)
+        decided["hold_id"] = ident
+        if decided.get("verdict") == "ALLOW" and decided.get("kata_decision") not in {"ALLOW", "BLOCK"}:
+            decided["kata_decision"] = "ALLOW"
+        return decided
+
+    def _maybe_hold(self, body: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+        if not self.hold_queue or payload.get("verdict") != "STEP_UP":
+            return payload
+        from kata_service.hold_queue import (
+            HoldStoreError,
+            HoldTableMissing,
+            amount_text,
+            bound_decision_ref,
+            hold_expired_decision,
+            hold_unavailable_decision,
+            payee_of,
+            payload_hash_for,
+        )
+
+        try:
+            ready = self._holds_ready()
+        except HoldStoreError:
+            log.exception("hold queue was not read")
+            return hold_unavailable_decision(payload)
+        except HoldTableMissing:
+            return payload
+        if not ready:
+            return payload
+        action = body.get("action") if isinstance(body.get("action"), dict) else {}
+        agreement_id = str(payload.get("agreement_id") or body.get("agreement_id") or "")
+        kata_decision = str(payload.get("kata_decision") or "STEP_UP")
+        try:
+            digest = payload_hash_for(body, agreement_id)
+            ref = bound_decision_ref(body, agreement_id, kata_decision)
+            existing = self.repo.find_hold(ref, digest)
+            if existing is not None:
+                if existing.get("status") in {"pending", "approved"} and self._hold_past(existing):
+                    self._expire_hold(existing)
+                    denied = hold_expired_decision(payload)
+                    denied["hold_id"] = existing["hold_id"]
+                    return denied
+                if existing.get("status") == "expired":
+                    denied = hold_expired_decision(payload)
+                    denied["hold_id"] = existing["hold_id"]
+                    return denied
+                if existing.get("status") in {"pending", "approved"}:
+                    updated = dict(payload)
+                    updated["hold_id"] = existing["hold_id"]
+                    return updated
+                return payload
+            at = self.stamp()
+            expires = (self.now() + timedelta(seconds=self.hold_ttl_seconds)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            record = {
+                "hold_id": "hold_" + secrets.token_hex(8),
+                "agent_id": str(payload.get("agent_id") or body.get("agent_id") or ""),
+                "agreement_id": agreement_id,
+                "decision_ref": ref,
+                "payload_hash": digest,
+                "amount": amount_text(action),
+                "currency": action.get("currency") if isinstance(action.get("currency"), str) else "",
+                "payee": payee_of(action),
+                "action": copy.deepcopy(action),
+                "intent_id": body.get("intent_id") if isinstance(body.get("intent_id"), str) else "",
+                "kata_decision": kata_decision,
+                "status": "pending",
+                "reviewer_id": None,
+                "decision_reason": None,
+                "expires_at": expires,
+                "created_at": at,
+                "decided_at": None,
+                "used_at": None,
+                "is_test": in_test_mode(),
+            }
+            self.repo.insert_hold(record)
+        except HoldTableMissing:
+            return payload
+        except Exception:
+            log.exception("hold queue was not written")
+            return hold_unavailable_decision(payload)
+        try:
+            self._audit_hold("created", record, None)
+        except Exception:
+            log.exception("hold created was not audited")
+        updated = dict(payload)
+        updated["hold_id"] = record["hold_id"]
+        return updated
+
+    def _step_up_without_queue(self, auth: Auth, body: dict[str, Any]) -> dict[str, Any]:
+        """Table missing. Keep today's decision, and never turn it into ALLOW via a hold."""
+
+        decision = self._verify_decision(auth, body)
+        if decision.get("verdict") != "ALLOW":
+            return decision
+        stepped = dict(decision)
+        stepped["verdict"] = "STEP_UP"
+        stepped["kata_decision"] = "STEP_UP"
+        stepped["required_action"] = "HUMAN_APPROVAL"
+        return stepped
+
+    def _require_holds(self) -> None:
+        from kata_service.hold_queue import NOT_AVAILABLE, HoldStoreError, HoldTableMissing
+
+        if not self.hold_queue:
+            raise BureauError(404, "hold queue is off")
+        try:
+            ready = self._holds_ready()
+        except (HoldStoreError, HoldTableMissing):
+            raise BureauError(503, NOT_AVAILABLE) from None
+        if not ready:
+            raise BureauError(503, NOT_AVAILABLE)
+
+    def _holds_ready(self) -> bool:
+        from kata_service.hold_queue import HoldStoreError, HoldTableMissing
+
+        checker = getattr(self.repo, "holds_supported", None)
+        if checker is None:
+            return True
+        try:
+            return bool(checker())
+        except HoldTableMissing:
+            return False
+        except HoldStoreError:
+            raise
+
+    def _hold_or_404(self, hold_id: str) -> dict[str, Any]:
+        from kata_service.hold_queue import NOT_AVAILABLE, HoldTableMissing, hold_id_text
+
+        ident = hold_id_text(hold_id)
+        if ident is None:
+            raise BureauError(400, "hold_id is not valid")
+        try:
+            hold = self.repo.get_hold(ident)
+        except HoldTableMissing:
+            raise BureauError(503, NOT_AVAILABLE) from None
+        except Exception as exc:
+            log.exception("hold queue was not read")
+            raise BureauError(503, NOT_AVAILABLE) from exc
+        if hold is None:
+            raise BureauError(404, "hold was not found")
+        return hold
+
+    def _expire_hold(self, hold: dict[str, Any]) -> dict[str, Any]:
+        if hold.get("status") == "expired":
+            return hold
+        updated = self.repo.transition_hold(
+            hold["hold_id"],
+            expect=str(hold.get("status") or ""),
+            status="expired",
+            reviewer_id=None,
+            reason=None,
+            at=self.stamp(),
+        )
+        if updated is None or updated.get("conflict"):
+            current = self.repo.get_hold(hold["hold_id"]) or hold
+            return current
+        self._audit_hold("expired", updated, None)
+        return updated
+
+    def _hold_past(self, hold: dict[str, Any]) -> bool:
+        return str(hold.get("expires_at") or "") <= self.stamp()
+
+    def _release_body(self, hold: dict[str, Any]) -> dict[str, Any]:
+        body: dict[str, Any] = {"agent_id": hold.get("agent_id"), "action": hold.get("action")}
+        if hold.get("agreement_id"):
+            body["agreement_id"] = hold["agreement_id"]
+        if hold.get("intent_id"):
+            body["intent_id"] = hold["intent_id"]
+        return body
+
+    def _decision_seed(self, hold: dict[str, Any]) -> dict[str, Any]:
+        seed: dict[str, Any] = {
+            "agent_id": hold.get("agent_id"),
+            "verdict": "STEP_UP",
+            "kata_decision": "STEP_UP",
+            "reasons": [],
+            "messages": [],
+        }
+        if hold.get("agreement_id"):
+            seed["agreement_id"] = hold["agreement_id"]
+        return seed
+
+    def _audit_hold(self, event: str, hold: dict[str, Any], reviewer: str | None) -> None:
+        self.repo.add_audit(
+            {
+                "audit_id": "aud_" + secrets.token_hex(8),
+                "at": self.stamp(),
+                "org_id": None,
+                "key_id": reviewer or "hold",
+                "method": "POST",
+                "path": f"/internal/holds/{hold['hold_id']}/{event}",
+                "status": 200,
+                "purpose_code": reviewer,
+                "agent_id": hold.get("agent_id"),
+                "environment": "test" if in_test_mode() else "live",
+            }
+        )
 
     def _portal(self, auth: Auth) -> None:
         if not auth.principal_id:
