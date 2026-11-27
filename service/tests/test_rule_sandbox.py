@@ -26,6 +26,9 @@ from kata_service.rule_sandbox import (
     MAX_BATCH,
     DecisionRules,
     SandboxError,
+    SyntheticRequest,
+    _baseline,
+    _decide,
     generate_requests,
     live_rules,
     main,
@@ -134,6 +137,7 @@ def _fingerprint(rules: DecisionRules) -> tuple:
     return (
         id(rules),
         rules.maximum_amount,
+        rules.cumulative_maximum,
         rules.currency,
         rules.allowed_actions,
         id(rules.allowed_actions),
@@ -182,12 +186,13 @@ def _attack() -> None:
 
     target = sandbox.LIVE_RULES
     object.__setattr__(target, "maximum_amount", 1)
+    object.__setattr__(target, "cumulative_maximum", 1)
     object.__setattr__(target, "currency", "USD")
     object.__setattr__(target, "allowed_actions", ("transfer",))
     object.__setattr__(target, "velocity_daily_count", 1)
     object.__setattr__(target, "velocity_daily_amount", 1)
     object.__setattr__(target, "velocity_enabled", False)
-    sandbox.LIVE_RULES = DecisionRules(1, "USD", ("transfer",), 1, 1, False)
+    sandbox.LIVE_RULES = DecisionRules(1, 1, "USD", ("transfer",), 1, 1, False)
 
 
 def test_flag_defaults_off():
@@ -196,6 +201,7 @@ def test_flag_defaults_off():
     assert settings_from_env({"GAB_RULE_SANDBOX": "1"}).rule_sandbox is True
     assert settings_from_env({"GAB_RULE_SANDBOX": "yes"}).rule_sandbox is True
     assert live_rules().maximum_amount == 1500
+    assert live_rules().cumulative_maximum == 2000
     assert live_rules().velocity_daily_count == ScorePolicy().velocity_daily_count
     assert live_rules().velocity_daily_amount == ScorePolicy().velocity_daily_amount
     assert live_rules().velocity_enabled is ScorePolicy().velocity
@@ -220,6 +226,43 @@ def test_flag_off_matches_unknown_404_and_golden_verify_bytes():
         assert _held.app.state.settings.rule_sandbox is False
 
 
+def _sandbox_case(name: str, ready: dict, body: dict):
+    action = body["action"]
+    active = ready.get("active", True)
+    return SyntheticRequest(
+        request_id=name,
+        agent_status="active" if active else "suspended",
+        agreement_count=int(ready.get("agreements", 1)),
+        amount=int(action["amount"]),
+        currency=str(action["currency"]),
+        action_type=str(action["action_type"]),
+        score=None,
+        cold_start=True,
+        prior_daily_count=0,
+        prior_daily_amount=0,
+        evidence_result=None,
+    )
+
+
+def test_baseline_matches_live_verify_on_the_golden_cases():
+    assert {name for name, _ready, _body in CASES} == {
+        "allow",
+        "deny_ceiling",
+        "deny_currency",
+        "deny_inactive",
+        "deny_no_agreement",
+        "step_up",
+    }
+    rules = _baseline()
+    for name, ready, body in CASES:
+        _held, response = _case(name, ready, body)
+        live = response.json()
+        decided = _decide(rules, _sandbox_case(name, ready, body))
+        assert decided["verdict"] == live["verdict"]
+        assert decided["reasons"] == live["reasons"]
+        assert decided["kata_decision"] == live["kata_decision"]
+
+
 def test_flag_on_leaves_verify_bytes_unchanged():
     for name, ready, body in CASES:
         _held, response = _case(name, ready, body, rule_sandbox=True)
@@ -231,6 +274,7 @@ def test_flag_on_leaves_verify_bytes_unchanged():
 def test_identical_candidate_rules_have_zero_flips():
     explicit = {
         "maximum_amount": 1500,
+        "cumulative_maximum": 2000,
         "currency": "CAD",
         "allowed_actions": ["purchase"],
         "velocity_daily_count": live_rules().velocity_daily_count,

@@ -29,6 +29,7 @@ DEFAULT_COUNT = 24
 MAX_BATCH = 100
 SAMPLE_LIMIT = 8
 _INTENT_CEILING = 1500
+_INTENT_CUMULATIVE = 2000
 _INTENT_CURRENCY = "CAD"
 _ALLOWED_ACTIONS = ("purchase",)
 
@@ -41,6 +42,7 @@ _BODY_KEYS = frozenset({"rules", "seed", "count", "requests"})
 _RULE_FIELDS = {
     "maximum_amount": "maximum_amount",
     "ceiling": "maximum_amount",
+    "cumulative_maximum": "cumulative_maximum",
     "currency": "currency",
     "allowed_actions": "allowed_actions",
     "velocity_daily_count": "velocity_daily_count",
@@ -84,6 +86,7 @@ class DecisionRules:
     """Operator decision rules used only inside the sandbox."""
 
     maximum_amount: int
+    cumulative_maximum: int
     currency: str
     allowed_actions: tuple[str, ...]
     velocity_daily_count: int
@@ -109,13 +112,14 @@ class SyntheticRequest:
 def _baseline() -> DecisionRules:
     """Current sandbox rules. Velocity matches ScorePolicy defaults.
 
-    The amount ceiling is the public sample intent ceiling. Nothing here is
-    loaded from a database.
+    The ceilings are the public sample intent: 1500 per charge and 2000
+    cumulative. Nothing here is loaded from a database.
     """
 
     policy = ScorePolicy()
     return DecisionRules(
         maximum_amount=_INTENT_CEILING,
+        cumulative_maximum=_INTENT_CUMULATIVE,
         currency=_INTENT_CURRENCY,
         allowed_actions=_ALLOWED_ACTIONS,
         velocity_daily_count=policy.velocity_daily_count,
@@ -136,6 +140,7 @@ def live_rules() -> DecisionRules:
 def _capture(rules: DecisionRules) -> DecisionRules:
     return DecisionRules(
         maximum_amount=rules.maximum_amount,
+        cumulative_maximum=rules.cumulative_maximum,
         currency=rules.currency,
         allowed_actions=rules.allowed_actions,
         velocity_daily_count=rules.velocity_daily_count,
@@ -146,6 +151,7 @@ def _capture(rules: DecisionRules) -> DecisionRules:
 
 def _restore(rules: DecisionRules, saved: DecisionRules) -> None:
     object.__setattr__(rules, "maximum_amount", saved.maximum_amount)
+    object.__setattr__(rules, "cumulative_maximum", saved.cumulative_maximum)
     object.__setattr__(rules, "currency", saved.currency)
     object.__setattr__(rules, "allowed_actions", saved.allowed_actions)
     object.__setattr__(rules, "velocity_daily_count", saved.velocity_daily_count)
@@ -255,12 +261,13 @@ def _candidate(current: DecisionRules, rules: Any) -> DecisionRules:
             raise SandboxError("overlapping rules for " + field)
         found[field] = value
     amount = _optional_int(found, "maximum_amount", current.maximum_amount, 0, 1_000_000_000)
+    cumulative = _optional_int(found, "cumulative_maximum", current.cumulative_maximum, 0, 1_000_000_000_000)
     currency = _optional_currency(found, current.currency)
     actions = _optional_actions(found, current.allowed_actions)
     count = _optional_int(found, "velocity_daily_count", current.velocity_daily_count, 1, 1_000_000)
     daily = _optional_int(found, "velocity_daily_amount", current.velocity_daily_amount, 0, 1_000_000_000_000)
     enabled = _optional_bool(found, "velocity_enabled", current.velocity_enabled)
-    return DecisionRules(amount, currency, actions, count, daily, enabled)
+    return DecisionRules(amount, cumulative, currency, actions, count, daily, enabled)
 
 
 def _optional_int(found: Mapping[str, Any], name: str, default: int, low: int, high: int) -> int:
@@ -384,6 +391,8 @@ def _decide(rules: DecisionRules, request: SyntheticRequest) -> dict[str, Any]:
             reasons.append("ACTION_EXCEEDS_INTENT")
     if request.currency != rules.currency:
         reasons.append("CURRENCY_MISMATCH")
+    elif request.amount > rules.cumulative_maximum:
+        reasons.append("CUMULATIVE_LIMIT_EXCEEDED")
     if reasons:
         return _outcome("DENY", "BLOCK", reasons)
     if rules.velocity_enabled:
@@ -441,6 +450,7 @@ def _counts(verdicts: list[str]) -> dict[str, int]:
 def _rules_dict(rules: DecisionRules) -> dict[str, Any]:
     return {
         "allowed_actions": list(rules.allowed_actions),
+        "cumulative_maximum": rules.cumulative_maximum,
         "currency": rules.currency,
         "maximum_amount": rules.maximum_amount,
         "velocity_daily_amount": rules.velocity_daily_amount,
