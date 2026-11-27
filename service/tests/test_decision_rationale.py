@@ -205,7 +205,20 @@ def test_flag_defaults_off():
 
 
 def test_flag_off_verify_matches_golden_bytes():
-    assert _client().app.state.settings.decision_rationale is False
+    client = _client()
+    assert client.app.state.settings.decision_rationale is False
+    assert client.app.state.settings.rule_sandbox is False
+    unknown = client.post("/internal/not-a-real-route", json={"rules": {"maximum_amount": 1}})
+    sandbox = client.post(
+        "/internal/rule-sandbox",
+        headers={"Authorization": "Bearer admin-test-token"},
+        json={"rules": {"maximum_amount": 1}},
+    )
+    assert sandbox.status_code == 404
+    assert sandbox.status_code == unknown.status_code
+    assert sandbox.content == unknown.content
+    assert sandbox.headers["content-type"] == unknown.headers["content-type"]
+    assert "/internal/rule-sandbox" not in client.get("/openapi.json").text
     for name, ready, body in CASES:
         _client_for_case, response = _case(name, ready, body)
         golden = (FIXTURES / f"{name}.bin").read_bytes()
