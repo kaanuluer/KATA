@@ -36,6 +36,8 @@ REASON_STEP_UP = "AUTHORITY_STEP_UP"
 REASON_TX = "AUTHORITY_TX_LIMIT"
 REASON_CUMULATIVE = "AUTHORITY_CUMULATIVE_LIMIT"
 REASON_APPROVAL = "AUTHORITY_APPROVAL_REQUIRED"
+REASON_UNAVAILABLE = "AGENT_AUTHORITY_UNAVAILABLE"
+_UNAVAILABLE = "Agent authority could not be applied."
 
 # Deny is tighter than step-up, and step-up is tighter than allow.
 VERDICT_RANK = {"ALLOW": 0, "STEP_UP": 1, "DENY": 2}
@@ -86,6 +88,57 @@ def effective_limits(
     if agreement_cumulative is not None:
         cumulative = min(cumulative, agreement_cumulative)
     return AuthorityLimits(per_tx, cumulative, None)
+
+
+def read_authority_level(agent: Any) -> int | None:
+    """Return the assigned level, or None when this agent has none.
+
+    A missing ``authority_level`` key is unassigned. That is also the shape of
+    an agent loaded from Postgres when ``022_agent_authority.sql`` has not been
+    applied: the row has no authority columns, and the loader does not add the
+    key. None is not an error and the caller keeps today's decision.
+
+    A value that is present but not 0, 1, 2, or 3 raises. So does any error
+    while reading the key. The caller treats that as an unknown level.
+    """
+
+    if "authority_level" not in agent:
+        return None
+    level = agent["authority_level"]
+    if level is None:
+        return None
+    if isinstance(level, bool) or not isinstance(level, int) or level not in LEVELS:
+        raise ValueError("authority level is not 0, 1, 2, or 3")
+    return level
+
+
+def authority_unavailable(payload: dict[str, Any], *, level: int | None, read_failed: bool = False) -> dict[str, Any]:
+    """Fail closed when authority cannot be read or applied.
+
+    A failed read does not know the level, so the decision is step-up.
+    Level 0 becomes deny. Levels 1 and 2 become step-up, and an existing deny
+    stays a deny. The reason code is ``AGENT_AUTHORITY_UNAVAILABLE``.
+    """
+
+    if not isinstance(payload, dict):
+        payload = {}
+    if read_failed:
+        return _rewrite(payload, "STEP_UP", "STEP_UP", REASON_UNAVAILABLE, _UNAVAILABLE)
+    if level == OBSERVE:
+        return _rewrite(payload, "DENY", "BLOCK", REASON_UNAVAILABLE, _UNAVAILABLE)
+    if level in (STEP_UP_ONLY, LIMITED):
+        if payload.get("verdict") == "DENY":
+            updated = dict(payload)
+            reasons = [code for code in list(updated.get("reasons") or []) if code != REASON_UNAVAILABLE]
+            updated["verdict"] = "DENY"
+            updated["kata_decision"] = "BLOCK"
+            updated["reasons"] = [REASON_UNAVAILABLE, *reasons]
+            messages = [text for text in list(updated.get("messages") or []) if text != _UNAVAILABLE]
+            updated["messages"] = [_UNAVAILABLE, *messages]
+            updated["required_action"] = "NONE"
+            return updated
+        return _rewrite(payload, "STEP_UP", "STEP_UP", REASON_UNAVAILABLE, _UNAVAILABLE)
+    return payload
 
 
 def apply_authority(

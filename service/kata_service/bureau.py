@@ -3563,15 +3563,24 @@ class BureauService:
         if not self.agent_authority:
             return payload
         try:
+            from kata_service.agent_authority import read_authority_level
+
+            level = read_authority_level(agent)
+        except Exception:
+            log.exception("agent authority level was not read")
+            from kata_service.agent_authority import authority_unavailable
+
+            return authority_unavailable(payload, level=None, read_failed=True)
+        try:
             from kata_service.agent_authority import agreement_bounds, apply_authority
 
             document = agreement.get("document") if isinstance(agreement, dict) else None
             currency = action.get("currency") if isinstance(action, dict) else None
-            intent_maximum, agreement_cumulative, spent = agreement_bounds(document, currency if isinstance(currency, str) else None)
+            intent_maximum, agreement_cumulative, spent = agreement_bounds(
+                document,
+                currency if isinstance(currency, str) else None,
+            )
             amount = action.get("amount") if isinstance(action, dict) else None
-            level = agent.get("authority_level")
-            if isinstance(level, bool) or not isinstance(level, int):
-                level = None
             return apply_authority(
                 payload,
                 stopped=bool(agent.get("authority_stopped")),
@@ -3583,7 +3592,11 @@ class BureauService:
             )
         except Exception:
             log.exception("agent authority was not applied")
-            return payload
+            if level is None or level == 3:
+                return payload
+            from kata_service.agent_authority import authority_unavailable
+
+            return authority_unavailable(payload, level=level)
 
     def _attach_rationale(self, body: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
         if not self.decision_rationale:

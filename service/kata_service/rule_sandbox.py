@@ -20,7 +20,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Iterator, Mapping
 
-from kata_service.agent_authority import apply_authority
+from kata_service.agent_authority import apply_authority, authority_unavailable
 from kata_service.decision_rationale import confidence_for
 from kata_service.defenses import ScorePolicy
 
@@ -65,6 +65,8 @@ _REQUEST_FIELDS = frozenset(
         "evidence_result",
         "authority_level",
         "authority_stopped",
+        "authority_apply_failed",
+        "authority_read_failed",
         "intent_maximum",
         "agreement_cumulative",
         "spent",
@@ -118,6 +120,8 @@ class SyntheticRequest:
     intent_maximum: int | None = None
     agreement_cumulative: int | None = None
     spent: int = 0
+    authority_apply_failed: bool = False
+    authority_read_failed: bool = False
 
 
 def _baseline() -> DecisionRules:
@@ -378,6 +382,8 @@ def _parse_request(raw: Any, index: int) -> SyntheticRequest:
         if not isinstance(raw.get("authority_stopped"), bool):
             raise SandboxError(label + " authority_stopped must be true or false")
         authority_stopped = raw["authority_stopped"]
+    authority_apply_failed = _optional_flag(raw, "authority_apply_failed", label)
+    authority_read_failed = _optional_flag(raw, "authority_read_failed", label)
     intent_maximum = None
     if "intent_maximum" in raw and raw.get("intent_maximum") is not None:
         intent_maximum = _strict_int(raw.get("intent_maximum"), label + " intent_maximum", 0, 1_000_000_000_000)
@@ -409,26 +415,45 @@ def _parse_request(raw: Any, index: int) -> SyntheticRequest:
         intent_maximum=intent_maximum,
         agreement_cumulative=agreement_cumulative,
         spent=spent,
+        authority_apply_failed=authority_apply_failed,
+        authority_read_failed=authority_read_failed,
     )
+
+
+def _optional_flag(raw: Mapping[str, Any], name: str, label: str) -> bool:
+    if name not in raw:
+        return False
+    if not isinstance(raw.get(name), bool):
+        raise SandboxError(label + " " + name + " must be true or false")
+    return bool(raw[name])
 
 
 def _decide(rules: DecisionRules, request: SyntheticRequest) -> dict[str, Any]:
     decided = _decide_current(rules, request)
+    if request.authority_read_failed:
+        return authority_unavailable(decided, level=None, read_failed=True)
     ceiling = rules.maximum_amount if request.intent_maximum is None else min(rules.maximum_amount, request.intent_maximum)
     cumulative = (
         rules.cumulative_maximum
         if request.agreement_cumulative is None
         else min(rules.cumulative_maximum, request.agreement_cumulative)
     )
-    return apply_authority(
-        decided,
-        stopped=request.authority_stopped,
-        level=request.authority_level,
-        amount=request.amount,
-        spent=request.spent,
-        intent_maximum=ceiling,
-        agreement_cumulative=cumulative,
-    )
+    try:
+        if request.authority_apply_failed:
+            raise RuntimeError("agent authority was not applied")
+        return apply_authority(
+            decided,
+            stopped=request.authority_stopped,
+            level=request.authority_level,
+            amount=request.amount,
+            spent=request.spent,
+            intent_maximum=ceiling,
+            agreement_cumulative=cumulative,
+        )
+    except Exception:
+        if request.authority_level is None or request.authority_level == 3:
+            return decided
+        return authority_unavailable(decided, level=request.authority_level)
 
 
 def _decide_current(rules: DecisionRules, request: SyntheticRequest) -> dict[str, Any]:

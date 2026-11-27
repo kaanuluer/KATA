@@ -24,6 +24,7 @@ from kata_service.agent_authority import (
     REASON_STEP_UP,
     REASON_STOPPED,
     REASON_TX,
+    REASON_UNAVAILABLE,
     tighter_or_equal,
 )
 from kata_service.asgi import create_app
@@ -663,6 +664,34 @@ def test_authority_reason_codes_tighten_and_keep_the_baseline():
     assert ceiling["reasons"] == [REASON_TX]
     cumulative = _decide(rules, _plain(25, authority_level=2, spent=100))
     assert cumulative["reasons"] == [REASON_CUMULATIVE]
+    failed = _decide(rules, _plain(10, authority_level=0, authority_apply_failed=True))
+    assert failed["verdict"] == "DENY"
+    assert failed["reasons"] == [REASON_UNAVAILABLE]
+    stepped_fail = _decide(rules, _plain(10, authority_level=1, authority_apply_failed=True))
+    assert stepped_fail["verdict"] == "STEP_UP"
+    assert stepped_fail["reasons"] == [REASON_UNAVAILABLE]
+    limited_fail = _decide(rules, _plain(10, authority_level=2, authority_apply_failed=True))
+    assert limited_fail["verdict"] != "ALLOW"
+    assert limited_fail["reasons"] == [REASON_UNAVAILABLE]
+    unread = _decide(rules, _plain(10, authority_read_failed=True))
+    assert unread["verdict"] == "STEP_UP"
+    assert unread["reasons"] == [REASON_UNAVAILABLE]
+    untouched = _decide(rules, _plain(10, authority_apply_failed=True))
+    assert untouched == _decide(rules, _plain(10))
+    assert _decide(rules, _plain(10, authority_level=3, authority_apply_failed=True))["verdict"] == "ALLOW"
+    reported = run_sandbox({"requests": [{**purchase, "authority_level": 0, "authority_apply_failed": True}]})
+    sample = reported["samples"][0]["current"]
+    assert sample["reasons"] == [REASON_UNAVAILABLE]
+    assert sample["verdict"] == "DENY"
+    assert reported["samples"][0]["rationale"]["current"]["reasons"] == [REASON_UNAVAILABLE]
+    assert reported["samples"][0]["rationale"]["current"]["confidence"] == confidence_for(
+        "DENY",
+        "BLOCK",
+        [REASON_UNAVAILABLE],
+        620,
+        True,
+        [],
+    )
     for request in generate_requests(DEFAULT_SEED, 24):
         baseline = _decide(rules, request)
         for level in (0, 1, 2, 3):

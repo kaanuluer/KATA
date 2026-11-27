@@ -26,6 +26,8 @@ from kata_service.agent_authority import (
     REASON_STEP_UP,
     REASON_STOPPED,
     REASON_TX,
+    REASON_UNAVAILABLE,
+    read_authority_level,
     effective_limits,
     tighter_or_equal,
 )
@@ -340,6 +342,89 @@ def test_rationale_includes_the_authority_reason():
         bool(agent["cold_start"]),
         [],
     )
+
+
+def test_apply_failure_fails_closed_below_level_3(monkeypatch):
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("authority apply failed")
+
+    monkeypatch.setattr("kata_service.agent_authority.apply_authority", boom)
+    client = _client(agent_authority=True)
+    token = _ready(client)
+    unchanged = _verify(client, token, {"agent_id": "shopper-01", "action": _action("act_allow")})
+    assert unchanged.content == (FIXTURES / "allow.bin").read_bytes()
+    for level in (0, 1, 2):
+        held = _client(agent_authority=True)
+        held_token = _ready(held)
+        assert held.post(
+            "/internal/agent-authority/shopper-01/level",
+            headers=ADMIN,
+            json={"level": level},
+        ).status_code == 200
+        body = _verify(held, held_token, {"agent_id": "shopper-01", "action": _action(f"act_fail_{level}")}).json()
+        assert body["verdict"] != "ALLOW"
+        assert body["reasons"] == [REASON_UNAVAILABLE]
+        if level == 0:
+            assert body["verdict"] == "DENY"
+            assert body["kata_decision"] == "BLOCK"
+        else:
+            assert body["verdict"] == "STEP_UP"
+
+
+def test_level_read_failure_steps_up(monkeypatch):
+    def boom(_agent):
+        raise RuntimeError("authority level was not read")
+
+    monkeypatch.setattr("kata_service.agent_authority.read_authority_level", boom)
+    client = _client(agent_authority=True)
+    token = _ready(client)
+    body = _verify(client, token, {"agent_id": "shopper-01", "action": _action("act_unread")}).json()
+    assert body["verdict"] == "STEP_UP"
+    assert body["kata_decision"] == "STEP_UP"
+    assert body["reasons"] == [REASON_UNAVAILABLE]
+
+
+def test_missing_authority_column_stays_unassigned():
+    from kata_service.bureau_pg import _agent_row
+
+    row = (
+        "shopper-01",
+        "org_synthetic",
+        "prn_person",
+        "active",
+        "operator_verified",
+        "EdDSA",
+        "ab" * 32,
+        '{"kty":"OKP","crv":"Ed25519","x":"abc"}',
+        "2026-10-04T13:55:00Z",
+        "2026-10-04T13:55:00Z",
+        0,
+        "[]",
+        1,
+        None,
+        False,
+        None,
+    )
+    agent = _agent_row(row)
+    assert "authority_level" not in agent
+    assert "authority_stopped" not in agent
+    assert read_authority_level(agent) is None
+    service = BureauService(MemoryRepo(), agent_authority=True)
+    payload = {"verdict": "ALLOW", "kata_decision": "ALLOW", "reasons": [], "messages": []}
+
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("authority apply failed")
+
+    service_module = __import__("kata_service.agent_authority", fromlist=["apply_authority"])
+    original = service_module.apply_authority
+    service_module.apply_authority = boom
+    try:
+        result = service._apply_authority(agent, {"amount": 10, "currency": "CAD"}, payload, None)
+    finally:
+        service_module.apply_authority = original
+    assert result is payload
+    assert result["verdict"] == "ALLOW"
+    assert result["reasons"] == []
 
 
 def test_missing_column_reports_not_available_and_verify_does_not_crash():
