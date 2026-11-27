@@ -647,6 +647,7 @@ def ensure_bureau(app: FastAPI):
             breach_tools=settings.breach_tools,
             passkey_enrollment=settings.passkey_enrollment,
             evidence_verifier=settings.evidence_verifier,
+            decision_rationale=settings.decision_rationale,
         )
         if settings.demo:
             from kata_service.seed import seed_demo
@@ -699,6 +700,7 @@ def ensure_bureau(app: FastAPI):
         breach_tools=settings.breach_tools,
         passkey_enrollment=settings.passkey_enrollment,
         evidence_verifier=settings.evidence_verifier,
+        decision_rationale=settings.decision_rationale,
     )
     _bind_subject_keys(service, settings, repo._connect)
     _ensure_ledger_store(service, settings)
