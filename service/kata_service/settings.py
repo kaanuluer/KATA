@@ -75,6 +75,8 @@ class Settings:
     breach_tools: bool = False
     passkey_enrollment: bool = False
     evidence_verifier: bool = False
+    http_message_signatures: bool = False
+    http_message_signatures_jwk: dict | None = None
 
     def log_key(self) -> PrivateKey | None:
         if self.log_signing_seed is None:
@@ -153,6 +155,15 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
     breach_tools = _flag(env.get("GAB_BREACH_TOOLS"))
     passkey_enrollment = _flag(env.get("GAB_PASSKEY_ENROLLMENT"))
     evidence_verifier = _flag(env.get("GAB_EVIDENCE_VERIFIER"))
+    http_message_signatures = _flag(env.get("GAB_HTTP_MESSAGE_SIGNATURES"))
+    http_message_signatures_jwk = None
+    if http_message_signatures:
+        from kata_service.evidence.web_bot_auth import publishable_jwk
+
+        raw_jwk = env.get("GAB_HTTP_MESSAGE_SIGNATURES_JWK")
+        http_message_signatures_jwk = publishable_jwk(raw_jwk)
+        if _blank(raw_jwk) is not None and http_message_signatures_jwk is None:
+            log.error("GAB_HTTP_MESSAGE_SIGNATURES_JWK is not a usable public JWK")
     return Settings(
         database_url=database_url,
         schema_url=schema_url,
@@ -203,6 +214,8 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
         breach_tools=breach_tools,
         passkey_enrollment=passkey_enrollment,
         evidence_verifier=evidence_verifier,
+        http_message_signatures=http_message_signatures,
+        http_message_signatures_jwk=http_message_signatures_jwk,
     )
 
 

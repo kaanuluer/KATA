@@ -237,6 +237,7 @@ def store(request):
 def test_flag_defaults_off_and_breach_tools_stay_off():
     settings = settings_from_env({})
     assert settings.evidence_verifier is False
+    assert settings.http_message_signatures is False
     assert settings.breach_tools is False
     assert settings_from_env({"GAB_EVIDENCE_VERIFIER": "1"}).evidence_verifier is True
     assert settings_from_env({"GAB_EVIDENCE_VERIFIER": "0"}).evidence_verifier is False
@@ -664,9 +665,20 @@ def test_flag_off_does_not_change_verify_bytes():
     second = off.post("/v1/verify", headers=_auth(key), json=extra)
     assert first.status_code == 200
     assert first.content == second.content.replace(b"act_extra", b"act_plain")
+    bot = {
+        "agent_id": "shopper-01",
+        "action": _action("act_bot"),
+        "external_evidence": {"source": "web-bot-auth", "method": "GET", "path": "/"},
+    }
+    third = off.post("/v1/verify", headers=_auth(key), json=bot)
+    assert first.content == third.content.replace(b"act_bot", b"act_plain")
     assert first.json()["verdict"] == "ALLOW"
     assert first.json()["kata_decision"] == "ALLOW"
     assert "external_evidence" not in first.json()
+    unknown = off.get("/.well-known/not-a-real-directory")
+    directory = off.get("/.well-known/http-message-signatures-directory")
+    assert directory.status_code == 404
+    assert directory.content == unknown.content
 
 
 def test_evidence_does_not_decide():

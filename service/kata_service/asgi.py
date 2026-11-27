@@ -582,6 +582,21 @@ def create_app(
         held.put_fx(currency, target, chosen_day, rate)
         return _fx_body(currency, target, chosen_day, rate)
 
+    if resolved.http_message_signatures:
+
+        @app.get("/.well-known/http-message-signatures-directory")
+        def http_message_signatures_directory():
+            from kata_service.evidence.web_bot_auth import DIRECTORY_MEDIA_TYPE, directory_response
+
+            body = directory_response(app.state.settings.http_message_signatures_jwk)
+            if body is None:
+                return _error(404, "directory was not found")
+            return Response(
+                body,
+                media_type=DIRECTORY_MEDIA_TYPE,
+                headers={"Cache-Control": "public, max-age=300"},
+            )
+
     return app
 
 
