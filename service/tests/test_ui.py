@@ -89,6 +89,17 @@ def test_home_lists_pilot_capabilities_without_banned_words():
     assert "ready to use" in body.lower()
     assert "can be enabled for a pilot" in body.lower()
     assert "deterministic rules" in body.lower()
+    assert "that score is not a calibrated probability." in body.lower()
+    assert "AGENT_STOPPED" in body
+    assert "AGENT_AUTHORITY_UNAVAILABLE" in body
+    assert "hold_id" in body
+    assert "HOLD_EXPIRED" in body
+    assert "HOLD_UNAVAILABLE" in body
+    assert "409" in body
+    assert "900 seconds" in body
+    assert "300 seconds" not in body
+    assert "AGENT_NOT_ACTIVE" not in body
+    assert "passkey" not in body.lower()
     assert "rfc 9421" in body.lower()
     assert 'href="/#capabilities"' in body
     folded = body.lower()
@@ -99,7 +110,6 @@ def test_home_lists_pilot_capabilities_without_banned_words():
         "tamper-proof",
         "compliant",
         "gdpr",
-        "probability",
     ):
         assert banned not in folded
     assert " proven " not in f" {folded} "
