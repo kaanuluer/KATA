@@ -4,7 +4,9 @@
 
 ``jwt`` checks a compact JWT against a JWKS directory. ``synthetic`` is the
 test verifier. ``web-bot-auth`` checks an Ed25519 HTTP message signature.
-None of them returns a KATA decision.
+``tap`` checks a Visa Trusted Agent Protocol signature on that same signature
+base, and only when the caller passes ``tap_verify``. None of them returns a
+KATA decision.
 """
 
 from __future__ import annotations
@@ -362,6 +364,13 @@ def _web_bot_auth_builder(store: EvidenceStore, **deps: Any):
     return WebBotAuthVerifier(store, **deps)
 
 
+def _tap_builder(store: EvidenceStore, **deps: Any):
+    from kata_service.evidence.tap import TapVerifier
+
+    return TapVerifier(store, **deps)
+
+
 register_verifier("synthetic", _synthetic_builder)
 register_verifier("jwt", _jwt_builder)
 register_verifier("web-bot-auth", _web_bot_auth_builder)
+register_verifier("tap", _tap_builder)

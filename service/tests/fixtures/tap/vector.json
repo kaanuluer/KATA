@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "seed_label": "gab-tap-synthetic-ed25519",
+  "now": "2026-11-28T12:00:00Z",
+  "created": 1795867200,
+  "expires": 1795867680,
+  "key": {
+    "key_id": "synthetic-ed25519",
+    "algorithm": "ed25519",
+    "public_key": "Ea6anjoU35JrS1lqEa14BBH9UNo2IpGhDf1ebSFPxkE=",
+    "is_active": "true",
+    "agent_domain": "https://agent.example"
+  },
+  "material": {
+    "source": "tap",
+    "method": "POST",
+    "authority": "merchant.example",
+    "path": "/checkout",
+    "scheme": "https",
+    "headers": {
+      "signature-input": "sig1=(\"@authority\" \"@path\");created=1795867200;expires=1795867680;keyid=\"synthetic-ed25519\";alg=\"ed25519\";nonce=\"tap-nonce-synthetic-01\";tag=\"agent-payer-auth\"",
+      "signature": "sig1=:HwyZONIhSirKfCuFV5OykL+5MA+/j6+f+3+7Z8lf8KuhnvP6u89hkkj9vsRcECLTdDfKCl5cTJoox5UJlM+jCA==:"
+    }
+  }
+}

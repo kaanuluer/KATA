@@ -772,6 +772,8 @@ def ensure_bureau(app: FastAPI):
             agent_authority=settings.agent_authority,
             hold_queue=settings.hold_queue,
             hold_ttl_seconds=settings.hold_ttl_seconds,
+            tap_verify=settings.tap_verify,
+            tap_keys=settings.tap_keys,
         )
         if settings.demo:
             from kata_service.seed import seed_demo
@@ -828,6 +830,8 @@ def ensure_bureau(app: FastAPI):
         agent_authority=settings.agent_authority,
         hold_queue=settings.hold_queue,
         hold_ttl_seconds=settings.hold_ttl_seconds,
+        tap_verify=settings.tap_verify,
+        tap_keys=settings.tap_keys,
     )
     _bind_subject_keys(service, settings, repo._connect)
     _ensure_ledger_store(service, settings)

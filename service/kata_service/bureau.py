@@ -1702,6 +1702,8 @@ class BureauService:
         agent_authority: bool = False,
         hold_queue: bool = False,
         hold_ttl_seconds: int = 900,
+        tap_verify: bool = False,
+        tap_keys: tuple[dict, ...] = (),
     ) -> None:
         self.repo = repo
         self.deployment_env = deployment_env if deployment_env in {"production", "sandbox"} else "production"
@@ -1744,6 +1746,8 @@ class BureauService:
         self.agent_authority = agent_authority
         self.hold_queue = hold_queue
         self.hold_ttl_seconds = hold_ttl_seconds
+        self.tap_verify = tap_verify
+        self.tap_keys = tap_keys
         self._rate_purged_before: str | None = None
         if keyed_identifiers:
             from kata_service.identifiers import IdentifierMode
