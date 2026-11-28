@@ -73,6 +73,49 @@ def test_home_page_explains_kata_in_english():
         assert banned not in body.lower()
 
 
+def test_home_lists_pilot_capabilities_without_banned_words():
+    body = _client().get("/").text
+    for headline in (
+        "Capabilities ready to use",
+        "Decision rationale and trust score",
+        "Rule sandbox",
+        "Agent authority ladder",
+        "Human-approval hold and release queue",
+        "Evidence verification for a pilot",
+        "Phase 0 external evidence verification",
+        "Phase 1 Web Bot Auth verification",
+    ):
+        assert headline in body
+    assert "ready to use" in body.lower()
+    assert "can be enabled for a pilot" in body.lower()
+    assert "deterministic rules" in body.lower()
+    assert "that score is not a calibrated probability." in body.lower()
+    assert "AGENT_STOPPED" in body
+    assert "AGENT_AUTHORITY_UNAVAILABLE" in body
+    assert "hold_id" in body
+    assert "HOLD_EXPIRED" in body
+    assert "HOLD_UNAVAILABLE" in body
+    assert "409" in body
+    assert "900 seconds" in body
+    assert "300 seconds" not in body
+    assert "AGENT_NOT_ACTIVE" not in body
+    assert "passkey" not in body.lower()
+    assert "rfc 9421" in body.lower()
+    assert 'href="/#capabilities"' in body
+    folded = body.lower()
+    for banned in (
+        "open source",
+        "open-source",
+        "credit bureau",
+        "tamper-proof",
+        "compliant",
+        "gdpr",
+    ):
+        assert banned not in folded
+    assert " proven " not in f" {folded} "
+    assert " fixed " not in f" {folded} "
+
+
 def test_home_renders_the_desk_without_banned_phrases():
     page = _client().get("/")
     assert page.status_code == 200

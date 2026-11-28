@@ -44,7 +44,7 @@
     <article>
       <p class="kicker">Trust score</p>
       <strong>On the agent</strong>
-      <p>Individuals are not scored. The check returns allow, step-up, or deny. Deny blocks the action and does not revoke the grant.</p>
+      <p>Individuals are not scored. The score is computed with deterministic rules. The check returns allow, step-up, or deny. Deny blocks the action and does not revoke the grant.</p>
     </article>
     <article>
       <span class="badge allow">ALLOW</span>
@@ -138,6 +138,89 @@
         <p class="kicker">AmEx</p>
         <h3>Assumed mapping</h3>
         <p>The AmEx Intent Intelligence note is an assumed mapping into the KATA agreement. Read it in the <a href="/docs/amex-intent-mapping">mapping note</a>.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="desk-block" id="capabilities">
+    <p class="kicker">Pilot</p>
+    <h2>Capabilities ready to use</h2>
+    <p class="lede">Each capability below is ready to use and can be enabled for a pilot. The examples are synthetic. Global Agent Bureau is an agent bureau and a technology company.</p>
+    <p class="sim-banner">SYNTHETIC TEST DATA – not real customers</p>
+    <div class="desk-grid cols-2">
+      <article class="desk-mod">
+        <p class="kicker">01 · Rationale</p>
+        <h3>Decision rationale and trust score</h3>
+        <p>A verify check can return a rationale with the decision. The rationale lists the reason codes already on that decision, a score from 0 to 1, and references to evidence stored for that decision. That score is computed with deterministic rules from the reason codes, the agent's trust score, and the stored evidence result. That score is not a calibrated probability. The same inputs always return the same score. When no evidence is stored, the evidence list is empty and the verdict is unchanged. The trust score is an integer from 0 to 1000 on the agent, also computed with deterministic rules. Individuals are not scored.</p>
+        <p class="desk-note">Synthetic example</p>
+        <dl>
+          <div class="desk-line"><dt>Agent</dt><dd>shopper-01</dd></div>
+          <div class="desk-line"><dt>Payment</dt><dd>CAD 4,200</dd></div>
+          <div class="desk-line"><dt>Reason</dt><dd>AMOUNT_ABOVE_INTENT_CEILING</dd></div>
+        </dl>
+      </article>
+      <article class="desk-mod">
+        <p class="kicker">02 · Sandbox</p>
+        <h3>Rule sandbox</h3>
+        <p>The rule sandbox tests a candidate rule on synthetic data before that rule is enabled. Supply a seed and a count, or a synthetic batch of at most 100 requests. The result shows allow, deny, and step-up counts for the example rules and for the candidate, the counts that changed, the decisions that flip, sample records, and a summary. The same seed returns the same summary. The example rules are the example intent ceiling and the default score policy. The replay does not read per-agent intents, participant records, or the ledger, and it does not write evidence or change the rules in use.</p>
+        <p class="desk-note">Synthetic example</p>
+        <dl>
+          <div class="desk-line"><dt>Agent</dt><dd>shopper-01</dd></div>
+          <div class="desk-line"><dt>Ceiling</dt><dd>CAD 1,500</dd></div>
+          <div class="desk-line"><dt>Candidate</dt><dd>CAD 1,000</dd></div>
+        </dl>
+      </article>
+      <article class="desk-mod">
+        <p class="kicker">03 · Authority</p>
+        <h3>Agent authority ladder</h3>
+        <p>The agent authority ladder assigns a level from 0 to 3, and a level only tightens the verify decision. It does not turn a deny into an allow, and it does not turn a step-up into an allow. Level 0 denies a payment that is not already denied, with AUTHORITY_OBSERVE_ONLY. Level 1 steps up a payment that would have been allowed, with AUTHORITY_STEP_UP. Level 2 allows only under a per-transaction ceiling of 100 and a cumulative ceiling of 100, and only at or under an approval threshold of 25. Those ceilings do not exceed that agent's signed intent maximum or agreement cumulative limit. Above the threshold the result is step-up, with AUTHORITY_APPROVAL_REQUIRED. Above a ceiling, when the decision would have been allow, the result is deny, with AUTHORITY_TX_LIMIT or AUTHORITY_CUMULATIVE_LIMIT. Level 3 leaves the decision unchanged. An agent with no level also leaves the decision unchanged. A per-agent stop denies later checks for that agent only, with AGENT_STOPPED. Resume lifts that stop. If the level itself cannot be read, the result is step-up with AGENT_AUTHORITY_UNAVAILABLE, and it is not an allow.</p>
+        <p class="desk-note">Synthetic example</p>
+        <dl>
+          <div class="desk-line"><dt>Agent</dt><dd>shopper-01</dd></div>
+          <div class="desk-line"><dt>Level</dt><dd>2</dd></div>
+          <div class="desk-line"><dt>Stop</dt><dd>AGENT_STOPPED</dd></div>
+        </dl>
+      </article>
+      <article class="desk-mod">
+        <p class="kicker">04 · Approval</p>
+        <h3>Human-approval hold and release queue</h3>
+        <p>A verify that is already step-up can be placed in a hold, and the response adds a hold_id. Allow and deny responses stay unchanged. Approve and reject are an admin review. Each one requires a reviewer id and a reason. The approval is bound to that decision's decision_ref and payload_hash. A different amount, a different payee, or any other payload change cannot use it. Release is single-use. A second release is answered with 409. Before a release returns allow, the check reads agent stop and authority, intent and agreement limits, and cumulative spend again. If any of those fail, the release is deny with that reason code. The default hold lifetime is 900 seconds. An expired hold returns deny with HOLD_EXPIRED, and it is not an allow. If the hold store cannot be reached, the result is step-up with HOLD_UNAVAILABLE, and it is not an allow.</p>
+        <p class="desk-note">Synthetic example</p>
+        <dl>
+          <div class="desk-line"><dt>Agent</dt><dd>shopper-01</dd></div>
+          <div class="desk-line"><dt>Decision</dt><dd>STEP_UP</dd></div>
+          <div class="desk-line"><dt>Binding</dt><dd>decision_ref, payload_hash</dd></div>
+        </dl>
+      </article>
+    </div>
+  </section>
+
+  <section class="desk-block" id="evidence-verification">
+    <p class="kicker">Evidence</p>
+    <h2>Evidence verification for a pilot</h2>
+    <p class="lede">Phase 0 and Phase 1 are ready to use. Either check can be enabled for a pilot. A verified outside record is stored beside the decision. The decision remains the bureau decision.</p>
+    <div class="desk-grid cols-2">
+      <article class="desk-mod">
+        <p class="kicker">Phase 0</p>
+        <h3>Phase 0 external evidence verification</h3>
+        <p>An optional external evidence object on a verify check is verified and recorded beside the decision. Recording it does not change the verdict. The sources are a signed JWT, a synthetic vector, and Web Bot Auth when that check is enabled. A malformed object is recorded as unverifiable.</p>
+        <p class="desk-note">Synthetic example</p>
+        <dl>
+          <div class="desk-line"><dt>Source</dt><dd>synthetic</dd></div>
+          <div class="desk-line"><dt>Agent</dt><dd>shopper-01</dd></div>
+          <div class="desk-line"><dt>Verdict</dt><dd>Unchanged</dd></div>
+        </dl>
+      </article>
+      <article class="desk-mod">
+        <p class="kicker">Phase 1</p>
+        <h3>Phase 1 Web Bot Auth verification</h3>
+        <p>Web Bot Auth verification checks an Ed25519 HTTP message signature, RFC 9421. Signature-Agent names the directory that publishes the public key. An origin publishes that directory at <span class="meta">/.well-known/http-message-signatures-directory</span>. The published key is a public Ed25519 JWK. A private key is refused and is not published. The created and expires parameters must sit within 60 seconds of the clock. A signature that verifies identifies the signer. The payment still has to match the signed intent.</p>
+        <p class="desk-note">Synthetic example</p>
+        <dl>
+          <div class="desk-line"><dt>Algorithm</dt><dd>Ed25519</dd></div>
+          <div class="desk-line"><dt>Signature</dt><dd>RFC 9421</dd></div>
+          <div class="desk-line"><dt>Window</dt><dd>60 seconds</dd></div>
+        </dl>
       </article>
     </div>
   </section>
