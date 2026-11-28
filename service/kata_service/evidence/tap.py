@@ -11,8 +11,12 @@ the RFC 9421 ``keyid`` parameter, ``alg``, and ``tag``. ``tag`` is
 ``ed25519``. ``rsa-pss-sha256`` is named by the sample and is rejected here.
 
 ``created`` may be at most 60 seconds ahead of the clock. ``expires`` must not
-be before the clock. A nonce is accepted once, through the evidence nonce
-store. Public keys come from the caller. Nothing is fetched.
+be before the clock, and ``expires`` must be after ``created``. The published
+sample does not state a maximum signature lifetime. ``tap-agent/agent_app.py``
+sets ``expires`` to ``created + 8 * 60``. This verifier uses that 480-second
+span as the maximum. A longer span is ``window_too_long``. A nonce is accepted
+once, through the evidence nonce store, and only after the span is accepted.
+Public keys come from the caller. Nothing is fetched.
 
 The verifier does nothing unless ``tap_verify`` is true. ``GAB_TAP_VERIFY``
 defaults off.
@@ -43,6 +47,8 @@ from kata_service.evidence.verifier import utc_seconds
 
 TAP_TAGS = frozenset({"agent-browser-auth", "agent-payer-auth"})
 CREATED_SKEW_SECONDS = 60
+# The published sample states no maximum. The agent uses created + 8 * 60.
+MAX_SIGNATURE_LIFETIME_SECONDS = 480
 NONCE_ISSUER = "tap"
 _KEY_ID = re.compile(r"^[A-Za-z0-9._-]{1,100}$")
 _MAX_KEYS = 32
@@ -136,7 +142,7 @@ class TapVerifier:
             raise HttpSignatureError("malformed")
         if isinstance(expires, bool) or not isinstance(expires, int):
             raise HttpSignatureError("malformed")
-        if created < 0 or expires < 0 or created > _UNIX_LIMIT or expires > _UNIX_LIMIT or created > expires:
+        if created < 0 or expires < 0 or created > _UNIX_LIMIT or expires > _UNIX_LIMIT or expires <= created:
             raise HttpSignatureError("malformed")
         if not isinstance(key_id, str) or _KEY_ID.fullmatch(key_id) is None:
             raise HttpSignatureError("malformed")
@@ -154,6 +160,10 @@ class TapVerifier:
             raise HttpSignatureError("malformed")
         if isinstance(expires, bool) or not isinstance(expires, int):
             raise HttpSignatureError("malformed")
+        if expires <= created:
+            raise HttpSignatureError("malformed")
+        if expires - created > MAX_SIGNATURE_LIFETIME_SECONDS:
+            raise HttpSignatureError("window_too_long")
         current = int(now.timestamp())
         if created > current + CREATED_SKEW_SECONDS:
             raise HttpSignatureError("not_yet_valid")

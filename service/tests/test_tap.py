@@ -56,11 +56,13 @@ def _private():
     return private_key_from_seed(hashlib.sha256(label.encode("ascii")).digest())
 
 
-def _resign(tag: str, nonce: str) -> dict:
+def _resign(tag: str, nonce: str, *, created: int | None = None, expires: int | None = None) -> dict:
     doc = _doc()
     material = _material()
+    created_at = doc["created"] if created is None else created
+    expires_at = doc["expires"] if expires is None else expires
     params = (
-        f'("@authority" "@path");created={doc["created"]};expires={doc["expires"]};'
+        f'("@authority" "@path");created={created_at};expires={expires_at};'
         f'keyid="{doc["key"]["key_id"]}";alg="ed25519";nonce="{nonce}";tag="{tag}"'
     )
     material["headers"]["signature-input"] = f"sig1={params}"
@@ -151,6 +153,50 @@ def test_rejects_signatures_outside_the_created_expires_window():
     on_skew, _store = _check(_resign("agent-payer-auth", "tap-nonce-skew"), now=skew)
     assert on_skew["result"] == "valid"
     assert on_skew["reason"] == "ok"
+
+
+def test_signature_lifetime_is_at_most_480_seconds():
+    from kata_service.evidence.tap import MAX_SIGNATURE_LIFETIME_SECONDS
+
+    doc = _doc()
+    created = doc["created"]
+    assert MAX_SIGNATURE_LIFETIME_SECONDS == 480
+    assert doc["expires"] - created == MAX_SIGNATURE_LIFETIME_SECONDS
+    at_limit, store = _check(
+        _resign(
+            "agent-payer-auth",
+            "tap-nonce-lifetime",
+            expires=created + MAX_SIGNATURE_LIFETIME_SECONDS,
+        )
+    )
+    assert at_limit["result"] == "valid"
+    assert at_limit["reason"] == "ok"
+    over, _store = _check(
+        _resign(
+            "agent-payer-auth",
+            "tap-nonce-lifetime",
+            expires=created + MAX_SIGNATURE_LIFETIME_SECONDS + 1,
+        ),
+        store=store,
+    )
+    assert over["result"] == "invalid"
+    assert over["reason"] == "window_too_long"
+    assert over["claims"] == {}
+    again, _store = _check(
+        _resign(
+            "agent-payer-auth",
+            "tap-nonce-lifetime-again",
+            expires=created + MAX_SIGNATURE_LIFETIME_SECONDS,
+        ),
+        store=store,
+    )
+    assert again["result"] == "valid"
+    equal, _store = _check(_resign("agent-payer-auth", "tap-nonce-equal", expires=created))
+    assert equal["result"] == "invalid"
+    assert equal["reason"] == "malformed"
+    backward, _store = _check(_resign("agent-payer-auth", "tap-nonce-backward", expires=created - 1))
+    assert backward["result"] == "invalid"
+    assert backward["reason"] == "malformed"
 
 
 def test_rejects_bad_signature():
