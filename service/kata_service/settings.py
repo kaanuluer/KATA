@@ -82,6 +82,8 @@ class Settings:
     agent_authority: bool = False
     hold_queue: bool = False
     hold_ttl_seconds: int = 900
+    tap_verify: bool = False
+    tap_keys: tuple[dict, ...] = ()
 
     def log_key(self) -> PrivateKey | None:
         if self.log_signing_seed is None:
@@ -167,6 +169,16 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
     hold_ttl_seconds = _positive_int(env.get("GAB_HOLD_TTL_SECONDS"), 900)
     http_message_signatures = _flag(env.get("GAB_HTTP_MESSAGE_SIGNATURES"))
     http_message_signatures_jwk = None
+    tap_verify = _flag(env.get("GAB_TAP_VERIFY"))
+    tap_keys: tuple[dict, ...] = ()
+    if tap_verify:
+        from kata_service.evidence.tap import parse_tap_keys
+
+        parsed_keys = parse_tap_keys(env.get("GAB_TAP_KEYS"))
+        if parsed_keys is None:
+            log.error("GAB_TAP_KEYS is not a usable public key set")
+        else:
+            tap_keys = parsed_keys
     if http_message_signatures:
         from kata_service.evidence.web_bot_auth import publishable_jwk
 
@@ -231,6 +243,8 @@ def settings_from_env(environ: dict[str, str] | None = None) -> Settings:
         agent_authority=agent_authority,
         hold_queue=hold_queue,
         hold_ttl_seconds=hold_ttl_seconds,
+        tap_verify=tap_verify,
+        tap_keys=tap_keys,
     )
 
 

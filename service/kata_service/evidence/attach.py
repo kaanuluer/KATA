@@ -74,7 +74,11 @@ def record_external_evidence(bureau: Any, body: dict[str, Any], payload: dict[st
         )
     else:
         source = material.get("source")
-        verifier = verifier_for(source if isinstance(source, str) else "", store)
+        deps: dict[str, Any] = {}
+        if getattr(bureau, "tap_verify", False):
+            deps["tap_verify"] = True
+            deps["tap_keys"] = getattr(bureau, "tap_keys", ())
+        verifier = verifier_for(source if isinstance(source, str) else "", store, **deps)
         evidence = verifier.verify(material, now=moment)
     action = body.get("action") if isinstance(body.get("action"), dict) else {}
     action_id = action.get("action_id") if isinstance(action.get("action_id"), str) else None

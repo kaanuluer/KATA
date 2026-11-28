@@ -71,7 +71,7 @@ Industry efforts to give agents signed, credentialed identity and safe payment r
 
 #### Other efforts
 
-- **Visa Trusted Agent Protocol** — RFC 9421 agent signatures and a key registry, aligned with Web Bot Auth. Q1 evidence. Brief map in [docs/interoperability.md](../docs/interoperability.md).
+- **Visa Trusted Agent Protocol** — RFC 9421 agent signatures and a key registry, aligned with Web Bot Auth. Q1 evidence. The service checks source `tap` only when `GAB_TAP_VERIFY` is on. Brief map in [docs/interoperability.md](../docs/interoperability.md).
 - **Verifiable Intent** (Mastercard-maintained, draft v0.1) — SD-JWT chain credential provider → user → agent, with amount range, line items, and merchant constraints. Field map and worked example: [docs/interoperability.md](../docs/interoperability.md), [examples/verifiable-intent/](../examples/verifiable-intent/).
 - **AGNTCY identity** — agent id, ResolverMetadata, and badge verifiable credentials. Q1 only. Same interoperability note.
 - **Stripe Agentic Commerce Suite** — agent-oriented commerce infrastructure; transaction evidence.

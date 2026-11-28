@@ -250,6 +250,8 @@ Sample at `16d59bd`. Not a separate specification document. The root README desc
 
 TAP does not define amount ranges, line items, or a decision. "Cryptographically verify agent intent" in the TAP README means the signature is bound to the domain and the operation. It is not a structured intent object.
 
+The service records that check as evidence source `tap` when `GAB_TAP_VERIFY` is on (default off) and `GAB_EVIDENCE_VERIFIER` is on. The signature base is the existing RFC 9421 code. The key identifier is the `keyid` parameter. Accepted tags are `agent-browser-auth` and `agent-payer-auth`. The checked algorithm is Ed25519. Public keys are the local set in `GAB_TAP_KEYS`. A valid signature does not change the KATA decision.
+
 ### AGNTCY identity
 
 Commit `8f7c1b5`, package `v1alpha1`. README: a unique id, ResolverMetadata, and Agent Badges as verifiable credentials (agent id, schema such as OASF, auth metadata). BYOID includes Okta, A2A Agent Cards, and W3C DIDs.
